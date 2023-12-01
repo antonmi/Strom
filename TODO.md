@@ -1,0 +1,3 @@
+- Flow.stream(s) that returns stream that can be run without Flow.run
+- rewrite parcels example using flow
+- DSL transform (function, module), stateful?
