@@ -12,3 +12,4 @@ Strom adds several abstractions:
 More will follow.
 
 For now, check the [parcels_test.exs](https://github.com/antonmi/Strom/blob/main/test/examples/parcels/parcels_test.exs)
+DSL will like there [dsl_test.exs](https://github.com/antonmi/Strom/blob/main/test/dsl_test.exs)

@@ -7,7 +7,10 @@ defmodule Strom.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      description: description(),
+      package: package(),
+      deps: deps(),
+      source_url: "https://github.com/antonmi/Strom"
     ]
   end
 
@@ -21,6 +24,19 @@ defmodule Strom.MixProject do
   defp deps do
     [
       {:alf, "0.10.0"}
+    ]
+  end
+
+  defp description do
+    "Stream Processing Framework"
+  end
+
+  defp package do
+    [
+      files: ~w(lib mix.exs README.md),
+      maintainers: ["Anton Mishchuk"],
+      licenses: ["MIT"],
+      links: %{"github" => "https://github.com/antonmi/Strom"}
     ]
   end
 end
