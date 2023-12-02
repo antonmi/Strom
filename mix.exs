@@ -23,7 +23,7 @@ defmodule Strom.MixProject do
 
   defp deps do
     [
-      {:alf, "0.10.0"},
+      {:alf, "0.10.0", only: [:dev, :test]},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]

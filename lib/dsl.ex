@@ -1,10 +1,16 @@
 defmodule Strom.DSL do
-  defmodule Pipeline do
-    defstruct pipeline: nil
+  defmodule Module do
+    defstruct module: nil, opts: []
+
+    def is_pipeline_module?(module) when is_atom(module) do
+      is_list(module.alf_components())
+    rescue
+      _error -> false
+    end
   end
 
-  defmodule Transform do
-    defstruct function: nil, module: nil
+  defmodule Function do
+    defstruct function: nil
   end
 
   defmodule Source do
@@ -67,20 +73,15 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro pipeline(module) do
+  defmacro module(module, opts \\ []) do
     quote do
-      unless is_atom(unquote(module)) do
-        raise "Pipeline be a module, given: #{inspect(unquote(module))}"
-      end
-
-      %Strom.DSL.Pipeline{pipeline: unquote(module)}
+      %Strom.DSL.Module{module: unquote(module), opts: unquote(opts)}
     end
   end
 
-  defmacro transform(function_or_module) do
-    # TODO
+  defmacro function(function) do
     quote do
-      %Strom.DSL.Transform{function: unquote(function_or_module)}
+      %Strom.DSL.Function{function: unquote(function)}
     end
   end
 

@@ -39,18 +39,25 @@ defmodule Strom.DSLTest do
 
     def to_string(stream), do: Stream.map(stream, &"#{&1}")
 
+    defmodule ToStringModule do
+      def start(:opts), do: :state
+
+      def stream(stream, :state), do: Stream.map(stream, &"#{&1}")
+
+      def stop(:state), do: :ok
+    end
+
     @topology [
       mixer([[source(source1)], [source(source2)]]),
-      pipeline(Pipeline),
+      module(Pipeline),
       splitter(%{
         &__MODULE__.odd_fun/1 => [
-          pipeline(ToString),
+          function(&__MODULE__.to_string/1),
           sink(sink_odd),
           run()
         ],
         &__MODULE__.even_fun/1 => [
-          pipeline(ToString),
-          transform(&__MODULE__.to_string/1),
+          module(ToStringModule, :opts),
           sink(sink_even),
           run()
         ]
@@ -82,28 +89,29 @@ defmodule Strom.DSLTest do
                  ]
                ]
              },
-             %Strom.DSL.Pipeline{pipeline: Pipeline},
+             %Strom.DSL.Module{module: Pipeline, opts: []},
              %Strom.DSL.Splitter{
                branches: branches
              }
            ] = MyFlow.topology()
 
     assert branches[&Strom.DSLTest.MyFlow.even_fun/1] == [
-             %Strom.DSL.Pipeline{pipeline: ToString},
-             %Strom.DSL.Transform{function: &Strom.DSLTest.MyFlow.to_string/1, module: nil},
+             %Strom.DSL.Module{module: Strom.DSLTest.MyFlow.ToStringModule, opts: :opts},
              %Strom.DSL.Sink{
                origin: %Strom.Sink.WriteLines{path: "test/data/even.txt", file: nil}
              },
              %Strom.DSL.Run{run: nil}
            ]
 
-    assert branches[&Strom.DSLTest.MyFlow.odd_fun/1] == [
-             %Strom.DSL.Pipeline{pipeline: ToString},
+    assert [
+             %Strom.DSL.Function{function: function},
              %Strom.DSL.Sink{
                origin: %Strom.Sink.WriteLines{path: "test/data/odd.txt", file: nil}
              },
              %Strom.DSL.Run{run: nil}
-           ]
+           ] = branches[&Strom.DSLTest.MyFlow.odd_fun/1]
+
+    assert is_function(function)
   end
 
   def check_output() do

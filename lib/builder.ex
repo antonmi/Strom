@@ -26,13 +26,18 @@ defmodule Strom.Builder do
           Flow.add_component(flow_pid, {:mixer, mixer})
           Strom.Mixer.stream(mixer)
 
-        %DSL.Pipeline{pipeline: pipeline} ->
-          :ok = pipeline.start()
-          Flow.add_component(flow_pid, {:pipeline, pipeline})
-          pipeline.stream(stream)
-
-        %DSL.Transform{function: function} ->
+        %DSL.Function{function: function} ->
           function.(stream)
+
+        %DSL.Module{module: module, opts: opts} ->
+          state = apply(module, :start, [opts])
+          Flow.add_component(flow_pid, {:module, {module, state}})
+
+          if DSL.Module.is_pipeline_module?(module) do
+            apply(module, :stream, [stream])
+          else
+            apply(module, :stream, [stream, state])
+          end
 
         %DSL.Splitter{branches: branches} ->
           partitions = Map.keys(branches)
@@ -54,42 +59,4 @@ defmodule Strom.Builder do
       end
     end)
   end
-
-  #  defp do_build(components, {stream, flow}) do
-  #    components
-  #    |> Enum.reduce({stream, flow}, fn(component, {stream, flow}) ->
-  #      case component do
-  #        %DSL.Source{source: source} ->
-  #          stream = Strom.Source.stream(source)
-  #          {stream, flow}
-  #
-  #        %DSL.Sink{sink: sink} ->
-  #          stream = Strom.Sink.stream(stream, sink)
-  #          {stream, flow}
-  #
-  #        %DSL.Mixer{sources: sources} ->
-  #          {stream, flow} = do_build(sources, {nil, flow})
-  #          stream =
-  #            stream
-  #            |> Strom.Mixer.new()
-  #            |> Strom.Mixer.stream()
-  #          {stream, flow}
-  #        %DSL.Pipeline{pipeline: pipeline} ->
-  #          pipeline.start()
-  #          stream = pipeline.stream(stream)
-  #          {stream, flow}
-  #        %DSL.Splitter{branches: branches} ->
-  #          partitions = Map.keys(branches)
-  #          stream
-  #          |> Strom.Splitter.new(partitions)
-  #          |> Strom.Splitter.stream()
-  #          |> Enum.with_index(fn str, index ->
-  #            partition = Enum.at(partitions, index)
-  #            branch = Map.fetch!(branches, partition)
-  #            {stream, flow} = do_build(branch, {stream, flow})
-  #          end)
-  #          {stream, flow}
-  #      end
-  #    end)
-  #  end
 end

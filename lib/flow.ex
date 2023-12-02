@@ -2,7 +2,7 @@ defmodule Strom.Flow do
   defstruct pid: nil,
             name: nil,
             streams: [],
-            pipelines: [],
+            modules: [],
             sources: [],
             sinks: [],
             mixers: [],
@@ -61,8 +61,8 @@ defmodule Strom.Flow do
         :sink ->
           %{state | sinks: [component | state.sinks]}
 
-        :pipeline ->
-          %{state | pipelines: [component | state.pipelines]}
+        :module ->
+          %{state | modules: [component | state.modules]}
       end
 
     {:reply, :ok, state}
@@ -83,9 +83,16 @@ defmodule Strom.Flow do
   def handle_call(:stop, _from, %__MODULE__{} = state) do
     Enum.each(state.sources, & &1.__struct__.stop(&1))
     Enum.each(state.sinks, & &1.__struct__.stop(&1))
-    Enum.each(state.pipelines, & &1.stop/0)
     Enum.each(state.mixers, & &1.__struct__.stop(&1))
     Enum.each(state.splitters, & &1.__struct__.stop(&1))
+
+    Enum.each(state.modules, fn {module, state} ->
+      if Strom.DSL.Module.is_pipeline_module?(module) do
+        apply(module, :stop, [])
+      else
+        apply(module, :stop, [state])
+      end
+    end)
 
     {:stop, :normal, :ok, state}
   end

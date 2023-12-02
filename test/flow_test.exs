@@ -103,6 +103,30 @@ defmodule Strom.FlowTest do
   defmodule MyFlow do
     alias Strom.DSL
 
+    defmodule MyModule do
+      defstruct state: nil
+
+      def start(_opts), do: %__MODULE__{}
+
+      def stream(stream, %__MODULE__{}), do: stream
+
+      def stop(%__MODULE__{}), do: :ok
+    end
+
+    defmodule ToString do
+      defstruct state: nil
+
+      def start(_opts), do: %__MODULE__{}
+
+      def stream(stream, %__MODULE__{}), do: stream
+
+      def stop(%__MODULE__{}), do: :ok
+    end
+
+    defmodule Function do
+      def call(stream), do: stream
+    end
+
     def topology() do
       source_origin1 = %ReadLines{path: "test/data/numbers1.txt"}
       source_origin2 = %ReadLines{path: "test/data/numbers2.txt"}
@@ -115,20 +139,20 @@ defmodule Strom.FlowTest do
       [
         %DSL.Mixer{
           sources: [
-            [%DSL.Source{origin: source_origin1}],
-            [%DSL.Source{origin: source_origin2}]
+            [%DSL.Source{origin: source_origin1}, %DSL.Module{module: MyModule}],
+            [%DSL.Source{origin: source_origin2}, %DSL.Function{function: &Function.call/1}]
           ]
         },
-        %DSL.Pipeline{pipeline: Pipeline},
+        %DSL.Module{module: Pipeline},
         %DSL.Splitter{
           branches: %{
             odd_fun => [
-              %DSL.Pipeline{pipeline: ToString},
+              %DSL.Module{module: ToString},
               %DSL.Sink{origin: sink_origin_odd},
               %DSL.Run{}
             ],
             even_fun => [
-              %DSL.Transform{function: fn stream -> Stream.map(stream, &"#{&1}") end},
+              %DSL.Function{function: fn stream -> Stream.map(stream, &"#{&1}") end},
               %DSL.Sink{origin: sink_origin_even},
               %DSL.Run{}
             ]
@@ -145,7 +169,15 @@ defmodule Strom.FlowTest do
              pid: flow_pid,
              name: Strom.FlowTest.MyFlow,
              streams: [stream1, _stream2],
-             pipelines: [Strom.FlowTest.ToString, Strom.FlowTest.Pipeline],
+             modules: [
+               "Elixir.Strom.FlowTest.MyFlow.ToString": %Strom.FlowTest.MyFlow.ToString{
+                 state: nil
+               },
+               "Elixir.Strom.FlowTest.Pipeline": :ok,
+               "Elixir.Strom.FlowTest.MyFlow.MyModule": %Strom.FlowTest.MyFlow.MyModule{
+                 state: nil
+               }
+             ],
              sources: [
                %Strom.Source{
                  origin: %ReadLines{path: "test/data/numbers2.txt"},
