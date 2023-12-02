@@ -2,12 +2,16 @@
 
 ## Stream Processing Framework
 
-Strom is built on top of [ALF](https://github.com/antonmi/ALF).
 
-Strom adds several abstractions:
+Strom operates with the following abstraction:
 - Source and Sink for reading/writing data from/to external sources
 - Mixer and Splitter for mixing/splitting streams
-- Topology
+- Function and Module for stream transformations
+- Flow, Topology
+
+## Components
+
+<img src="images/components.png" alt="Implicit components" width="5000"/>
 
 More will follow.
 
