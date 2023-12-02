@@ -29,8 +29,8 @@ defmodule Strom.Flow do
 
   def add_stream(pid, stream), do: GenServer.call(pid, {:add_stream, stream})
 
-  def add_component(pid, {type, component}),
-    do: GenServer.call(pid, {:add_component, {type, component}})
+  def add_component(pid, component),
+    do: GenServer.call(pid, {:add_component, component})
 
   def run(flow_module), do: GenServer.call(flow_module, :run)
 
@@ -46,22 +46,22 @@ defmodule Strom.Flow do
     {:reply, :ok, state}
   end
 
-  def handle_call({:add_component, {type, component}}, _from, %__MODULE__{} = state) do
+  def handle_call({:add_component, component}, _from, %__MODULE__{} = state) do
     state =
-      case type do
-        :mixer ->
+      case component do
+        %Strom.Mixer{} ->
           %{state | mixers: [component | state.mixers]}
 
-        :splitter ->
+        %Strom.Splitter{} ->
           %{state | splitters: [component | state.splitters]}
 
-        :source ->
+        %Strom.Source{} ->
           %{state | sources: [component | state.sources]}
 
-        :sink ->
+        %Strom.Sink{} ->
           %{state | sinks: [component | state.sinks]}
 
-        :module ->
+        %Strom.DSL.Module{} ->
           %{state | modules: [component | state.modules]}
       end
 
@@ -86,7 +86,7 @@ defmodule Strom.Flow do
     Enum.each(state.mixers, & &1.__struct__.stop(&1))
     Enum.each(state.splitters, & &1.__struct__.stop(&1))
 
-    Enum.each(state.modules, fn {module, state} ->
+    Enum.each(state.modules, fn %{module: module, state: state} ->
       if Strom.DSL.Module.is_pipeline_module?(module) do
         apply(module, :stop, [])
       else

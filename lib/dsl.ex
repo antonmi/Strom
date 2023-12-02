@@ -1,6 +1,6 @@
 defmodule Strom.DSL do
   defmodule Module do
-    defstruct module: nil, opts: []
+    defstruct module: nil, opts: [], state: nil
 
     def is_pipeline_module?(module) when is_atom(module) do
       is_list(module.alf_components())

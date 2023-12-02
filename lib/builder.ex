@@ -12,26 +12,27 @@ defmodule Strom.Builder do
       case component do
         %DSL.Source{origin: origin} ->
           source = Strom.Source.start(origin)
-          Flow.add_component(flow_pid, {:source, source})
+          Flow.add_component(flow_pid, source)
           Strom.Source.stream(source)
 
         %DSL.Sink{origin: origin} ->
           sink = Strom.Sink.start(origin)
-          Flow.add_component(flow_pid, {:sink, sink})
+          Flow.add_component(flow_pid, sink)
           Strom.Sink.stream(stream, sink)
 
         %DSL.Mixer{sources: sources} ->
           sources = Enum.map(sources, &do_build(&1, nil, flow_pid))
           mixer = Strom.Mixer.start(sources)
-          Flow.add_component(flow_pid, {:mixer, mixer})
+          Flow.add_component(flow_pid, mixer)
           Strom.Mixer.stream(mixer)
 
         %DSL.Function{function: function} ->
           function.(stream)
 
-        %DSL.Module{module: module, opts: opts} ->
+        %DSL.Module{module: module, opts: opts} = mod ->
           state = apply(module, :start, [opts])
-          Flow.add_component(flow_pid, {:module, {module, state}})
+          mod = %{mod | state: state}
+          Flow.add_component(flow_pid, mod)
 
           if DSL.Module.is_pipeline_module?(module) do
             apply(module, :stream, [stream])
@@ -43,7 +44,7 @@ defmodule Strom.Builder do
           partitions = Map.keys(branches)
 
           splitter = Strom.Splitter.start(stream, partitions)
-          Flow.add_component(flow_pid, {:splitter, splitter})
+          Flow.add_component(flow_pid, splitter)
 
           splitter
           |> Strom.Splitter.stream()

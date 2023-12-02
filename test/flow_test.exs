@@ -170,12 +170,16 @@ defmodule Strom.FlowTest do
              name: Strom.FlowTest.MyFlow,
              streams: [stream1, _stream2],
              modules: [
-               "Elixir.Strom.FlowTest.MyFlow.ToString": %Strom.FlowTest.MyFlow.ToString{
-                 state: nil
+               %Strom.DSL.Module{
+                 module: Strom.FlowTest.MyFlow.ToString,
+                 opts: [],
+                 state: %Strom.FlowTest.MyFlow.ToString{state: nil}
                },
-               "Elixir.Strom.FlowTest.Pipeline": :ok,
-               "Elixir.Strom.FlowTest.MyFlow.MyModule": %Strom.FlowTest.MyFlow.MyModule{
-                 state: nil
+               %Strom.DSL.Module{module: Strom.FlowTest.Pipeline, opts: [], state: :ok},
+               %Strom.DSL.Module{
+                 module: Strom.FlowTest.MyFlow.MyModule,
+                 opts: [],
+                 state: %Strom.FlowTest.MyFlow.MyModule{state: nil}
                }
              ],
              sources: [
