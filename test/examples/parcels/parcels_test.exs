@@ -252,6 +252,28 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
     end
   end
 
+  describe "with several pipelines and flow" do
+    defmodule ParcelsFlow do
+      use Strom.DSL
+
+      @topology [
+        mixer([
+          source(%ReadLines{path: "test/examples/parcels/parcels.csv"}),
+          source(%ReadLines{path: "test/examples/parcels/orders.csv"}),
+        ]),
+        module(BuildPipeline),
+        module(OrderingPipeline),
+        module(Pipeline),
+        run()
+      ]
+    end
+
+    test "start flow" do
+      flow = ParcelsFlow.start()
+      assert Enum.to_list(hd(flow.streams)) == expected_results()
+    end
+  end
+
   defmodule ComposedPipeline do
     use ALF.DSL
 

@@ -62,7 +62,6 @@ defmodule Strom.Builder do
 
         %DSL.Run{} ->
           Flow.add_stream(flow_pid, stream)
-          stream
 
         %DSL.FlowSource{flow: flow_module} ->
           flow = apply(flow_module, :start, [])

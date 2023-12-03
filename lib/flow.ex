@@ -44,7 +44,7 @@ defmodule Strom.Flow do
 
   def handle_call({:add_stream, stream}, _from, %__MODULE__{streams: streams} = state) do
     state = %{state | streams: [stream | streams]}
-    {:reply, :ok, state}
+    {:reply, stream, state}
   end
 
   def handle_call({:add_component, component}, _from, %__MODULE__{} = state) do
