@@ -33,7 +33,7 @@ defmodule Strom.Flow do
   def add_component(pid, component),
     do: GenServer.call(pid, {:add_component, component})
 
-  def run(flow_module), do: GenServer.call(flow_module, :run)
+  def run(flow_module), do: GenServer.call(flow_module, :run, :infinity)
 
   def stop(flow_module) when is_atom(flow_module), do: GenServer.call(flow_module, :stop)
 

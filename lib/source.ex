@@ -19,7 +19,7 @@ defmodule Strom.Source do
   @impl true
   def init(%__MODULE__{} = state), do: {:ok, %{state | pid: self()}}
 
-  def call(%__MODULE__{pid: pid}), do: GenServer.call(pid, :call)
+  def call(%__MODULE__{pid: pid}), do: GenServer.call(pid, :call, :infinity)
 
   def infinite?(%__MODULE__{pid: pid}), do: GenServer.call(pid, :infinite)
 
