@@ -33,6 +33,10 @@ defmodule Strom.DSL do
     defstruct run: nil
   end
 
+  defmodule FlowSource do
+    defstruct flow: nil
+  end
+
   defmacro source(origin) do
     quote do
       unless is_struct(unquote(origin)) do
@@ -88,6 +92,12 @@ defmodule Strom.DSL do
   defmacro run() do
     quote do
       %Strom.DSL.Run{}
+    end
+  end
+
+  defmacro flow_source(flow) do
+    quote do
+      %Strom.DSL.FlowSource{flow: unquote(flow)}
     end
   end
 

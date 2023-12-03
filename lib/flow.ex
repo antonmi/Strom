@@ -6,7 +6,8 @@ defmodule Strom.Flow do
             sources: [],
             sinks: [],
             mixers: [],
-            splitters: []
+            splitters: [],
+            flows: []
 
   use GenServer
 
@@ -63,6 +64,9 @@ defmodule Strom.Flow do
 
         %Strom.DSL.Module{} ->
           %{state | modules: [component | state.modules]}
+
+        %Strom.Flow{} ->
+          %{state | flows: [component | state.flows]}
       end
 
     {:reply, :ok, state}
@@ -85,6 +89,7 @@ defmodule Strom.Flow do
     Enum.each(state.sinks, & &1.__struct__.stop(&1))
     Enum.each(state.mixers, & &1.__struct__.stop(&1))
     Enum.each(state.splitters, & &1.__struct__.stop(&1))
+    Enum.each(state.flows, & &1.__struct__.stop(&1))
 
     Enum.each(state.modules, fn %{module: module, state: state} ->
       if Strom.DSL.Module.is_pipeline_module?(module) do

@@ -48,7 +48,7 @@ defmodule Strom.DSLTest do
     end
 
     @topology [
-      mixer([[source(source1)], [source(source2)]]),
+      mixer([source(source1), source(source2)]),
       module(Pipeline),
       splitter(%{
         &__MODULE__.odd_fun/1 => [
@@ -69,24 +69,20 @@ defmodule Strom.DSLTest do
     assert [
              %Strom.DSL.Mixer{
                sources: [
-                 [
-                   %Strom.DSL.Source{
-                     origin: %Strom.Source.ReadLines{
-                       path: "test/data/numbers1.txt",
-                       file: nil,
-                       infinite: false
-                     }
+                 %Strom.DSL.Source{
+                   origin: %Strom.Source.ReadLines{
+                     path: "test/data/numbers1.txt",
+                     file: nil,
+                     infinite: false
                    }
-                 ],
-                 [
-                   %Strom.DSL.Source{
-                     origin: %Strom.Source.ReadLines{
-                       path: "test/data/numbers2.txt",
-                       file: nil,
-                       infinite: false
-                     }
+                 },
+                 %Strom.DSL.Source{
+                   origin: %Strom.Source.ReadLines{
+                     path: "test/data/numbers2.txt",
+                     file: nil,
+                     infinite: false
                    }
-                 ]
+                 }
                ]
              },
              %Strom.DSL.Module{module: Pipeline, opts: []},
@@ -137,5 +133,51 @@ defmodule Strom.DSLTest do
     MyFlow.run()
     check_output()
     MyFlow.stop()
+  end
+
+  test "start and run stream separately" do
+    flow = MyFlow.start()
+
+    lists =
+      flow.streams
+      |> Enum.map(fn stream ->
+        Task.async(fn -> Enum.to_list(stream) end)
+      end)
+      |> Enum.map(&Task.await/1)
+      |> Enum.map(&Enum.sort/1)
+
+    assert Enum.member?(lists, ["2", "4", "6"])
+    assert Enum.member?(lists, ["11", "21", "3", "31", "41", "5", "51"])
+
+    check_output()
+  end
+
+  describe "connect 2 flows" do
+    defmodule AnotherFlow do
+      use Strom.DSL
+
+      sink_mixed = %WriteLines{path: "test/data/mixed.txt"}
+
+      @topology [
+        flow_source(MyFlow),
+        sink(sink_mixed),
+        run()
+      ]
+    end
+
+    test "run mixed" do
+      AnotherFlow.start()
+      AnotherFlow.run()
+
+      check_output()
+
+      mixed =
+        "test/data/mixed.txt"
+        |> File.read!()
+        |> String.split()
+        |> Enum.sort()
+
+      assert mixed == ["11", "2", "21", "3", "31", "4", "41", "5", "51", "6"]
+    end
   end
 end
