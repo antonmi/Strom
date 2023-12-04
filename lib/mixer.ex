@@ -20,7 +20,7 @@ defmodule Strom.Mixer do
   end
 
   def call(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_list(to_mix) do
-    streams = Map.values(Map.take(flow, to_mix))
+    streams = Map.take(flow, to_mix)
     :ok = GenServer.call(mixer.pid, {:run_streams, streams})
 
     new_stream =
@@ -48,12 +48,12 @@ defmodule Strom.Mixer do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp run_streams(streams, pid, chunk_every) do
-    Enum.map(streams, fn stream ->
-      async_run_stream(stream, chunk_every, pid)
+    Enum.map(streams, fn {name, stream} ->
+      async_run_stream(name, stream, chunk_every, pid)
     end)
   end
 
-  defp async_run_stream(stream, chunk_every, pid) do
+  defp async_run_stream(name, stream, chunk_every, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(chunk_every)
@@ -63,7 +63,7 @@ defmodule Strom.Mixer do
       end)
       |> Stream.run()
 
-      GenServer.call(pid, {:done, stream})
+      GenServer.call(pid, {:done, name})
     end)
   end
 
@@ -84,16 +84,16 @@ defmodule Strom.Mixer do
   def handle_call({:run_streams, streams}, _from, %__MODULE__{} = mixer) do
     run_streams(streams, mixer.pid, mixer.chunk_every)
 
-    {:reply, :ok, %{mixer | running: true, streams: MapSet.new(streams)}}
+    {:reply, :ok, %{mixer | running: true, streams: streams}}
   end
 
-  def handle_call({:done, stream}, _from, %__MODULE__{streams: streams} = mixer) do
-    streams = MapSet.delete(streams, stream)
+  def handle_call({:done, name}, _from, %__MODULE__{streams: streams} = mixer) do
+    streams = Map.delete(streams, name)
     {:reply, :ok, %{mixer | streams: streams, running: false}}
   end
 
   def handle_call(:get_data, _from, %__MODULE__{data: data, streams: streams} = mixer) do
-    if length(data) == 0 && MapSet.size(streams) == 0 do
+    if length(data) == 0 && map_size(streams) == 0 do
       {:reply, {:error, :done}, mixer}
     else
       {:reply, {:ok, data}, %{mixer | data: []}}
