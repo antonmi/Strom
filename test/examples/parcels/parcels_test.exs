@@ -259,7 +259,7 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
       @topology [
         mixer([
           source(%ReadLines{path: "test/examples/parcels/parcels.csv"}),
-          source(%ReadLines{path: "test/examples/parcels/orders.csv"}),
+          source(%ReadLines{path: "test/examples/parcels/orders.csv"})
         ]),
         module(BuildPipeline),
         module(OrderingPipeline),

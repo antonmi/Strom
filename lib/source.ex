@@ -25,10 +25,10 @@ defmodule Strom.Source do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(%{__struct__: source_module} = source) do
+  def stream(%__MODULE__{} = source) do
     Stream.resource(
       fn -> source end,
-      fn source -> apply(source_module, :call, [source]) end,
+      fn source -> call(source) end,
       fn source -> source end
     )
   end

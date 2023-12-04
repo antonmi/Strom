@@ -22,12 +22,12 @@ defmodule Strom.Sink do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(stream, %{__struct__: sink_module} = sink) do
+  def stream(stream, %__MODULE__{} = sink) do
     stream
     |> Stream.transform(
       fn -> sink end,
       fn el, sink ->
-        apply(sink_module, :call, [sink, el])
+        call(sink, el)
         {[el], sink}
       end,
       fn sink -> sink end
