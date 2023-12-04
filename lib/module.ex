@@ -14,11 +14,23 @@ defmodule Strom.Module do
 
     sub_flows =
       Enum.reduce(streams, %{}, fn {name, stream}, acc ->
-        stream = apply(module, :stream, [stream, state])
+        stream =
+          if is_pipeline_module?(module) do
+            apply(module, :stream, [stream])
+          else
+            apply(module, :stream, [stream, state])
+          end
+
         Map.put(acc, name, stream)
       end)
 
     Map.merge(flow, sub_flows)
+  end
+
+  defp is_pipeline_module?(module) when is_atom(module) do
+    is_list(module.alf_components())
+  rescue
+    _error -> false
   end
 
   def stream(flow, %__MODULE__{} = state, name) do
@@ -26,6 +38,10 @@ defmodule Strom.Module do
   end
 
   def stop(%__MODULE__{module: module, state: state}) do
-    apply(module, :stop, [state])
+    if is_pipeline_module?(module) do
+      apply(module, :stop, [])
+    else
+      apply(module, :stop, [state])
+    end
   end
 end

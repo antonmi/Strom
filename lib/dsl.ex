@@ -1,103 +1,83 @@
 defmodule Strom.DSL do
   defmodule Module do
-    defstruct module: nil, opts: [], state: nil
-
-    def is_pipeline_module?(module) when is_atom(module) do
-      is_list(module.alf_components())
-    rescue
-      _error -> false
-    end
+    defstruct module: nil, opts: [], inputs: [], state: nil
   end
 
   defmodule Function do
-    defstruct function: nil
+    defstruct function: nil, inputs: []
   end
 
   defmodule Source do
-    defstruct origin: nil
+    defstruct source: nil, origin: nil, name: nil
   end
 
   defmodule Sink do
-    defstruct origin: nil
+    defstruct sink: nil, origin: nil, name: nil, sync: false
   end
 
   defmodule Mixer do
-    defstruct sources: []
+    defstruct mixer: nil, inputs: [], output: nil
   end
 
   defmodule Splitter do
-    defstruct branches: []
+    defstruct splitter: nil, input: nil, partitions: %{}
   end
 
-  defmodule Run do
-    defstruct run: nil
-  end
-
-  defmodule FlowSource do
-    defstruct flow: nil
-  end
-
-  defmacro source(origin) do
+  defmacro source(origin, name) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Source origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Source{origin: unquote(origin)}
+      %Strom.DSL.Source{origin: unquote(origin), name: unquote(name)}
     end
   end
 
-  defmacro sink(origin) do
+  defmacro sink(origin, name, sync \\ false) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Sink origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Sink{origin: unquote(origin)}
+      %Strom.DSL.Sink{origin: unquote(origin), name: unquote(name), sync: unquote(sync)}
     end
   end
 
-  defmacro mixer(sources) do
+  defmacro mixer(inputs, output) do
     quote do
-      unless is_list(unquote(sources)) do
-        raise "Mixer sources must be a list, given: #{inspect(unquote(sources))}"
+      unless is_list(unquote(inputs)) do
+        raise "Mixer sources must be a list, given: #{inspect(unquote(inputs))}"
       end
 
-      %Strom.DSL.Mixer{sources: unquote(sources)}
+      %Strom.DSL.Mixer{inputs: unquote(inputs), output: unquote(output)}
     end
   end
 
-  defmacro splitter(branches) do
+  defmacro splitter(input, partitions) do
     quote do
-      unless is_map(unquote(branches)) do
-        raise "Branches in splitter must be a map, given: #{inspect(unquote(branches))}"
+      unless is_map(unquote(partitions)) and map_size(unquote(partitions)) > 0 do
+        raise "Branches in splitter must be a map, given: #{inspect(unquote(partitions))}"
       end
 
-      %Strom.DSL.Splitter{branches: unquote(branches)}
+      %Strom.DSL.Splitter{input: unquote(input), partitions: unquote(partitions)}
     end
   end
 
-  defmacro module(module, opts \\ []) do
+  defmacro module(module, inputs) do
     quote do
-      %Strom.DSL.Module{module: unquote(module), opts: unquote(opts)}
+      %Strom.DSL.Module{module: unquote(module), opts: [], inputs: unquote(inputs)}
     end
   end
 
-  defmacro function(function) do
+  defmacro module({module, opts}, inputs) do
     quote do
-      %Strom.DSL.Function{function: unquote(function)}
+      %Strom.DSL.Module{module: unquote(module), opts: unquote(opts), inputs: unquote(inputs)}
     end
   end
 
-  defmacro run() do
+  defmacro function(function, inputs) do
     quote do
-      %Strom.DSL.Run{}
-    end
-  end
-
-  defmacro flow_source(flow) do
-    quote do
-      %Strom.DSL.FlowSource{flow: unquote(flow)}
+      %Strom.DSL.Function{function: unquote(function), inputs: unquote(inputs)}
     end
   end
 
@@ -112,9 +92,14 @@ defmodule Strom.DSL do
         Strom.Flow.start(__MODULE__)
       end
 
-      @spec run() :: :ok
-      def run() do
-        Strom.Flow.run(__MODULE__)
+      @spec topology() :: list(map)
+      def topology() do
+        Strom.Flow.topology(__MODULE__)
+      end
+
+      @spec run(map) :: map()
+      def run(flow) when is_map(flow) do
+        Strom.Flow.run(__MODULE__, flow)
       end
 
       @spec stop() :: :ok
@@ -126,7 +111,7 @@ defmodule Strom.DSL do
 
   defmacro __before_compile__(_env) do
     quote do
-      def topology, do: @topology
+      def flow_topology, do: @topology
     end
   end
 end

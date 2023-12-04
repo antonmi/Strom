@@ -7,98 +7,105 @@ defmodule Strom.Flow do
             sinks: [],
             mixers: [],
             splitters: [],
-            flows: []
+            flows: [],
+            module: nil,
+            topology: []
 
   use GenServer
+  alias Strom.DSL
 
   @type t :: %__MODULE__{}
 
   # TODO Supervisor
   def start(flow_module, _opts \\ []) when is_atom(flow_module) do
-    state = %__MODULE__{name: flow_module}
+    state = %__MODULE__{name: flow_module, module: flow_module}
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state, name: flow_module)
 
-    Strom.Builder.build(flow_module.topology(), pid)
     __state__(pid)
   end
 
   @impl true
-  def init(%__MODULE__{} = state) do
-    {:ok, %{state | pid: self()}}
+  def init(%__MODULE__{module: module} = state) do
+    topology = Strom.Builder.build(module.flow_topology())
+    {:ok, %{state | pid: self(), topology: topology}}
   end
 
-  def add_stream(pid, stream), do: GenServer.call(pid, {:add_stream, stream})
+  def topology(flow_module), do: GenServer.call(flow_module, :topology)
 
-  def add_component(pid, component),
-    do: GenServer.call(pid, {:add_component, component})
-
-  def run(flow_module), do: GenServer.call(flow_module, :run, :infinity)
+  def run(flow_module, flow), do: GenServer.call(flow_module, {:run, flow}, :infinity)
 
   def stop(flow_module) when is_atom(flow_module), do: GenServer.call(flow_module, :stop)
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
+  def handle_call(:topology, _from, state), do: {:reply, state.topology, state}
+
   def handle_call(:__state__, _from, state), do: {:reply, state, state}
 
-  def handle_call({:add_stream, stream}, _from, %__MODULE__{streams: streams} = state) do
-    state = %{state | streams: [stream | streams]}
-    {:reply, stream, state}
-  end
+  def handle_call({:run, init_flow}, _from, %__MODULE__{streams: streams} = state) do
+    flow =
+      state.topology
+      |> Enum.reduce(init_flow, fn component, flow ->
+        case component do
+          %DSL.Source{source: source, name: name} ->
+            Strom.Source.stream(flow, source, name)
 
-  def handle_call({:add_component, component}, _from, %__MODULE__{} = state) do
-    state =
-      case component do
-        %Strom.Mixer{} ->
-          %{state | mixers: [component | state.mixers]}
+          %DSL.Sink{sink: sink, name: name, sync: sync} ->
+            Strom.Sink.stream(flow, sink, name, sync)
 
-        %Strom.Splitter{} ->
-          %{state | splitters: [component | state.splitters]}
+          %DSL.Mixer{mixer: mixer, inputs: inputs, output: output} ->
+            Strom.Mixer.stream(flow, mixer, inputs, output)
 
-        %Strom.Source{} ->
-          %{state | sources: [component | state.sources]}
+          %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
+            Strom.Splitter.stream(flow, splitter, input, partitions)
 
-        %Strom.Sink{} ->
-          %{state | sinks: [component | state.sinks]}
+          %DSL.Function{function: function, inputs: inputs} ->
+            Strom.Function.stream(flow, function, inputs)
 
-        %Strom.DSL.Module{} ->
-          %{state | modules: [component | state.modules]}
-
-        %Strom.Flow{} ->
-          %{state | flows: [component | state.flows]}
-      end
-
-    {:reply, :ok, state}
-  end
-
-  def handle_call(:run, _from, %__MODULE__{streams: streams} = state) do
-    streams
-    |> Enum.map(fn stream ->
-      Task.async(fn ->
-        Stream.run(stream)
+          %DSL.Module{module: module, inputs: inputs, state: state} = mod ->
+            Strom.Module.stream(flow, module, inputs)
+        end
       end)
-    end)
-    |> Enum.map(&Task.await(&1, :infinity))
 
-    {:reply, :ok, state}
+    {:reply, flow, state}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = state) do
-    Enum.each(state.sources, & &1.__struct__.stop(&1))
-    Enum.each(state.sinks, & &1.__struct__.stop(&1))
-    Enum.each(state.mixers, & &1.__struct__.stop(&1))
-    Enum.each(state.splitters, & &1.__struct__.stop(&1))
-    Enum.each(state.flows, & &1.__struct__.stop(&1))
+    state.topology
+    |> Enum.each(fn component ->
+      case component do
+        %DSL.Source{source: source} ->
+          Strom.Source.stop(source)
 
-    Enum.each(state.modules, fn %{module: module, state: state} ->
-      if Strom.DSL.Module.is_pipeline_module?(module) do
-        apply(module, :stop, [])
-      else
-        apply(module, :stop, [state])
+        %DSL.Sink{sink: sink} ->
+          Strom.Sink.stop(sink)
+
+        %DSL.Mixer{mixer: mixer} ->
+          Strom.Mixer.stop(mixer)
+
+        %DSL.Splitter{splitter: splitter} ->
+          Strom.Splitter.stop(splitter)
+
+        %DSL.Function{function: function, inputs: inputs} ->
+          Strom.Function.stop(function)
+
+        %DSL.Module{module: module, inputs: inputs, state: state} = mod ->
+          Strom.Module.stop(module)
       end
     end)
 
     {:stop, :normal, :ok, state}
+  end
+
+  def handle_info({_task_ref, :ok}, mixer) do
+    # do nothing for now
+    {:noreply, mixer}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mixer) do
+    # do nothing for now
+    {:noreply, mixer}
   end
 end

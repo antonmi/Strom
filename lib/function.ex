@@ -23,5 +23,5 @@ defmodule Strom.Function do
     stream(flow, %__MODULE__{function: function}, [name])
   end
 
-  def stop(%__MODULE__{}), do: :ok
+  def stop(%__MODULE__{}), do: :ok |> IO.inspect()
 end
