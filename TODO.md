@@ -1,2 +1,3 @@
 - Proper supervision tree
 - wrap function and module to process? what about pipeline?
+- waiting strategy in Mixer and Splitter
