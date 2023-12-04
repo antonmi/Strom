@@ -1,6 +1,4 @@
 defmodule Strom.Function do
-  use GenServer
-
   defstruct function: nil
 
   def start(function) do
@@ -23,5 +21,5 @@ defmodule Strom.Function do
     stream(flow, %__MODULE__{function: function}, [name])
   end
 
-  def stop(%__MODULE__{}), do: :ok |> IO.inspect()
+  def stop(%__MODULE__{}), do: :ok
 end

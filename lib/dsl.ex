@@ -63,15 +63,15 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro module(module, inputs) do
-    quote do
-      %Strom.DSL.Module{module: unquote(module), opts: [], inputs: unquote(inputs)}
-    end
-  end
-
   defmacro module({module, opts}, inputs) do
     quote do
       %Strom.DSL.Module{module: unquote(module), opts: unquote(opts), inputs: unquote(inputs)}
+    end
+  end
+
+  defmacro module(module, inputs) do
+    quote do
+      %Strom.DSL.Module{module: unquote(module), opts: [], inputs: unquote(inputs)}
     end
   end
 

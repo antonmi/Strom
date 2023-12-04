@@ -1,6 +1,4 @@
 defmodule Strom.Module do
-  use GenServer
-
   defstruct module: nil, opts: [], state: nil
 
   def start(module, opts \\ []) do
@@ -27,14 +25,14 @@ defmodule Strom.Module do
     Map.merge(flow, sub_flows)
   end
 
+  def stream(flow, %__MODULE__{} = state, name) do
+    stream(flow, state, [name])
+  end
+
   defp is_pipeline_module?(module) when is_atom(module) do
     is_list(module.alf_components())
   rescue
     _error -> false
-  end
-
-  def stream(flow, %__MODULE__{} = state, name) do
-    stream(flow, state, [name])
   end
 
   def stop(%__MODULE__{module: module, state: state}) do

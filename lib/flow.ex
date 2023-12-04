@@ -1,13 +1,6 @@
 defmodule Strom.Flow do
   defstruct pid: nil,
             name: nil,
-            streams: [],
-            modules: [],
-            sources: [],
-            sinks: [],
-            mixers: [],
-            splitters: [],
-            flows: [],
             module: nil,
             topology: []
 
@@ -27,8 +20,34 @@ defmodule Strom.Flow do
 
   @impl true
   def init(%__MODULE__{module: module} = state) do
-    topology = Strom.Builder.build(module.flow_topology())
+    topology = build(module.flow_topology())
     {:ok, %{state | pid: self(), topology: topology}}
+  end
+
+  defp build(components) do
+    components
+    |> Enum.map(fn component ->
+      case component do
+        %DSL.Source{origin: origin} = source ->
+          %{source | source: Strom.Source.start(origin)}
+
+        %DSL.Sink{origin: origin} = sink ->
+          %{sink | sink: Strom.Sink.start(origin)}
+
+        %DSL.Mixer{} = mixer ->
+          %{mixer | mixer: Strom.Mixer.start()}
+
+        %DSL.Splitter{} = splitter ->
+          %{splitter | splitter: Strom.Splitter.start()}
+
+        %DSL.Function{function: function} = fun ->
+          %{fun | function: Strom.Function.start(function)}
+
+        %DSL.Module{module: module, opts: opts} = mod ->
+          module = Strom.Module.start(module, opts)
+          %{mod | module: module}
+      end
+    end)
   end
 
   def topology(flow_module), do: GenServer.call(flow_module, :topology)
@@ -44,7 +63,7 @@ defmodule Strom.Flow do
 
   def handle_call(:__state__, _from, state), do: {:reply, state, state}
 
-  def handle_call({:run, init_flow}, _from, %__MODULE__{streams: streams} = state) do
+  def handle_call({:run, init_flow}, _from, %__MODULE__{} = state) do
     flow =
       state.topology
       |> Enum.reduce(init_flow, fn component, flow ->
@@ -64,7 +83,7 @@ defmodule Strom.Flow do
           %DSL.Function{function: function, inputs: inputs} ->
             Strom.Function.stream(flow, function, inputs)
 
-          %DSL.Module{module: module, inputs: inputs, state: state} = mod ->
+          %DSL.Module{module: module, inputs: inputs} ->
             Strom.Module.stream(flow, module, inputs)
         end
       end)
@@ -88,10 +107,10 @@ defmodule Strom.Flow do
         %DSL.Splitter{splitter: splitter} ->
           Strom.Splitter.stop(splitter)
 
-        %DSL.Function{function: function, inputs: inputs} ->
+        %DSL.Function{function: function} ->
           Strom.Function.stop(function)
 
-        %DSL.Module{module: module, inputs: inputs, state: state} = mod ->
+        %DSL.Module{module: module} ->
           Strom.Module.stop(module)
       end
     end)
@@ -99,6 +118,7 @@ defmodule Strom.Flow do
     {:stop, :normal, :ok, state}
   end
 
+  @impl true
   def handle_info({_task_ref, :ok}, mixer) do
     # do nothing for now
     {:noreply, mixer}

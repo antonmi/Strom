@@ -1,8 +1,7 @@
 defmodule Strom.Integration.SplitAndMixTest do
   use ExUnit.Case
 
-  alias Strom.{Source, Sink, Mixer, Splitter, Function}
-  alias Strom.Sink.WriteLines
+  alias Strom.{Source, Mixer, Splitter, Function}
   alias Strom.Source.ReadLines
 
   setup do

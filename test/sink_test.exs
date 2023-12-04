@@ -41,7 +41,6 @@ defmodule Strom.SinkTest do
              |> Source.stream(source(), :another_stream)
              |> Sink.stream(sink, :my_stream, true)
 
-    content = File.read!("test/data/output.csv")
     lines = Enum.to_list(another_stream)
 
     assert Enum.join(lines, "\n") <> "\n" == File.read!("test/data/output.csv")

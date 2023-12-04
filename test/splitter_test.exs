@@ -3,7 +3,7 @@ defmodule Strom.SplitterTest do
 
   alias Strom.Source
   alias Strom.Source.ReadLines
-  alias Strom.{Mixer, Splitter}
+  alias Strom.Splitter
 
   def orders_and_parcels do
     orders =

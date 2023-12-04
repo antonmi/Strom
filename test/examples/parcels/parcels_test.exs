@@ -161,12 +161,7 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
   alias Strom.Examples.Parcels.BuildPipeline
   alias Strom.Examples.Parcels.OrderingPipeline
   alias Strom.Examples.Parcels.Pipeline
-  alias Strom.Source
   alias Strom.Source.ReadLines
-  alias Strom.Sink
-  alias Strom.Sink.WriteLines
-  alias Strom.Mixer
-  alias Strom.Splitter
 
   def expected_results do
     [
@@ -188,213 +183,25 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
     ]
   end
 
-  setup do
-    source1 = Source.start(%ReadLines{path: "test/examples/parcels/parcels.csv"})
-    source2 = Source.start(%ReadLines{path: "test/examples/parcels/orders.csv"})
-
-    stream1 = Source.stream(source1)
-    stream2 = Source.stream(source2)
-
-    %{stream1: stream1, stream2: stream2}
-  end
-
   describe "with several pipelines" do
-    setup do
-      BuildPipeline.start()
-      OrderingPipeline.start()
-      Pipeline.start()
-
-      on_exit(fn ->
-        BuildPipeline.stop()
-        OrderingPipeline.stop()
-        Pipeline.stop()
-      end)
-    end
-
-    test "with several pipelines", %{stream1: stream1, stream2: stream2} do
-      results =
-        [stream1, stream2]
-        |> Mixer.start()
-        |> Mixer.stream()
-        |> BuildPipeline.stream()
-        |> OrderingPipeline.stream()
-        |> Pipeline.stream()
-        |> Enum.to_list()
-
-      assert results == expected_results()
-    end
-  end
-
-  describe "with several sync pipelines" do
-    setup do
-      BuildPipeline.start(sync: true)
-      OrderingPipeline.start(sync: true)
-      Pipeline.start(sync: true)
-
-      on_exit(fn ->
-        BuildPipeline.stop()
-        OrderingPipeline.stop()
-        Pipeline.stop()
-      end)
-    end
-
-    test "with several sync pipelines", %{stream1: stream1, stream2: stream2} do
-      results =
-        [stream1, stream2]
-        |> Mixer.start()
-        |> Mixer.stream()
-        |> BuildPipeline.stream()
-        |> OrderingPipeline.stream()
-        |> Pipeline.stream()
-        |> Enum.to_list()
-
-      assert results == expected_results()
-    end
-  end
-
-  describe "with several pipelines and flow" do
-    defmodule ParcelsFlow do
+    defmodule SeveralPipelinesFlow do
       use Strom.DSL
 
       @topology [
-        mixer([
-          source(%ReadLines{path: "test/examples/parcels/parcels.csv"}),
-          source(%ReadLines{path: "test/examples/parcels/orders.csv"})
-        ]),
-        module(BuildPipeline),
-        module(OrderingPipeline),
-        module(Pipeline),
-        run()
+        source(%ReadLines{path: "test/examples/parcels/parcels.csv"}, :parcels),
+        source(%ReadLines{path: "test/examples/parcels/orders.csv"}, :orders),
+        mixer([:orders, :parcels], :mixed),
+        module(BuildPipeline, :mixed),
+        module(OrderingPipeline, :mixed),
+        module(Pipeline, :mixed)
       ]
     end
 
-    test "start flow" do
-      flow = ParcelsFlow.start()
-      assert Enum.to_list(hd(flow.streams)) == expected_results()
-    end
-  end
+    test "with several pipelines" do
+      SeveralPipelinesFlow.start()
+      %{mixed: mixed} = SeveralPipelinesFlow.run(%{})
 
-  defmodule ComposedPipeline do
-    use ALF.DSL
-
-    @partitions_count 3
-
-    main_stages = from(OrderingPipeline) ++ from(Pipeline)
-
-    @components from(BuildPipeline) ++
-                  [
-                    switch(:route_event,
-                      branches:
-                        Enum.reduce(0..(@partitions_count - 1), %{}, fn i, memo ->
-                          Map.put(memo, i, main_stages)
-                        end)
-                    )
-                  ]
-
-    def route_event(event, _) do
-      rem(event[:order_number], @partitions_count)
-    end
-  end
-
-  describe "with ComposedPipeline" do
-    setup do
-      ComposedPipeline.start()
-      on_exit(&ComposedPipeline.stop/0)
-    end
-
-    test "with composed pipeline", %{stream1: stream1, stream2: stream2} do
-      results =
-        [stream1, stream2]
-        |> Mixer.start()
-        |> Mixer.stream()
-        |> ComposedPipeline.stream()
-        |> Enum.to_list()
-
-      assert results == expected_results()
-    end
-  end
-
-  defmodule EventToStringPipeline do
-    use ALF.DSL
-
-    @components [
-      stage(:to_string)
-    ]
-
-    def to_string(event, _) do
-      "#{event.type},#{event.occurred_at},#{event.order_number}"
-    end
-  end
-
-  describe "split and save to file" do
-    setup do
-      ComposedPipeline.start()
-      EventToStringPipeline.start()
-
-      on_exit(fn ->
-        ComposedPipeline.stop()
-        EventToStringPipeline.stop()
-      end)
-    end
-
-    test "save to files", %{stream1: stream1, stream2: stream2} do
-      partitions = [
-        &(&1[:type] == "ALL_PARCELS_SHIPPED"),
-        &(&1[:type] == "THRESHOLD_EXCEEDED")
-      ]
-
-      sink1 = Sink.start(%WriteLines{path: "test/examples/parcels/all_parcels_shipped.csv"})
-      sink2 = Sink.start(%WriteLines{path: "test/examples/parcels/threshold_exceeded.csv"})
-
-      results =
-        [stream1, stream2]
-        |> Mixer.start()
-        |> Mixer.stream()
-        |> ComposedPipeline.stream()
-        |> Splitter.start(partitions)
-        |> Splitter.stream()
-        |> Enum.zip([sink1, sink2])
-        |> Enum.map(fn {stream, sink} ->
-          Task.async(fn ->
-            stream
-            |> EventToStringPipeline.stream()
-            |> Sink.stream(sink)
-            |> Enum.to_list()
-          end)
-        end)
-        |> Enum.map(&Task.await/1)
-
-      assert results == [
-               ["ALL_PARCELS_SHIPPED,2017-04-21 08:00:00.000Z,111"],
-               [
-                 "THRESHOLD_EXCEEDED,2017-04-20 09:00:00.000Z,222",
-                 "THRESHOLD_EXCEEDED,2017-04-21 09:00:00.000Z,333"
-               ]
-             ]
-
-      assert File.read!("test/examples/parcels/all_parcels_shipped.csv") ==
-               "ALL_PARCELS_SHIPPED,2017-04-21 08:00:00.000Z,111\n"
-
-      assert File.read!("test/examples/parcels/threshold_exceeded.csv") ==
-               "THRESHOLD_EXCEEDED,2017-04-20 09:00:00.000Z,222\nTHRESHOLD_EXCEEDED,2017-04-21 09:00:00.000Z,333\n"
-    end
-  end
-
-  describe "with ComposedPipeline sync" do
-    setup do
-      ComposedPipeline.start(sync: true)
-      on_exit(&ComposedPipeline.stop/0)
-    end
-
-    test "with composed sync pipeline", %{stream1: stream1, stream2: stream2} do
-      results =
-        [stream1, stream2]
-        |> Mixer.start()
-        |> Mixer.stream()
-        |> ComposedPipeline.stream()
-        |> Enum.to_list()
-
-      assert results == expected_results()
+      assert Enum.to_list(mixed) == expected_results()
     end
   end
 end
