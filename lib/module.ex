@@ -6,7 +6,7 @@ defmodule Strom.Module do
     %__MODULE__{module: module, state: state, opts: opts}
   end
 
-  def stream(flow, %__MODULE__{module: module, state: state}, names)
+  def call(flow, %__MODULE__{module: module, state: state}, names)
       when is_map(flow) and is_list(names) do
     streams = Map.take(flow, names)
 
@@ -16,7 +16,7 @@ defmodule Strom.Module do
           if is_pipeline_module?(module) do
             apply(module, :stream, [stream])
           else
-            apply(module, :stream, [stream, state])
+            apply(module, :call, [stream, state])
           end
 
         Map.put(acc, name, stream)
@@ -25,8 +25,8 @@ defmodule Strom.Module do
     Map.merge(flow, sub_flows)
   end
 
-  def stream(flow, %__MODULE__{} = state, name) do
-    stream(flow, state, [name])
+  def call(flow, %__MODULE__{} = state, name) do
+    call(flow, state, [name])
   end
 
   defp is_pipeline_module?(module) when is_atom(module) do

@@ -69,22 +69,22 @@ defmodule Strom.Flow do
       |> Enum.reduce(init_flow, fn component, flow ->
         case component do
           %DSL.Source{source: source, name: name} ->
-            Strom.Source.stream(flow, source, name)
+            Strom.Source.call(flow, source, name)
 
           %DSL.Sink{sink: sink, name: name, sync: sync} ->
-            Strom.Sink.stream(flow, sink, name, sync)
+            Strom.Sink.call(flow, sink, name, sync)
 
           %DSL.Mixer{mixer: mixer, inputs: inputs, output: output} ->
-            Strom.Mixer.stream(flow, mixer, inputs, output)
+            Strom.Mixer.call(flow, mixer, inputs, output)
 
           %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
-            Strom.Splitter.stream(flow, splitter, input, partitions)
+            Strom.Splitter.call(flow, splitter, input, partitions)
 
           %DSL.Function{function: function, inputs: inputs} ->
-            Strom.Function.stream(flow, function, inputs)
+            Strom.Function.call(flow, function, inputs)
 
           %DSL.Module{module: module, inputs: inputs} ->
-            Strom.Module.stream(flow, module, inputs)
+            Strom.Module.call(flow, module, inputs)
         end
       end)
 

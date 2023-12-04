@@ -20,7 +20,7 @@ defmodule Strom.SourceTest do
   end
 
   test "stream lines", %{source: source} do
-    %{my_stream: stream} = Source.stream(%{}, source, :my_stream)
+    %{my_stream: stream} = Source.call(%{}, source, :my_stream)
     lines = Enum.to_list(stream)
     assert Enum.join(lines, "\n") == File.read!("test/data/orders.csv")
   end
@@ -30,8 +30,8 @@ defmodule Strom.SourceTest do
 
     %{my_stream: stream, another_stream: another_stream} =
       %{}
-      |> Source.stream(source, :my_stream)
-      |> Source.stream(another_source, :another_stream)
+      |> Source.call(source, :my_stream)
+      |> Source.call(another_source, :another_stream)
 
     list = Enum.to_list(stream)
     another_list = Enum.to_list(another_stream)

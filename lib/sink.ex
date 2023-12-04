@@ -22,7 +22,7 @@ defmodule Strom.Sink do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(flow, %__MODULE__{} = sink, name, sync \\ false)
+  def call(flow, %__MODULE__{} = sink, name, sync \\ false)
       when is_map(flow)
       when is_boolean(sync) do
     stream = Map.fetch!(flow, name)

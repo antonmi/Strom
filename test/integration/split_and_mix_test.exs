@@ -26,10 +26,10 @@ defmodule Strom.Integration.SplitAndMixTest do
 
     %{modified: stream} =
       %{}
-      |> Source.stream(orders_source, :orders)
-      |> Splitter.stream(splitter, :orders, partitions)
-      |> Function.stream(function, ["111", "222", "333"])
-      |> Mixer.stream(mixer, ["111", "222", "333"], :modified)
+      |> Source.call(orders_source, :orders)
+      |> Splitter.call(splitter, :orders, partitions)
+      |> Function.call(function, ["111", "222", "333"])
+      |> Mixer.call(mixer, ["111", "222", "333"], :modified)
 
     modified = Enum.to_list(stream)
     Enum.each(modified, fn line -> assert String.starts_with?(line, "foo-") end)

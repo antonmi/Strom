@@ -26,17 +26,17 @@ defmodule Strom.MixerTest do
 
     flow =
       %{}
-      |> Source.stream(source1, :source1)
-      |> Source.stream(source2, :source2)
-      |> Source.stream(source3, :source3)
+      |> Source.call(source1, :source1)
+      |> Source.call(source2, :source2)
+      |> Source.call(source3, :source3)
 
     %{flow: flow}
   end
 
-  test "stream", %{flow: flow} do
+  test "call", %{flow: flow} do
     mixer = Mixer.start()
 
-    %{mixed: mixed, source3: source3} = Mixer.stream(flow, mixer, [:source1, :source2], :mixed)
+    %{mixed: mixed, source3: source3} = Mixer.call(flow, mixer, [:source1, :source2], :mixed)
 
     lines = Enum.to_list(mixed)
     {orders, parcels} = orders_and_parcels()
@@ -60,9 +60,9 @@ defmodule Strom.MixerTest do
 
     %{stream: stream} =
       %{}
-      |> Source.stream(source, :s1)
-      |> Source.stream(source, :s2)
-      |> Mixer.stream(mixer, [:s1, :s2], :stream)
+      |> Source.call(source, :s1)
+      |> Source.call(source, :s2)
+      |> Mixer.call(mixer, [:s1, :s2], :stream)
 
     lines = Enum.to_list(stream)
 

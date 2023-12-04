@@ -20,7 +20,7 @@ defmodule Strom.Splitter do
     {:ok, %{splitter | pid: self()}}
   end
 
-  def stream(flow, %__MODULE__{} = splitter, name, partitions) do
+  def call(flow, %__MODULE__{} = splitter, name, partitions) do
     GenServer.call(splitter.pid, {:set_partitions, partitions})
     stream_to_run = Map.fetch!(flow, name)
 

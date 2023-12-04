@@ -5,7 +5,7 @@ defmodule Strom.Function do
     %__MODULE__{function: function}
   end
 
-  def stream(flow, %__MODULE__{function: function}, names)
+  def call(flow, %__MODULE__{function: function}, names)
       when is_map(flow) and is_function(function) and is_list(names) do
     streams = Map.take(flow, names)
 
@@ -17,8 +17,8 @@ defmodule Strom.Function do
     Map.merge(flow, sub_flows)
   end
 
-  def stream(flow, %__MODULE__{function: function}, name) do
-    stream(flow, %__MODULE__{function: function}, [name])
+  def call(flow, %__MODULE__{function: function}, name) do
+    call(flow, %__MODULE__{function: function}, [name])
   end
 
   def stop(%__MODULE__{}), do: :ok

@@ -8,7 +8,7 @@ defmodule Strom.FunctionTest do
   setup do
     path = "test/data/orders.csv"
     source = Source.start(%ReadLines{path: path})
-    flow = Source.stream(%{}, source, :orders)
+    flow = Source.call(%{}, source, :orders)
     %{flow: flow}
   end
 
@@ -18,7 +18,7 @@ defmodule Strom.FunctionTest do
         Stream.map(stream, &"foo-#{&1}")
       end)
 
-    %{orders: orders} = Function.stream(flow, function, [:orders])
+    %{orders: orders} = Function.call(flow, function, [:orders])
     orders = Enum.to_list(orders)
     Enum.each(orders, fn line -> assert String.starts_with?(line, "foo-") end)
     assert length(orders) == length(String.split(File.read!("test/data/orders.csv"), "\n"))
@@ -35,8 +35,8 @@ defmodule Strom.FunctionTest do
 
     %{orders: orders, parcels: parcels} =
       flow
-      |> Source.stream(source2, :parcels)
-      |> Function.stream(function, [:parcels])
+      |> Source.call(source2, :parcels)
+      |> Function.call(function, [:parcels])
 
     parcels = Enum.to_list(parcels)
     Enum.each(parcels, fn line -> assert String.starts_with?(line, "foo-") end)

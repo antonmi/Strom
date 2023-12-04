@@ -19,7 +19,7 @@ defmodule Strom.Mixer do
     {:ok, %{mixer | pid: self(), data: []}}
   end
 
-  def stream(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_list(to_mix) do
+  def call(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_list(to_mix) do
     streams = Map.values(Map.take(flow, to_mix))
     :ok = GenServer.call(mixer.pid, {:run_streams, streams})
 

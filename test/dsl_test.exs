@@ -47,7 +47,7 @@ defmodule Strom.DSLTest do
     defmodule ToStringModule do
       def start(:opts), do: :state
 
-      def stream(stream, :state), do: Stream.map(stream, &"#{&1}")
+      def call(stream, :state), do: Stream.map(stream, &"#{&1}")
 
       def stop(:state), do: :ok
     end

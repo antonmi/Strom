@@ -25,7 +25,7 @@ defmodule Strom.Source do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(flow, %__MODULE__{} = source, name) do
+  def call(flow, %__MODULE__{} = source, name) do
     stream =
       Stream.resource(
         fn -> source end,

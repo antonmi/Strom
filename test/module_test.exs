@@ -12,7 +12,7 @@ defmodule Strom.ModuleTest do
       %__MODULE__{state: :state}
     end
 
-    def stream(stream, %__MODULE__{state: :state}) do
+    def call(stream, %__MODULE__{state: :state}) do
       Stream.map(stream, &"foo-#{&1}")
     end
 
@@ -22,13 +22,13 @@ defmodule Strom.ModuleTest do
   setup do
     path = "test/data/orders.csv"
     source = Source.start(%ReadLines{path: path})
-    flow = Source.stream(%{}, source, :orders)
+    flow = Source.call(%{}, source, :orders)
     %{flow: flow}
   end
 
   test "function", %{flow: flow} do
     module = Module.start(MyModule)
-    %{orders: orders} = Module.stream(flow, module, [:orders])
+    %{orders: orders} = Module.call(flow, module, [:orders])
     orders = Enum.to_list(orders)
     Enum.each(orders, fn line -> assert String.starts_with?(line, "foo-") end)
     assert length(orders) == length(String.split(File.read!("test/data/orders.csv"), "\n"))
@@ -42,8 +42,8 @@ defmodule Strom.ModuleTest do
 
     %{orders: orders, parcels: parcels} =
       flow
-      |> Source.stream(source2, :parcels)
-      |> Module.stream(module, [:parcels])
+      |> Source.call(source2, :parcels)
+      |> Module.call(module, [:parcels])
 
     parcels = Enum.to_list(parcels)
     Enum.each(parcels, fn line -> assert String.starts_with?(line, "foo-") end)

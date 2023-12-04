@@ -25,8 +25,8 @@ defmodule Strom.SplitterTest do
 
     flow =
       %{}
-      |> Source.stream(source1, :orders)
-      |> Source.stream(source2, :parcels)
+      |> Source.call(source1, :orders)
+      |> Source.call(source2, :parcels)
 
     %{flow: flow}
   end
@@ -41,7 +41,7 @@ defmodule Strom.SplitterTest do
              "333" => stream3
            } =
              flow
-             |> Splitter.stream(splitter, :orders, %{
+             |> Splitter.call(splitter, :orders, %{
                "111" => fn el -> String.contains?(el, ",111,") end,
                "222" => fn el -> String.contains?(el, ",222,") end,
                "333" => fn el -> String.contains?(el, ",333,") end

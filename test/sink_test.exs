@@ -24,9 +24,9 @@ defmodule Strom.SinkTest do
   test "stream lines", %{sink: sink} do
     assert %{another_stream: another_stream} =
              %{}
-             |> Source.stream(source(), :my_stream)
-             |> Source.stream(source(), :another_stream)
-             |> Sink.stream(sink, :my_stream)
+             |> Source.call(source(), :my_stream)
+             |> Source.call(source(), :another_stream)
+             |> Sink.call(sink, :my_stream)
 
     Process.sleep(10)
     lines = Enum.to_list(another_stream)
@@ -37,9 +37,9 @@ defmodule Strom.SinkTest do
   test "with sync lines", %{sink: sink} do
     assert %{another_stream: another_stream} =
              %{}
-             |> Source.stream(source(), :my_stream)
-             |> Source.stream(source(), :another_stream)
-             |> Sink.stream(sink, :my_stream, true)
+             |> Source.call(source(), :my_stream)
+             |> Source.call(source(), :another_stream)
+             |> Sink.call(sink, :my_stream, true)
 
     lines = Enum.to_list(another_stream)
 
