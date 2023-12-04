@@ -1,4 +1,5 @@
 - rewrite parcels example using flow
 - Proper supervision tree
-- rename components stream to flow
+- rename components stream to flow, or just call. (start, call, stop)
+- maybe the same for flow - start, call, stop
 - wrap function and module to process? what about pipeline?
