@@ -188,12 +188,12 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
       use Strom.DSL
 
       @topology [
-        source(%ReadLines{path: "test/examples/parcels/parcels.csv"}, :parcels),
-        source(%ReadLines{path: "test/examples/parcels/orders.csv"}, :orders),
+        source(:parcels, %ReadLines{path: "test/examples/parcels/parcels.csv"}),
+        source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
         mixer([:orders, :parcels], :mixed),
-        module(BuildPipeline, :mixed),
-        module(OrderingPipeline, :mixed),
-        module(Pipeline, :mixed)
+        module(:mixed, BuildPipeline),
+        module(:mixed, OrderingPipeline),
+        module(:mixed, Pipeline)
       ]
     end
 

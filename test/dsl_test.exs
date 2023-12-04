@@ -53,14 +53,14 @@ defmodule Strom.DSLTest do
     end
 
     @topology [
-      source(source1, :numbers1),
-      source(source2, :numbers2),
+      source(:numbers1, source1),
+      source(:numbers2, source2),
       mixer([:numbers1, :numbers2], :mixed),
-      module(Pipeline, :mixed),
+      module(:mixed, Pipeline),
       splitter(:mixed, partitions),
-      function(&__MODULE__.to_string/1, [:odd, :even]),
-      sink(sink_odd, :odd),
-      sink(sink_even, :even, true)
+      function([:odd, :even], &__MODULE__.to_string/1),
+      sink(:odd, sink_odd),
+      sink(:even, sink_even, true)
     ]
   end
 

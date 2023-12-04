@@ -23,7 +23,7 @@ defmodule Strom.DSL do
     defstruct splitter: nil, input: nil, partitions: %{}
   end
 
-  defmacro source(origin, name) do
+  defmacro source(name, origin) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Source origin must be a struct, given: #{inspect(unquote(origin))}"
@@ -33,7 +33,7 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro sink(origin, name, sync \\ false) do
+  defmacro sink(name, origin, sync \\ false) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Sink origin must be a struct, given: #{inspect(unquote(origin))}"
@@ -63,19 +63,13 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro module({module, opts}, inputs) do
+  defmacro module(inputs, module, opts \\ []) do
     quote do
       %Strom.DSL.Module{module: unquote(module), opts: unquote(opts), inputs: unquote(inputs)}
     end
   end
 
-  defmacro module(module, inputs) do
-    quote do
-      %Strom.DSL.Module{module: unquote(module), opts: [], inputs: unquote(inputs)}
-    end
-  end
-
-  defmacro function(function, inputs) do
+  defmacro function(inputs, function) do
     quote do
       %Strom.DSL.Function{function: unquote(function), inputs: unquote(inputs)}
     end
