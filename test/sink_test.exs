@@ -22,13 +22,27 @@ defmodule Strom.SinkTest do
   end
 
   test "stream lines", %{sink: sink} do
-    lines =
-      source()
-      |> Source.stream()
-      |> Sink.stream(sink)
-      |> Enum.to_list()
+    assert %{another_stream: another_stream} =
+             %{}
+             |> Source.stream(source(), :my_stream)
+             |> Source.stream(source(), :another_stream)
+             |> Sink.stream(sink, :my_stream)
 
-    assert length(lines) == 107
+    Process.sleep(10)
+    lines = Enum.to_list(another_stream)
+
+    assert Enum.join(lines, "\n") <> "\n" == File.read!("test/data/output.csv")
+  end
+
+  test "with sync lines", %{sink: sink} do
+    assert %{another_stream: another_stream} =
+             %{}
+             |> Source.stream(source(), :my_stream)
+             |> Source.stream(source(), :another_stream)
+             |> Sink.stream(sink, :my_stream, true)
+
+    content = File.read!("test/data/output.csv")
+    lines = Enum.to_list(another_stream)
 
     assert Enum.join(lines, "\n") <> "\n" == File.read!("test/data/output.csv")
   end

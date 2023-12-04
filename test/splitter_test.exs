@@ -23,78 +23,48 @@ defmodule Strom.SplitterTest do
     source1 = Source.start(%ReadLines{path: "test/data/orders.csv"})
     source2 = Source.start(%ReadLines{path: "test/data/parcels.csv"})
 
-    stream1 = Source.stream(source1)
-    stream2 = Source.stream(source2)
+    flow =
+      %{}
+      |> Source.stream(source1, :orders)
+      |> Source.stream(source2, :parcels)
 
-    %{stream1: stream1, stream2: stream2}
+    %{flow: flow}
   end
 
-  setup %{stream1: stream1, stream2: stream2} do
-    stream =
-      [stream1, stream2]
-      |> Mixer.start()
-      |> Mixer.stream()
+  test "splitter", %{flow: flow} do
+    splitter = Splitter.start([])
 
-    %{stream: stream}
-  end
+    assert %{
+             :parcels => parcels,
+             "111" => stream1,
+             "222" => stream2,
+             "333" => stream3
+           } =
+             flow
+             |> Splitter.stream(splitter, :orders, %{
+               "111" => fn el -> String.contains?(el, ",111,") end,
+               "222" => fn el -> String.contains?(el, ",222,") end,
+               "333" => fn el -> String.contains?(el, ",333,") end
+             })
 
-  test "splitter", %{stream: stream} do
+    orders111 = Enum.to_list(stream1)
+    orders222 = Enum.to_list(stream2)
+    orders333 = Enum.to_list(stream3)
+
+    orders = orders111 ++ orders222 ++ orders333
     {original_orders, original_parcels} = orders_and_parcels()
-
-    partitions = [
-      fn el -> String.starts_with?(el, "PARCEL_SHIPPED") end,
-      fn el -> String.starts_with?(el, "ORDER_CREATED") end
-    ]
-
-    splitter = Splitter.start(stream, partitions)
-    [stream1, stream2] = Splitter.stream(splitter)
-
-    parcels = Enum.to_list(stream1)
-    assert parcels -- original_parcels == []
-    assert original_parcels -- parcels == []
-
-    orders = Enum.to_list(stream2)
     assert orders -- original_orders == []
     assert original_orders -- orders == []
+
+    parcels = Enum.to_list(parcels)
+    assert parcels -- original_parcels == []
+    assert original_parcels -- parcels == []
   end
 
-  test "stop", %{stream: stream} do
-    splitter = Splitter.start(stream, [])
+  test "stop" do
+    splitter = Splitter.start([])
     assert Process.alive?(splitter.pid)
     :ok = Splitter.stop(splitter)
     refute Process.alive?(splitter.pid)
   end
-
-  #  @tag timeout: 300_000
-  #  test "memory" do
-  #    # add :observer, :runtime_tools, :wx to extra_applications
-  #    :observer.start()
-  #
-  #    source = Source.start(%ReadLines{path: "test_data/input.csv"})
-  #    stream = Source.stream(source)
-  #
-  #    partitions = [
-  #      fn el -> String.contains?(el, "Z,111,") end,
-  #      fn el -> String.contains?(el, "Z,222,") end,
-  #      fn el -> String.contains?(el, "Z,333,") end
-  #    ]
-  #
-  #    splitter = Splitter.start(stream, partitions)
-  #
-  #    sink1 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/output111.csv"})
-  #    sink2 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/output222.csv"})
-  #    sink3 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/output333.csv"})
-  #
-  #    splitter
-  #    |> Splitter.stream()
-  #    |> Enum.zip([sink1, sink2, sink3])
-  #    |> Enum.map(fn {stream, sink} ->
-  #      Task.async(fn ->
-  #        stream
-  #        |> Strom.Sink.stream(sink)
-  #        |> Stream.run()
-  #      end)
-  #    end)
-  #    |> Enum.map(fn task -> Task.await(task, :infinity) end)
-  #  end
 end

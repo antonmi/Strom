@@ -22,106 +22,52 @@ defmodule Strom.MixerTest do
   setup do
     source1 = Source.start(%ReadLines{path: "test/data/orders.csv"})
     source2 = Source.start(%ReadLines{path: "test/data/parcels.csv"})
+    source3 = Source.start(%ReadLines{path: "test/data/parcels.csv"})
 
-    stream1 = Source.stream(source1)
-    stream2 = Source.stream(source2)
+    flow =
+      %{}
+      |> Source.stream(source1, :source1)
+      |> Source.stream(source2, :source2)
+      |> Source.stream(source3, :source3)
 
-    %{stream1: stream1, stream2: stream2}
+    %{flow: flow}
   end
 
-  test "stream", %{stream1: stream1, stream2: stream2} do
-    lines =
-      [stream1, stream2]
-      |> Mixer.start()
-      |> Mixer.stream()
-      |> Enum.into([])
+  test "stream", %{flow: flow} do
+    mixer = Mixer.start()
 
+    %{mixed: mixed, source3: source3} = Mixer.stream(flow, mixer, [:source1, :source2], :mixed)
+
+    lines = Enum.to_list(mixed)
     {orders, parcels} = orders_and_parcels()
     assert lines -- (orders ++ parcels) == []
     assert (orders ++ parcels) -- lines == []
+
+    source3_lines = Enum.to_list(source3)
+    assert length(source3_lines) == length(parcels)
   end
 
-  test "stop", %{stream1: stream1} do
-    mixer = Mixer.start([stream1])
+  test "stop" do
+    mixer = Mixer.start()
     assert Process.alive?(mixer.pid)
     :ok = Mixer.stop(mixer)
     refute Process.alive?(mixer.pid)
   end
 
-  test "stream two identical streams", %{stream1: stream1} do
-    lines =
-      [stream1, stream1]
-      |> Mixer.start()
-      |> Mixer.stream()
-      |> Enum.into([])
+  test "stream two identical streams" do
+    source = Source.start(%ReadLines{path: "test/data/orders.csv"})
+    mixer = Mixer.start()
+
+    %{stream: stream} =
+      %{}
+      |> Source.stream(source, :s1)
+      |> Source.stream(source, :s2)
+      |> Mixer.stream(mixer, [:s1, :s2], :stream)
+
+    lines = Enum.to_list(stream)
 
     {orders, _parcels} = orders_and_parcels()
     assert lines -- orders == []
     assert orders -- lines == []
   end
-
-  test "stream two identical files", %{stream1: stream1} do
-    source2 = Source.start(%ReadLines{path: "test/data/orders.csv"})
-    stream2 = Source.stream(source2)
-
-    lines =
-      [stream1, stream2]
-      |> Mixer.start()
-      |> Mixer.stream()
-      |> Enum.into([])
-
-    {orders, _parcels} = orders_and_parcels()
-    assert lines -- (orders ++ orders) == []
-    assert (orders ++ orders) -- lines == []
-  end
-
-  test "add streams", %{stream1: stream1, stream2: stream2} do
-    lines =
-      [stream1]
-      |> Mixer.start()
-      |> Mixer.add(stream2)
-      |> Mixer.stream()
-      |> Enum.into([])
-
-    {orders, parcels} = orders_and_parcels()
-    assert lines -- (orders ++ parcels) == []
-    assert (orders ++ parcels) -- lines == []
-  end
-
-  test "dynamically add streams", %{stream1: stream1, stream2: stream2} do
-    mixer = Mixer.start([stream1])
-
-    Task.async(fn ->
-      Mixer.add(mixer, stream2)
-    end)
-
-    lines =
-      mixer
-      |> Mixer.stream()
-      |> Enum.into([])
-
-    {orders, parcels} = orders_and_parcels()
-    assert lines -- (orders ++ parcels) == []
-    assert (orders ++ parcels) -- lines == []
-  end
-
-  #  @tag timeout: 300_000
-  #  test "memory" do
-  #    # add :observer, :runtime_tools, :wx to extra_applications
-  #    :observer.start()
-  #
-  #    source1 = Source.start(%ReadLines{path: "test_data/input.csv"})
-  #    source2 = Source.start(%ReadLines{path: "test_data/input.csv"})
-  #
-  #    stream1 = Source.stream(source1)
-  #    stream2 = Source.stream(source2)
-  #    sink = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/output.csv"})
-  #
-  #    [stream1]
-  #    |> Mixer.start()
-  #    |> Mixer.add(stream2)
-  #    |> Mixer.stream()
-  #    |> Strom.Sink.stream(sink)
-  #    |> Stream.run()
-  #  end
 end

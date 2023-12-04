@@ -5,9 +5,8 @@ defmodule Strom.Mixer do
 
   @chunk_every 100
 
-  def start(streams, opts \\ []) when is_list(streams) and is_list(opts) do
+  def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      streams: streams,
       running: false,
       chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
     }
@@ -16,31 +15,35 @@ defmodule Strom.Mixer do
     __state__(pid)
   end
 
-  def init(%__MODULE__{streams: streams} = mixer) do
-    {:ok, %{mixer | pid: self(), data: [], streams: MapSet.new(streams)}}
+  def init(%__MODULE__{} = mixer) do
+    {:ok, %{mixer | pid: self(), data: []}}
   end
 
-  def stream(%__MODULE__{} = mixer) do
-    :ok = GenServer.call(mixer.pid, :run_streams)
+  def stream(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_list(to_mix) do
+    streams = Map.values(Map.take(flow, to_mix))
+    :ok = GenServer.call(mixer.pid, {:run_streams, streams})
 
-    Stream.resource(
-      fn -> mixer end,
-      fn mixer ->
-        case GenServer.call(mixer.pid, :get_data) do
-          {:ok, data} ->
-            {data, mixer}
+    new_stream =
+      Stream.resource(
+        fn -> mixer end,
+        fn mixer ->
+          case GenServer.call(mixer.pid, :get_data) do
+            {:ok, data} ->
+              {data, mixer}
 
-          {:error, :done} ->
-            {:halt, mixer}
-        end
-      end,
-      fn mixer -> mixer end
-    )
+            {:error, :done} ->
+              {:halt, mixer}
+          end
+        end,
+        fn mixer -> mixer end
+      )
+
+    flow
+    |> Map.drop(to_mix)
+    |> Map.put(name, new_stream)
   end
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
-
-  def add(%__MODULE__{pid: pid}, stream), do: GenServer.call(pid, {:add, stream})
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
@@ -78,10 +81,10 @@ defmodule Strom.Mixer do
     {:reply, length(data), %{mixer | data: data}}
   end
 
-  def handle_call(:run_streams, _from, %__MODULE__{} = mixer) do
-    run_streams(mixer.streams, mixer.pid, mixer.chunk_every)
+  def handle_call({:run_streams, streams}, _from, %__MODULE__{} = mixer) do
+    run_streams(streams, mixer.pid, mixer.chunk_every)
 
-    {:reply, :ok, %{mixer | running: true}}
+    {:reply, :ok, %{mixer | running: true, streams: MapSet.new(streams)}}
   end
 
   def handle_call({:done, stream}, _from, %__MODULE__{streams: streams} = mixer) do
@@ -99,16 +102,6 @@ defmodule Strom.Mixer do
 
   def handle_call(:stop, _from, %__MODULE__{} = mixer) do
     {:stop, :normal, :ok, %{mixer | running: false}}
-  end
-
-  def handle_call({:add, stream}, _from, %__MODULE__{streams: streams} = mixer) do
-    mixer = %{mixer | streams: MapSet.put(streams, stream)}
-
-    if mixer.running do
-      async_run_stream(stream, mixer.chunk_every, mixer.pid)
-    end
-
-    {:reply, mixer, mixer}
   end
 
   def handle_call(:__state__, _from, mixer), do: {:reply, mixer, mixer}

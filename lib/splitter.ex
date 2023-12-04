@@ -5,12 +5,10 @@ defmodule Strom.Splitter do
 
   @chunk_every 100
 
-  def start(stream, partitions, opts \\ [])
-      when is_function(stream) and is_list(partitions) and is_list(opts) do
+  def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      stream: stream,
-      running: false,
-      partitions: Enum.reduce(partitions, %{}, &Map.put(&2, &1, [])),
+      running: MapSet.new(),
+      partitions: %{},
       chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
     }
 
@@ -22,31 +20,41 @@ defmodule Strom.Splitter do
     {:ok, %{splitter | pid: self()}}
   end
 
-  def stream(%__MODULE__{partitions: partitions} = splitter) do
-    partitions
-    |> Map.keys()
-    |> Enum.map(fn partition ->
-      Stream.resource(
-        fn -> GenServer.call(splitter.pid, :run_stream) end,
-        fn splitter ->
-          case GenServer.call(splitter.pid, {:get_data, partition}) do
-            {:ok, data} ->
-              {data, splitter}
+  def stream(flow, %__MODULE__{} = splitter, name, partitions) do
+    GenServer.call(splitter.pid, {:set_partitions, partitions})
+    stream_to_run = Map.fetch!(flow, name)
 
-            {:error, :done} ->
-              {:halt, splitter}
-          end
-        end,
-        fn splitter -> splitter end
-      )
-    end)
+    sub_flow =
+      partitions
+      |> Enum.reduce(%{}, fn {name, fun}, flow ->
+        stream =
+          Stream.resource(
+            fn -> GenServer.call(splitter.pid, {:run_stream, stream_to_run, fun}) end,
+            fn splitter ->
+              case GenServer.call(splitter.pid, {:get_data, fun}) do
+                {:ok, data} ->
+                  {data, splitter}
+
+                {:error, :done} ->
+                  {:halt, splitter}
+              end
+            end,
+            fn splitter -> splitter end
+          )
+
+        Map.put(flow, name, stream)
+      end)
+
+    flow
+    |> Map.delete(name)
+    |> Map.merge(sub_flow)
   end
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp async_run_stream(stream, chunk_every, pid) do
+  defp async_run_stream(stream, fun, chunk_every, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(chunk_every)
@@ -56,7 +64,7 @@ defmodule Strom.Splitter do
       end)
       |> Stream.run()
 
-      GenServer.call(pid, :done)
+      GenServer.call(pid, {:done, fun})
     end)
   end
 
@@ -87,36 +95,39 @@ defmodule Strom.Splitter do
     {:reply, data_size, %{splitter | partitions: new_partitions}}
   end
 
-  def handle_call(:run_stream, _from, %__MODULE__{} = splitter) do
-    if splitter.running do
-      {:reply, splitter, splitter}
-    else
-      async_run_stream(splitter.stream, splitter.chunk_every, splitter.pid)
-      splitter = %{splitter | running: true}
-      {:reply, splitter, splitter}
-    end
+  def handle_call({:run_stream, stream, fun}, _from, %__MODULE__{} = splitter) do
+    async_run_stream(stream, fun, splitter.chunk_every, splitter.pid)
+    splitter = %{splitter | running: MapSet.put(splitter.running, fun)}
+    {:reply, splitter, splitter}
   end
 
-  def handle_call(:done, _from, %__MODULE__{} = splitter) do
-    {:reply, :ok, %{splitter | running: false}}
+  def handle_call({:set_partitions, partitions}, _from, %__MODULE__{} = splitter) do
+    partitions = Enum.reduce(partitions, %{}, fn {_name, fun}, acc -> Map.put(acc, fun, []) end)
+    splitter = %{splitter | partitions: partitions}
+    {:reply, splitter, splitter}
+  end
+
+  def handle_call({:done, fun}, _from, %__MODULE__{} = splitter) do
+    running = MapSet.delete(splitter.running, fun)
+    {:reply, :ok, %{splitter | running: running}}
   end
 
   def handle_call(
-        {:get_data, partition},
+        {:get_data, partition_fun},
         _from,
         %__MODULE__{partitions: partitions, running: running} = splitter
       ) do
-    data = Map.get(partitions, partition)
+    data = Map.get(partitions, partition_fun)
 
-    if length(data) == 0 && !running do
+    if length(data) == 0 && MapSet.size(running) == 0 do
       {:reply, {:error, :done}, splitter}
     else
-      {:reply, {:ok, data}, %{splitter | partitions: Map.put(partitions, partition, [])}}
+      {:reply, {:ok, data}, %{splitter | partitions: Map.put(partitions, partition_fun, [])}}
     end
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = splitter) do
-    {:stop, :normal, :ok, %{splitter | running: false}}
+    {:stop, :normal, :ok, %{splitter | running: MapSet.new(), partitions: %{}}}
   end
 
   def handle_call(:__state__, _from, splitter), do: {:reply, splitter, splitter}

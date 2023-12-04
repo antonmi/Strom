@@ -22,16 +22,24 @@ defmodule Strom.Sink do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(stream, %__MODULE__{} = sink) do
-    stream
-    |> Stream.transform(
-      fn -> sink end,
-      fn el, sink ->
+  def stream(flow, %__MODULE__{} = sink, name, sync \\ false)
+      when is_map(flow)
+      when is_boolean(sync) do
+    stream = Map.fetch!(flow, name)
+
+    stream =
+      Stream.transform(stream, sink, fn el, sink ->
         call(sink, el)
-        {[el], sink}
-      end,
-      fn sink -> sink end
-    )
+        {[], sink}
+      end)
+
+    if sync do
+      Stream.run(stream)
+    else
+      Task.async(fn -> Stream.run(stream) end)
+    end
+
+    Map.delete(flow, name)
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

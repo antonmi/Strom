@@ -25,12 +25,15 @@ defmodule Strom.Source do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def stream(%__MODULE__{} = source) do
-    Stream.resource(
-      fn -> source end,
-      fn source -> call(source) end,
-      fn source -> source end
-    )
+  def stream(flow, %__MODULE__{} = source, name) do
+    stream =
+      Stream.resource(
+        fn -> source end,
+        fn source -> call(source) end,
+        fn source -> source end
+      )
+
+    Map.put(flow, name, stream)
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
