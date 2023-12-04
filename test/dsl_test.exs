@@ -84,7 +84,7 @@ defmodule Strom.DSLTest do
 
   test "start and run" do
     MyFlow.start()
-    MyFlow.run(%{})
+    MyFlow.call(%{})
     check_output()
     MyFlow.stop()
   end

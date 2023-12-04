@@ -52,7 +52,7 @@ defmodule Strom.Flow do
 
   def topology(flow_module), do: GenServer.call(flow_module, :topology)
 
-  def run(flow_module, flow), do: GenServer.call(flow_module, {:run, flow}, :infinity)
+  def call(flow_module, flow), do: GenServer.call(flow_module, {:call, flow}, :infinity)
 
   def stop(flow_module) when is_atom(flow_module), do: GenServer.call(flow_module, :stop)
 
@@ -63,7 +63,7 @@ defmodule Strom.Flow do
 
   def handle_call(:__state__, _from, state), do: {:reply, state, state}
 
-  def handle_call({:run, init_flow}, _from, %__MODULE__{} = state) do
+  def handle_call({:call, init_flow}, _from, %__MODULE__{} = state) do
     flow =
       state.topology
       |> Enum.reduce(init_flow, fn component, flow ->

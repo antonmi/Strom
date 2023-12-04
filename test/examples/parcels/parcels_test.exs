@@ -199,7 +199,7 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
 
     test "with several pipelines" do
       SeveralPipelinesFlow.start()
-      %{mixed: mixed} = SeveralPipelinesFlow.run(%{})
+      %{mixed: mixed} = SeveralPipelinesFlow.call(%{})
 
       assert Enum.to_list(mixed) == expected_results()
     end

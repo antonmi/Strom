@@ -91,9 +91,9 @@ defmodule Strom.DSL do
         Strom.Flow.topology(__MODULE__)
       end
 
-      @spec run(map) :: map()
-      def run(flow) when is_map(flow) do
-        Strom.Flow.run(__MODULE__, flow)
+      @spec call(map) :: map()
+      def call(flow) when is_map(flow) do
+        Strom.Flow.call(__MODULE__, flow)
       end
 
       @spec stop() :: :ok
