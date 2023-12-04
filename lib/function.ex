@@ -19,5 +19,9 @@ defmodule Strom.Function do
     Map.merge(flow, sub_flows)
   end
 
+  def stream(flow, %__MODULE__{function: function}, name) do
+    stream(flow, %__MODULE__{function: function}, [name])
+  end
+
   def stop(%__MODULE__{}), do: :ok
 end

@@ -22,7 +22,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
     %{odd: odd, even: even} =
       flow
       |> Mixer.stream(mixer, [:numbers1, :numbers2], :number)
-      |> Function.stream(function, [:number])
+      |> Function.stream(function, :number)
       |> Splitter.stream(splitter, :number, partitions)
 
     assert Enum.sort(Enum.to_list(odd)) == [3, 5, 7, 9, 11]
