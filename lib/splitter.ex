@@ -20,7 +20,16 @@ defmodule Strom.Splitter do
     {:ok, %{splitter | pid: self()}}
   end
 
-  def call(flow, %__MODULE__{} = splitter, name, partitions) do
+  def call(flow, %__MODULE__{} = splitter, name, partitions) when is_list(partitions) do
+    partitions =
+      Enum.reduce(partitions, %{}, fn name, acc ->
+        Map.put(acc, name, fn _el -> true end)
+      end)
+
+    call(flow, splitter, name, partitions)
+  end
+
+  def call(flow, %__MODULE__{} = splitter, name, partitions) when is_map(partitions) do
     GenServer.call(splitter.pid, {:set_partitions, partitions})
     stream_to_run = Map.fetch!(flow, name)
 
@@ -29,9 +38,9 @@ defmodule Strom.Splitter do
       |> Enum.reduce(%{}, fn {name, fun}, flow ->
         stream =
           Stream.resource(
-            fn -> GenServer.call(splitter.pid, {:run_stream, stream_to_run, fun}) end,
+            fn -> GenServer.call(splitter.pid, {:run_stream, stream_to_run, {name, fun}}) end,
             fn splitter ->
-              case GenServer.call(splitter.pid, {:get_data, fun}) do
+              case GenServer.call(splitter.pid, {:get_data, {name, fun}}) do
                 {:ok, data} ->
                   {data, splitter}
 
@@ -54,7 +63,7 @@ defmodule Strom.Splitter do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp async_run_stream(stream, fun, chunk_every, pid) do
+  defp async_run_stream(stream, {name, fun}, chunk_every, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(chunk_every)
@@ -64,7 +73,7 @@ defmodule Strom.Splitter do
       end)
       |> Stream.run()
 
-      GenServer.call(pid, {:done, fun})
+      GenServer.call(pid, {:done, {name, fun}})
     end)
   end
 
@@ -78,14 +87,14 @@ defmodule Strom.Splitter do
 
   def handle_call({:new_data, data}, _from, %__MODULE__{} = splitter) do
     new_partitions =
-      Enum.reduce(splitter.partitions, %{}, fn {fun, prev_data}, acc ->
+      Enum.reduce(splitter.partitions, %{}, fn {{name, fun}, prev_data}, acc ->
         case Enum.split_with(data, fun) do
           {[], _} ->
-            Map.put(acc, fun, prev_data)
+            Map.put(acc, {name, fun}, prev_data)
 
           {data, _} ->
             new_data = prev_data ++ data
-            Map.put(acc, fun, new_data)
+            Map.put(acc, {name, fun}, new_data)
         end
       end)
 
@@ -95,20 +104,22 @@ defmodule Strom.Splitter do
     {:reply, data_size, %{splitter | partitions: new_partitions}}
   end
 
-  def handle_call({:run_stream, stream, fun}, _from, %__MODULE__{} = splitter) do
-    async_run_stream(stream, fun, splitter.chunk_every, splitter.pid)
-    splitter = %{splitter | running: MapSet.put(splitter.running, fun)}
+  def handle_call({:run_stream, stream, {name, fun}}, _from, %__MODULE__{} = splitter) do
+    async_run_stream(stream, {name, fun}, splitter.chunk_every, splitter.pid)
+    splitter = %{splitter | running: MapSet.put(splitter.running, {name, fun})}
     {:reply, splitter, splitter}
   end
 
   def handle_call({:set_partitions, partitions}, _from, %__MODULE__{} = splitter) do
-    partitions = Enum.reduce(partitions, %{}, fn {_name, fun}, acc -> Map.put(acc, fun, []) end)
+    partitions =
+      Enum.reduce(partitions, %{}, fn {name, fun}, acc -> Map.put(acc, {name, fun}, []) end)
+
     splitter = %{splitter | partitions: partitions}
     {:reply, splitter, splitter}
   end
 
-  def handle_call({:done, fun}, _from, %__MODULE__{} = splitter) do
-    running = MapSet.delete(splitter.running, fun)
+  def handle_call({:done, {name, fun}}, _from, %__MODULE__{} = splitter) do
+    running = MapSet.delete(splitter.running, {name, fun})
     {:reply, :ok, %{splitter | running: running}}
   end
 

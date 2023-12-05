@@ -31,7 +31,34 @@ defmodule Strom.SplitterTest do
     %{flow: flow}
   end
 
-  test "splitter", %{flow: flow} do
+  test "splitter with list of streams", %{flow: flow} do
+    splitter = Splitter.start([])
+
+    assert %{
+             :parcels => parcels,
+             "111" => stream1,
+             "222" => stream2,
+             "333" => stream3
+           } =
+             flow
+             |> Splitter.call(splitter, :orders, ["111", "222", "333"])
+
+    orders111 = Enum.to_list(stream1)
+    orders222 = Enum.to_list(stream2)
+    orders333 = Enum.to_list(stream3)
+
+    {original_orders, original_parcels} = orders_and_parcels()
+
+    assert length(orders111) == length(original_orders)
+    assert length(orders222) == length(original_orders)
+    assert length(orders333) == length(original_orders)
+
+    parcels = Enum.to_list(parcels)
+    assert parcels -- original_parcels == []
+    assert original_parcels -- parcels == []
+  end
+
+  test "splitter with partitions", %{flow: flow} do
     splitter = Splitter.start([])
 
     assert %{
