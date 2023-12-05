@@ -59,7 +59,7 @@ defmodule Strom.DSLTest do
       module(:mixed, Pipeline, sync: true),
       splitter(:mixed, partitions),
       function([:odd, :even], &__MODULE__.to_string/1),
-      sink(:odd, sink_odd),
+      sink(:odd, sink_odd, true),
       sink(:even, sink_even, true)
     ]
   end
