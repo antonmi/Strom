@@ -56,7 +56,7 @@ defmodule Strom.DSLTest do
       source(:numbers1, source1),
       source(:numbers2, source2),
       mixer([:numbers1, :numbers2], :mixed),
-      module(:mixed, Pipeline),
+      module(:mixed, Pipeline, sync: true),
       splitter(:mixed, partitions),
       function([:odd, :even], &__MODULE__.to_string/1),
       sink(:odd, sink_odd),

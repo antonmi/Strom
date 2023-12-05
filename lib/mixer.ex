@@ -1,13 +1,16 @@
 defmodule Strom.Mixer do
   use GenServer
 
-  defstruct [:streams, :pid, :running, :data, :chunk_every]
-
   @chunk_every 100
+
+  defstruct streams: %{},
+            pid: nil,
+            running: false,
+            data: %{},
+            chunk_every: @chunk_every
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      running: false,
       chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
     }
 
@@ -16,12 +19,25 @@ defmodule Strom.Mixer do
   end
 
   def init(%__MODULE__{} = mixer) do
-    {:ok, %{mixer | pid: self(), data: []}}
+    {:ok, %{mixer | pid: self()}}
   end
 
   def call(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_list(to_mix) do
-    streams = Map.take(flow, to_mix)
-    :ok = GenServer.call(mixer.pid, {:run_streams, streams})
+    to_mix =
+      Enum.reduce(to_mix, %{}, fn name, acc ->
+        Map.put(acc, name, fn _el -> true end)
+      end)
+
+    call(flow, mixer, to_mix, name)
+  end
+
+  def call(flow, %__MODULE__{} = mixer, to_mix, name) when is_map(flow) and is_map(to_mix) do
+    streams_to_mix =
+      Enum.reduce(to_mix, %{}, fn {name, fun}, acc ->
+        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
+      end)
+
+    :ok = GenServer.call(mixer.pid, {:run_streams, streams_to_mix})
 
     new_stream =
       Stream.resource(
@@ -39,7 +55,7 @@ defmodule Strom.Mixer do
       )
 
     flow
-    |> Map.drop(to_mix)
+    |> Map.drop(Map.keys(to_mix))
     |> Map.put(name, new_stream)
   end
 
@@ -48,22 +64,23 @@ defmodule Strom.Mixer do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp run_streams(streams, pid, chunk_every) do
-    Enum.map(streams, fn {name, stream} ->
-      async_run_stream(name, stream, chunk_every, pid)
+    Enum.map(streams, fn {{name, fun}, stream} ->
+      async_run_stream({name, fun}, stream, chunk_every, pid)
     end)
   end
 
-  defp async_run_stream(name, stream, chunk_every, pid) do
+  defp async_run_stream({name, fun}, stream, chunk_every, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(chunk_every)
       |> Stream.each(fn chunk ->
-        data_length = GenServer.call(pid, {:new_data, chunk})
+        {chunk, _} = Enum.split_with(chunk, fun)
+        data_length = GenServer.call(pid, {:new_data, {name, fun}, chunk})
         maybe_wait(data_length, chunk_every)
       end)
       |> Stream.run()
 
-      GenServer.call(pid, {:done, name})
+      GenServer.call(pid, {:done, {name, fun}})
     end)
   end
 
@@ -75,28 +92,33 @@ defmodule Strom.Mixer do
     end
   end
 
-  def handle_call({:new_data, data}, _from, %__MODULE__{data: prev_data} = mixer) do
-    data = data ++ prev_data
+  def handle_call({:new_data, {name, fun}, data}, _from, %__MODULE__{data: prev_data} = mixer) do
+    prev_data_from_stream = Map.get(prev_data, {name, fun}, [])
+    data_from_stream = prev_data_from_stream ++ data
+    data = Map.put(prev_data, {name, fun}, data_from_stream)
 
-    {:reply, length(data), %{mixer | data: data}}
+    {:reply, length(data_from_stream), %{mixer | data: data}}
   end
 
-  def handle_call({:run_streams, streams}, _from, %__MODULE__{} = mixer) do
-    run_streams(streams, mixer.pid, mixer.chunk_every)
+  def handle_call({:run_streams, streams_to_mix}, _from, %__MODULE__{} = mixer) do
+    run_streams(streams_to_mix, mixer.pid, mixer.chunk_every)
 
-    {:reply, :ok, %{mixer | running: true, streams: streams}}
+    {:reply, :ok, %{mixer | running: true, streams: streams_to_mix}}
   end
 
-  def handle_call({:done, name}, _from, %__MODULE__{streams: streams} = mixer) do
-    streams = Map.delete(streams, name)
+  def handle_call({:done, {name, fun}}, _from, %__MODULE__{streams: streams} = mixer) do
+    streams = Map.delete(streams, {name, fun})
     {:reply, :ok, %{mixer | streams: streams, running: false}}
   end
 
   def handle_call(:get_data, _from, %__MODULE__{data: data, streams: streams} = mixer) do
-    if length(data) == 0 && map_size(streams) == 0 do
+    all_data = Enum.reduce(data, [], fn {_, d}, acc -> acc ++ d end)
+
+    if length(all_data) == 0 && map_size(streams) == 0 do
       {:reply, {:error, :done}, mixer}
     else
-      {:reply, {:ok, data}, %{mixer | data: []}}
+      data = Enum.reduce(data, %{}, fn {name, _}, acc -> Map.put(acc, name, []) end)
+      {:reply, {:ok, all_data}, %{mixer | data: data}}
     end
   end
 
