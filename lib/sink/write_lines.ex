@@ -15,7 +15,7 @@ defmodule Strom.Sink.WriteLines do
   def call(%__MODULE__{} = write_lines, data) do
     :ok = IO.write(write_lines.file, data <> @line_sep)
 
-    {:ok, {[data], write_lines}}
+    {:ok, {[], write_lines}}
   end
 
   @impl true

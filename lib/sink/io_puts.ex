@@ -10,7 +10,7 @@ defmodule Strom.Sink.IOPuts do
   def call(%__MODULE__{} = io_puts, data) do
     IO.puts(io_puts.prefix <> "#{data}" <> io_puts.line_sep)
 
-    {:ok, {[data], io_puts}}
+    {:ok, {[], io_puts}}
   end
 
   @impl true
