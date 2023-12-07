@@ -4,7 +4,7 @@ defmodule Strom.MixProject do
   def project do
     [
       app: :strom,
-      version: "0.4.0",
+      version: "0.4.1",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -30,7 +30,7 @@ defmodule Strom.MixProject do
   end
 
   defp description do
-    "Stream Processing Framework"
+    "Flow-Based Programming"
   end
 
   defp package do
