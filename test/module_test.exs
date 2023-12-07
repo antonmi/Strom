@@ -26,13 +26,19 @@ defmodule Strom.ModuleTest do
     %{flow: flow}
   end
 
+  test "start and stop" do
+    module = Module.start(MyModule, prefix: "foo")
+    assert Process.alive?(module.pid)
+    :ok = Module.stop(module)
+    refute Process.alive?(module.pid)
+  end
+
   test "function", %{flow: flow} do
     module = Module.start(MyModule, prefix: "foo")
     %{orders: orders} = Module.call(flow, module, [:orders])
     orders = Enum.to_list(orders)
     Enum.each(orders, fn line -> assert String.starts_with?(line, "foo-") end)
     assert length(orders) == length(String.split(File.read!("test/data/orders.csv"), "\n"))
-    assert Module.stop(module) == [prefix: "foo"]
   end
 
   test "with several streams", %{flow: flow} do

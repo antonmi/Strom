@@ -1,4 +1,2 @@
-- Proper supervision tree
-- wrap function and module to process? do we need this? what about pipeline?
-- validation for empty flow as input in components (except source)
-- chunk_every behaviour in mixer and splitter (chunk_every: 1) 
+- Proper supervision tree!!!
+- test chunk_every behaviour in mixer and splitter (chunk_every: 1) 

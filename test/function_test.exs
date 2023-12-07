@@ -12,6 +12,13 @@ defmodule Strom.FunctionTest do
     %{flow: flow}
   end
 
+  test "start and stop" do
+    function = Function.start(&"foo-#{&1}")
+    assert Process.alive?(function.pid)
+    :ok = Function.stop(function)
+    refute Process.alive?(function.pid)
+  end
+
   test "function", %{flow: flow} do
     function = Function.start(&"foo-#{&1}")
 
