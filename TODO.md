@@ -1,2 +1,3 @@
 - Proper supervision tree!!!
-- test chunk_every behaviour in mixer and splitter (chunk_every: 1) 
+- test chunk_every behaviour in mixer and splitter (chunk_every: 1)
+- event referencing and component storage for restarting 

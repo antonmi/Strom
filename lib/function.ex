@@ -22,9 +22,11 @@ defmodule Strom.Function do
 
     sub_flow =
       Enum.reduce(streams, %{}, fn {name, stream}, acc ->
-        stream = Stream.map(stream, fn event ->
-          GenServer.call(pid, {:call, event}, :infinity)
-        end)
+        stream =
+          Stream.map(stream, fn event ->
+            GenServer.call(pid, {:call, event}, :infinity)
+          end)
+
         Map.put(acc, name, stream)
       end)
 
@@ -39,7 +41,8 @@ defmodule Strom.Function do
 
   @impl true
   def handle_call({:call, event}, _from, state) do
-    {:reply, state.function.(event), state}
+    new_event = state.function.(event)
+    {:reply, new_event, state}
   end
 
   def handle_call(:stop, _from, state) do

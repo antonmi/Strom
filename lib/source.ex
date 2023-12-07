@@ -56,7 +56,6 @@ defmodule Strom.Source do
           end
       end
 
-    #    IO.inspect({inspect(self()), events}, label: "source")
     {:reply, {events, state}, state}
   end
 

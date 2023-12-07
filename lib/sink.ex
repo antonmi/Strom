@@ -46,17 +46,16 @@ defmodule Strom.Sink do
 
   @impl true
   def handle_call({:call, data}, _from, %__MODULE__{origin: origin} = state) do
-    {events, state} =
+    {[], state} =
       case apply(origin.__struct__, :call, [origin, data]) do
-        {:ok, {events, origin}} ->
-          state = %{state | origin: origin}
-          {events, state}
+        {:ok, {[], origin}} ->
+          {[], %{state | origin: origin}}
 
         {:error, {:halt, origin}} ->
           {:halt, %{state | origin: origin}}
       end
 
-    {:reply, {events, state}, state}
+    {:reply, {[], state}, state}
   end
 
   def handle_call(:stop, _from, %__MODULE__{origin: origin} = state) do
