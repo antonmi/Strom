@@ -1,6 +1,6 @@
 # Strom
 
-## Stream Processing Framework
+## Flow-Based Programming
 
 
 Strom operates with the following abstraction:
