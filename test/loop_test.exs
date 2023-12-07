@@ -5,7 +5,7 @@ defmodule Strom.LoopTest do
     flow = %{stream: [1, 2, 3]}
 
     plus_one =
-      Strom.Function.start(&Stream.map(&1, fn el -> el + 1 end))
+      Strom.Function.start(&(&1 + 1))
 
     mixer = Strom.Mixer.start(chunk_every: 2)
     splitter = Strom.Splitter.start(chunk_every: 2)

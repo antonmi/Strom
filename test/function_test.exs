@@ -13,10 +13,7 @@ defmodule Strom.FunctionTest do
   end
 
   test "function", %{flow: flow} do
-    function =
-      Function.start(fn stream ->
-        Stream.map(stream, &"foo-#{&1}")
-      end)
+    function = Function.start(&"foo-#{&1}")
 
     %{orders: orders} = Function.call(flow, function, [:orders])
     orders = Enum.to_list(orders)
@@ -29,9 +26,7 @@ defmodule Strom.FunctionTest do
     source2 = Source.start(%ReadLines{path: path})
 
     function =
-      Function.start(fn stream ->
-        Stream.map(stream, &"foo-#{&1}")
-      end)
+      Function.start(&"foo-#{&1}")
 
     %{orders: orders, parcels: parcels} =
       flow
@@ -44,5 +39,13 @@ defmodule Strom.FunctionTest do
 
     orders = Enum.to_list(orders)
     assert Enum.join(orders, "\n") == File.read!("test/data/orders.csv")
+  end
+
+  test "when applied to empty flow" do
+    function = Function.start(&"foo-#{&1}")
+
+    assert_raise KeyError, fn ->
+      Function.call(%{}, function, [:orders])
+    end
   end
 end

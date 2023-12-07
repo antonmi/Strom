@@ -6,9 +6,12 @@ defmodule Strom.Module do
     %__MODULE__{module: module, state: state, opts: opts}
   end
 
-  def call(flow, %__MODULE__{module: module, state: state}, names)
+  def call(flow, %__MODULE__{module: module, state: state, opts: opts}, names)
       when is_map(flow) and is_list(names) do
-    streams = Map.take(flow, names)
+    streams =
+      Enum.reduce(names, %{}, fn name, acc ->
+        Map.put(acc, name, Map.fetch!(flow, name))
+      end)
 
     sub_flows =
       Enum.reduce(streams, %{}, fn {name, stream}, acc ->
@@ -16,7 +19,9 @@ defmodule Strom.Module do
           if is_pipeline_module?(module) do
             apply(module, :stream, [stream])
           else
-            apply(module, :call, [stream, state])
+            Stream.transform(stream, state, fn el, acc ->
+              apply(module, :call, [el, acc, opts])
+            end)
           end
 
         Map.put(acc, name, stream)
@@ -35,11 +40,11 @@ defmodule Strom.Module do
     _error -> false
   end
 
-  def stop(%__MODULE__{module: module, state: state}) do
+  def stop(%__MODULE__{module: module, state: state, opts: opts}) do
     if is_pipeline_module?(module) do
       apply(module, :stop, [])
     else
-      apply(module, :stop, [state])
+      apply(module, :stop, [state, opts])
     end
   end
 end

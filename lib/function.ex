@@ -7,11 +7,15 @@ defmodule Strom.Function do
 
   def call(flow, %__MODULE__{function: function}, names)
       when is_map(flow) and is_function(function) and is_list(names) do
-    streams = Map.take(flow, names)
+    streams =
+      Enum.reduce(names, %{}, fn name, acc ->
+        Map.put(acc, name, Map.fetch!(flow, name))
+      end)
 
     sub_flows =
       Enum.reduce(streams, %{}, fn {name, stream}, acc ->
-        Map.put(acc, name, function.(stream))
+        stream = Stream.map(stream, &function.(&1))
+        Map.put(acc, name, stream)
       end)
 
     Map.merge(flow, sub_flows)

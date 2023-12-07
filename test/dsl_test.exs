@@ -42,14 +42,14 @@ defmodule Strom.DSLTest do
       even: &__MODULE__.even_fun/1
     }
 
-    def to_string(stream), do: Stream.map(stream, &"#{&1}")
+    def to_string(el), do: "#{el}"
 
     defmodule ToStringModule do
       def start(:opts), do: :state
 
-      def call(stream, :state), do: Stream.map(stream, &"#{&1}")
+      def call(event, :state, :opts), do: "#{event}"
 
-      def stop(:state), do: :ok
+      def stop(:state, :opts), do: :ok
     end
 
     @topology [

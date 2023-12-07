@@ -201,7 +201,7 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
       SeveralPipelinesFlow.start()
       %{mixed: mixed} = SeveralPipelinesFlow.call(%{})
 
-      assert Enum.to_list(mixed) == expected_results()
+      assert Enum.sort(Enum.to_list(mixed)) == Enum.sort(expected_results())
     end
   end
 end

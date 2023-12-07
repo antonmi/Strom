@@ -13,10 +13,7 @@ defmodule Strom.Integration.SplitAndMixTest do
     splitter = Splitter.start()
     mixer = Mixer.start()
 
-    function =
-      Function.start(fn stream ->
-        Stream.map(stream, &"foo-#{&1}")
-      end)
+    function = Function.start(&"foo-#{&1}")
 
     partitions = %{
       "111" => fn el -> String.contains?(el, ",111,") end,
