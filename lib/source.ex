@@ -33,7 +33,8 @@ defmodule Strom.Source do
         fn source -> source end
       )
 
-    Map.put(flow, name, stream)
+    prev_stream = Map.get(flow, name, [])
+    Map.put(flow, name, Stream.concat(prev_stream, stream))
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

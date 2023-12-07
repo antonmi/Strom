@@ -40,6 +40,16 @@ defmodule Strom.SourceTest do
     assert Enum.join(another_list, "\n") == File.read!("test/data/orders.csv")
   end
 
+  test "several sources for one stream", %{source: source} do
+    %{my_stream: stream} =
+      Source.call(%{my_stream: [1, 2, 3]}, source, :my_stream)
+
+    lines = Enum.to_list(stream)
+    assert Enum.member?(lines, 1)
+    assert Enum.member?(lines, 2)
+    assert Enum.member?(lines, 3)
+  end
+
   test "stop", %{source: source} do
     assert Source.stop(source) == :ok
     refute Process.alive?(source.pid)
