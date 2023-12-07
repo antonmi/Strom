@@ -20,7 +20,13 @@ defmodule Strom.Function do
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    sub_flow = GenServer.call(pid, {:call, streams}, :infinity)
+    sub_flow =
+      Enum.reduce(streams, %{}, fn {name, stream}, acc ->
+        stream = Stream.map(stream, fn event ->
+          GenServer.call(pid, {:call, event}, :infinity)
+        end)
+        Map.put(acc, name, stream)
+      end)
 
     Map.merge(flow, sub_flow)
   end
@@ -32,14 +38,8 @@ defmodule Strom.Function do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
-  def handle_call({:call, streams}, _from, state) do
-    sub_flow =
-      Enum.reduce(streams, %{}, fn {name, stream}, acc ->
-        stream = Stream.map(stream, &state.function.(&1))
-        Map.put(acc, name, stream)
-      end)
-
-    {:reply, sub_flow, state}
+  def handle_call({:call, event}, _from, state) do
+    {:reply, state.function.(event), state}
   end
 
   def handle_call(:stop, _from, state) do

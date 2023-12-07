@@ -13,14 +13,27 @@ defmodule Strom.Module do
   @impl true
   def init(%__MODULE__{} = state), do: {:ok, %{state | pid: self()}}
 
-  def call(flow, %__MODULE__{pid: pid}, names)
+  def call(flow, %__MODULE__{pid: pid} = state, names)
       when is_map(flow) and is_list(names) do
     streams =
       Enum.reduce(names, %{}, fn name, acc ->
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    sub_flow = GenServer.call(pid, {:call, streams}, :infinity)
+    sub_flow =
+      Enum.reduce(streams, %{}, fn {name, stream}, acc ->
+        stream =
+          if is_pipeline_module?(state.module) do
+            apply(state.module, :stream, [stream])
+          else
+            Stream.transform(stream, state.state, fn event, acc ->
+              GenServer.call(pid, {:call, event, acc}, :infinity)
+            end)
+          end
+
+        Map.put(acc, name, stream)
+      end)
+
     Map.merge(flow, sub_flow)
   end
 
@@ -39,22 +52,10 @@ defmodule Strom.Module do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
-  def handle_call({:call, streams}, _from, state) do
-    sub_flow =
-      Enum.reduce(streams, %{}, fn {name, stream}, acc ->
-        stream =
-          if is_pipeline_module?(state.module) do
-            apply(state.module, :stream, [stream])
-          else
-            Stream.transform(stream, state.state, fn el, acc ->
-              apply(state.module, :call, [el, acc, state.opts])
-            end)
-          end
+  def handle_call({:call, event, acc}, _from, state) do
+    {events, acc} = apply(state.module, :call, [event, acc, state.opts])
 
-        Map.put(acc, name, stream)
-      end)
-
-    {:reply, sub_flow, state}
+    {:reply, {events, acc}, state}
   end
 
   def handle_call(:stop, _from, state) do
