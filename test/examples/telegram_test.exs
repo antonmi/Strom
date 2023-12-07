@@ -40,7 +40,7 @@ defmodule Strom.Integration.TelegramTest do
       source(:input, %ReadLines{path: "test/data/orders.csv"}),
       module(:input, Decompose),
       module(:input, Recompose),
-      sink(:input, %WriteLines{path: "test_data/telegram.txt"}, true)
+      sink(:input, %WriteLines{path: "test/data/telegram.txt"}, true)
     ]
   end
 
