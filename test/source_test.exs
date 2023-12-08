@@ -52,8 +52,27 @@ defmodule Strom.SourceTest do
     assert Enum.member?(lines, 3)
   end
 
+  test "apply source to several streams", %{source: source} do
+    %{stream1: stream1, stream2: stream2} = Source.call(%{}, source, [:stream1, :stream2])
+
+    lines1 = Enum.to_list(stream1)
+    lines2 = Enum.to_list(stream2)
+
+    assert Enum.join(lines1 ++ lines2, "\n") == File.read!("test/data/orders.csv")
+  end
+
   test "stop", %{source: source} do
     assert Source.stop(source) == :ok
     refute Process.alive?(source.pid)
+  end
+
+  describe "events source" do
+    alias Strom.Source.Events
+
+    test "events" do
+      source = Source.start(%Events{events: [1, 2, 3]})
+      %{events: events} = Source.call(%{events: [0]}, source, :events)
+      assert Enum.to_list(events) == [0, 1, 2, 3]
+    end
   end
 end

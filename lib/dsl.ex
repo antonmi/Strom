@@ -8,58 +8,62 @@ defmodule Strom.DSL do
   end
 
   defmodule Source do
-    defstruct source: nil, origin: nil, name: nil
+    defstruct source: nil, origin: nil, names: []
   end
 
   defmodule Sink do
-    defstruct sink: nil, origin: nil, name: nil, sync: false
+    defstruct sink: nil, origin: nil, names: [], sync: false
   end
 
   defmodule Mixer do
-    defstruct mixer: nil, inputs: [], output: nil
+    defstruct mixer: nil, opts: [], inputs: [], output: nil
   end
 
   defmodule Splitter do
-    defstruct splitter: nil, input: nil, partitions: %{}
+    defstruct splitter: nil, opts: [], input: nil, partitions: %{}
   end
 
-  defmacro source(name, origin) do
+  defmacro source(names, origin) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Source origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Source{origin: unquote(origin), name: unquote(name)}
+      %Strom.DSL.Source{origin: unquote(origin), names: unquote(names)}
     end
   end
 
-  defmacro sink(name, origin, sync \\ false) do
+  defmacro sink(names, origin, sync \\ false) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Sink origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Sink{origin: unquote(origin), name: unquote(name), sync: unquote(sync)}
+      %Strom.DSL.Sink{origin: unquote(origin), names: unquote(names), sync: unquote(sync)}
     end
   end
 
-  defmacro mixer(inputs, output) do
+  defmacro mixer(inputs, output, opts \\ []) do
     quote do
       unless is_list(unquote(inputs)) do
         raise "Mixer sources must be a list, given: #{inspect(unquote(inputs))}"
       end
 
-      %Strom.DSL.Mixer{inputs: unquote(inputs), output: unquote(output)}
+      %Strom.DSL.Mixer{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
     end
   end
 
-  defmacro splitter(input, partitions) do
+  defmacro splitter(input, partitions, opts \\ []) do
     quote do
       unless is_map(unquote(partitions)) and map_size(unquote(partitions)) > 0 do
         raise "Branches in splitter must be a map, given: #{inspect(unquote(partitions))}"
       end
 
-      %Strom.DSL.Splitter{input: unquote(input), partitions: unquote(partitions)}
+      %Strom.DSL.Splitter{
+        input: unquote(input),
+        partitions: unquote(partitions),
+        opts: unquote(opts)
+      }
     end
   end
 

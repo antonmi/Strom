@@ -1,4 +1,5 @@
 defmodule Strom.Module do
+  # TODO define behaviour
   use GenServer
 
   defstruct module: nil, pid: nil, opts: [], state: nil

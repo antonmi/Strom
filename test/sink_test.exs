@@ -1,5 +1,5 @@
 defmodule Strom.SinkTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Strom.Source
   alias Strom.Source.ReadLines
@@ -32,6 +32,18 @@ defmodule Strom.SinkTest do
     lines = Enum.to_list(another_stream)
 
     assert Enum.join(lines, "\n") <> "\n" == File.read!("test/data/output.csv")
+  end
+
+  test "stream lines to one_sink", %{sink: sink} do
+    assert %{} =
+             %{}
+             |> Source.call(source(), :my_stream)
+             |> Source.call(source(), :another_stream)
+             |> Sink.call(sink, [:my_stream, :another_stream], true)
+
+    original_size = String.length(File.read!("test/data/orders.csv"))
+    output_size = String.length(File.read!("test/data/output.csv"))
+    assert 2 * (original_size + 1) == output_size
   end
 
   test "with sync lines", %{sink: sink} do

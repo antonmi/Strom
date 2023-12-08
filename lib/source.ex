@@ -1,6 +1,6 @@
 defmodule Strom.Source do
   @callback start(map) :: map
-  @callback call(map) :: {:ok, {term, map}} | {:error, {:halt, map}}
+  @callback call(map) :: {:ok, {[term], map}} | {:error, {:halt, map}}
   @callback stop(map) :: map
   @callback infinite?(map) :: true | false
 
@@ -25,16 +25,25 @@ defmodule Strom.Source do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def call(flow, %__MODULE__{} = source, name) do
-    stream =
-      Stream.resource(
-        fn -> source end,
-        fn source -> call(source) end,
-        fn source -> source end
-      )
+  def call(flow, %__MODULE__{} = source, names) when is_map(flow) and is_list(names) do
+    sub_flow =
+      Enum.reduce(names, %{}, fn name, acc ->
+        stream =
+          Stream.resource(
+            fn -> source end,
+            fn source -> call(source) end,
+            fn source -> source end
+          )
 
-    prev_stream = Map.get(flow, name, [])
-    Map.put(flow, name, Stream.concat(prev_stream, stream))
+        prev_stream = Map.get(flow, name, [])
+        Map.put(acc, name, Stream.concat(prev_stream, stream))
+      end)
+
+    Map.merge(flow, sub_flow)
+  end
+
+  def call(flow, source, name) when is_map(flow) do
+    call(flow, source, [name])
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

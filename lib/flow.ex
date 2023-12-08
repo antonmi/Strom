@@ -34,11 +34,11 @@ defmodule Strom.Flow do
         %DSL.Sink{origin: origin} = sink ->
           %{sink | sink: Strom.Sink.start(origin)}
 
-        %DSL.Mixer{} = mixer ->
-          %{mixer | mixer: Strom.Mixer.start()}
+        %DSL.Mixer{opts: opts} = mixer ->
+          %{mixer | mixer: Strom.Mixer.start(opts)}
 
-        %DSL.Splitter{} = splitter ->
-          %{splitter | splitter: Strom.Splitter.start()}
+        %DSL.Splitter{opts: opts} = splitter ->
+          %{splitter | splitter: Strom.Splitter.start(opts)}
 
         %DSL.Function{function: function} = fun ->
           %{fun | function: Strom.Function.start(function)}
@@ -68,11 +68,11 @@ defmodule Strom.Flow do
       state.topology
       |> Enum.reduce(init_flow, fn component, flow ->
         case component do
-          %DSL.Source{source: source, name: name} ->
-            Strom.Source.call(flow, source, name)
+          %DSL.Source{source: source, names: names} ->
+            Strom.Source.call(flow, source, names)
 
-          %DSL.Sink{sink: sink, name: name, sync: sync} ->
-            Strom.Sink.call(flow, sink, name, sync)
+          %DSL.Sink{sink: sink, names: names, sync: sync} ->
+            Strom.Sink.call(flow, sink, names, sync)
 
           %DSL.Mixer{mixer: mixer, inputs: inputs, output: output} ->
             Strom.Mixer.call(flow, mixer, inputs, output)

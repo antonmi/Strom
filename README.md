@@ -105,6 +105,14 @@ Source.stop(source)
 # stops the source process
 ```
 
+Here the `Strom.Source.ReadLines` module is used to read line from file.
+
+To specify a custom source, one can implement a module with the `Strom.Source` behaviour.
+
+Strom provides a couple of simple sources, see [sources](https://github.com/antonmi/Strom/blob/main/lib/source/).
+
+The same for sinks.
+
 Then, for example, one wants to split the stream into two streams, one with short lines, another - with long ones:
 
 ```elixir

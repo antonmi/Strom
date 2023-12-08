@@ -22,24 +22,34 @@ defmodule Strom.Sink do
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def call(flow, %__MODULE__{} = sink, name, sync \\ false)
-      when is_map(flow)
-      when is_boolean(sync) do
-    stream = Map.fetch!(flow, name)
+  def call(flow, sink, names, sync \\ false)
 
-    stream =
-      Stream.transform(stream, sink, fn el, sink ->
-        call(sink, el)
-        {[], sink}
+  def call(flow, %__MODULE__{} = sink, names, sync)
+      when is_map(flow) and is_list(names) and is_boolean(sync) do
+    sub_flow =
+      Enum.reduce(names, %{}, fn name, acc ->
+        Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    if sync do
-      Stream.run(stream)
-    else
-      Task.async(fn -> Stream.run(stream) end)
-    end
+    Enum.reduce(sub_flow, flow, fn {name, stream}, acc ->
+      stream =
+        Stream.transform(stream, sink, fn el, sink ->
+          call(sink, el)
+          {[], sink}
+        end)
 
-    Map.delete(flow, name)
+      if sync do
+        Stream.run(stream)
+      else
+        Task.async(fn -> Stream.run(stream) end)
+      end
+
+      Map.delete(acc, name)
+    end)
+  end
+
+  def call(flow, sink, name, sync) when is_map(flow) and is_boolean(sync) do
+    call(flow, sink, [name], sync)
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
