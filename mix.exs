@@ -30,7 +30,7 @@ defmodule Strom.MixProject do
   end
 
   defp description do
-    "Flow-Based Programming"
+    "Flow-based Programming Framework"
   end
 
   defp package do

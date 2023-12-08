@@ -13,6 +13,8 @@ defmodule Strom.SourceTest do
   test "source init", %{source: source} do
     assert Process.alive?(source.pid)
     assert source.origin.path == "test/data/orders.csv"
+    Source.stop(source)
+    refute Process.alive?(source.pid)
   end
 
   test "call", %{source: source} do
