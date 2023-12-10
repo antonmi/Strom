@@ -33,27 +33,20 @@ defmodule Strom.Examples.SimpleNumbersTest do
       def add_label(event, label), do: {event, label}
 
       defmodule DoMix do
-        def start(_opts), do: %{first: [], second: []}
-
-        def call({number, :first}, acc, _opts) do
-          case acc[:second] do
-            [hd | tl] ->
-              {[hd, number], Map.put(acc, :second, tl)}
-
-            [] ->
-              firsts = Map.fetch!(acc, :first)
-              {[], Map.put(acc, :first, firsts ++ [number])}
-          end
+        def start(names) do
+          Enum.reduce(names, %{}, &Map.put(&2, &1, []))
         end
 
-        def call({number, :second}, acc, _opts) do
-          case acc[:first] do
+        def call({number, label}, acc, names) do
+          [another] = Enum.reject(names, &(&1 == label))
+
+          case Map.fetch!(acc, another) do
             [hd | tl] ->
-              {[hd, number], Map.put(acc, :first, tl)}
+              {[hd, number], Map.put(acc, another, tl)}
 
             [] ->
-              seconds = Map.fetch!(acc, :second)
-              {[], Map.put(acc, :second, seconds ++ [number])}
+              numbers = Map.fetch!(acc, label)
+              {[], Map.put(acc, label, numbers ++ [number])}
           end
         end
 
@@ -64,7 +57,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
         function(:first, &__MODULE__.add_label/2, :first),
         function(:second, &__MODULE__.add_label/2, :second),
         mixer([:first, :second], :mixed),
-        module(:mixed, DoMix)
+        module(:mixed, DoMix, [:first, :second])
       ]
     end
 
