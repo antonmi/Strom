@@ -1,10 +1,10 @@
 defmodule Strom.Function do
   use GenServer
 
-  defstruct function: nil, pid: nil
+  defstruct function: nil, opts: nil, pid: nil
 
-  def start(function) do
-    state = %__MODULE__{function: function}
+  def start(function, opts \\ nil) do
+    state = %__MODULE__{function: function, opts: opts}
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
@@ -41,7 +41,13 @@ defmodule Strom.Function do
 
   @impl true
   def handle_call({:call, event}, _from, state) do
-    new_event = state.function.(event)
+    new_event =
+      if is_function(state.function, 1) do
+        state.function.(event)
+      else
+        state.function.(event, state.opts)
+      end
+
     {:reply, new_event, state}
   end
 

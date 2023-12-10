@@ -55,4 +55,11 @@ defmodule Strom.FunctionTest do
       Function.call(%{}, function, [:orders])
     end
   end
+
+  test "with extra argument" do
+    function = Function.start(fn event, extra -> "#{extra}-#{event}" end, "foo")
+
+    %{events: stream} = Function.call(%{events: [1, 2, 3]}, function, :events)
+    assert Enum.to_list(stream) == ["foo-1", "foo-2", "foo-3"]
+  end
 end

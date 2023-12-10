@@ -4,7 +4,7 @@ defmodule Strom.DSL do
   end
 
   defmodule Function do
-    defstruct function: nil, inputs: []
+    defstruct function: nil, opts: [], inputs: []
   end
 
   defmodule Source do
@@ -73,9 +73,13 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro function(inputs, function) do
+  defmacro function(inputs, function, opts \\ []) do
     quote do
-      %Strom.DSL.Function{function: unquote(function), inputs: unquote(inputs)}
+      %Strom.DSL.Function{
+        function: unquote(function),
+        opts: unquote(opts),
+        inputs: unquote(inputs)
+      }
     end
   end
 

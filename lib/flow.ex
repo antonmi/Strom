@@ -40,8 +40,8 @@ defmodule Strom.Flow do
         %DSL.Splitter{opts: opts} = splitter ->
           %{splitter | splitter: Strom.Splitter.start(opts)}
 
-        %DSL.Function{function: function} = fun ->
-          %{fun | function: Strom.Function.start(function)}
+        %DSL.Function{function: function, opts: opts} = fun ->
+          %{fun | function: Strom.Function.start(function, opts)}
 
         %DSL.Module{module: module, opts: opts} = mod ->
           module = Strom.Module.start(module, opts)
