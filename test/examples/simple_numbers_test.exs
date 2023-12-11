@@ -53,12 +53,14 @@ defmodule Strom.Examples.SimpleNumbersTest do
         def stop(_acc, _opts), do: :ok
       end
 
-      @topology [
-        function(:first, &__MODULE__.add_label/2, :first),
-        function(:second, &__MODULE__.add_label/2, :second),
-        mixer([:first, :second], :mixed),
-        module(:mixed, DoMix, [:first, :second])
-      ]
+      def topology(_opts) do
+        [
+          function(:first, &__MODULE__.add_label/2, :first),
+          function(:second, &__MODULE__.add_label/2, :second),
+          mixer([:first, :second], :mixed),
+          module(:mixed, DoMix, [:first, :second])
+        ]
+      end
     end
 
     test "test the order of numbers" do

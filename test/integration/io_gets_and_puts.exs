@@ -6,11 +6,13 @@ defmodule Strom.Integration.IOGetsAndPutsTest do
 
     def hello(stream), do: Stream.map(stream, &"Hello, #{&1}!")
 
-    @topology [
-      source(%Strom.Source.IOGets{}),
-      function(&__MODULE__.hello/1),
-      sink(%Strom.Sink.IOPuts{}),
-      run()
-    ]
+    def topology(_opts) do
+      [
+        source(%Strom.Source.IOGets{}),
+        function(&__MODULE__.hello/1),
+        sink(%Strom.Sink.IOPuts{}),
+        run()
+      ]
+    end
   end
 end

@@ -187,14 +187,16 @@ defmodule Strom.Examples.Parcels.ParcelsTest do
     defmodule SeveralPipelinesFlow do
       use Strom.DSL
 
-      @topology [
-        source(:parcels, %ReadLines{path: "test/examples/parcels/parcels.csv"}),
-        source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
-        mixer([:orders, :parcels], :mixed),
-        module(:mixed, BuildPipeline),
-        module(:mixed, OrderingPipeline),
-        module(:mixed, Pipeline)
-      ]
+      def topology(_opts) do
+        [
+          source(:parcels, %ReadLines{path: "test/examples/parcels/parcels.csv"}),
+          source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
+          mixer([:orders, :parcels], :mixed),
+          module(:mixed, BuildPipeline),
+          module(:mixed, OrderingPipeline),
+          module(:mixed, Pipeline)
+        ]
+      end
     end
 
     test "with several pipelines" do

@@ -87,8 +87,6 @@ defmodule Strom.DSL do
     quote do
       import Strom.DSL
 
-      @before_compile Strom.DSL
-
       @spec start(term) :: Strom.Flow.t()
       def start(opts \\ []) do
         Strom.Flow.start(__MODULE__, opts)
@@ -102,25 +100,6 @@ defmodule Strom.DSL do
       @spec stop() :: :ok
       def stop do
         Strom.Flow.stop(__MODULE__)
-      end
-    end
-  end
-
-  defmacro __before_compile__(_env) do
-    quote do
-      def flow_topology(opts) do
-        functions = __MODULE__.module_info(:functions)
-
-        cond do
-          Enum.member?(functions, {:topology, 0}) ->
-            apply(__MODULE__, :topology, [])
-
-          Enum.member?(functions, {:topology, 1}) ->
-            apply(__MODULE__, :topology, [opts])
-
-          true ->
-            @topology
-        end
       end
     end
   end

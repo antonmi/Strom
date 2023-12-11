@@ -234,18 +234,22 @@ The topology form the first examples (with long and short strings) can be define
 defmodule MyFlow do
   use Strom.DSL
   
-  parts = %{
-    long: fn event -> String.length(event) > 100 end,
-    short: fn event -> String.length(event) <= 100 end
-  }
+  
 
 
-  @topology [
-    source(:lines, %ReadLines{path: "input.txt"}),
-    splitter(:lines, parts),
-    sink(:short, %WriteLines{path: "short.txt"}),
-    sink(:long, %WriteLines{path: "long.txt"})
-  ]
+  def topology(_opts) do
+    parts = %{
+      long: fn event -> String.length(event) > 100 end,
+      short: fn event -> String.length(event) <= 100 end
+    }
+    
+    [
+      source(:lines, %ReadLines{path: "input.txt"}),
+      splitter(:lines, parts),
+      sink(:short, %WriteLines{path: "short.txt"}),
+      sink(:long, %WriteLines{path: "long.txt"})
+    ] 
+  end
 end
 ```
 

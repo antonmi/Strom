@@ -36,12 +36,14 @@ defmodule Strom.Integration.TelegramTest do
       def stop(_acc, []), do: :ok
     end
 
-    @topology [
-      source(:input, %ReadLines{path: "test/data/orders.csv"}),
-      module(:input, Decompose),
-      module(:input, Recompose),
-      sink(:input, %WriteLines{path: "test/data/telegram.txt"}, true)
-    ]
+    def topology(_opts) do
+      [
+        source(:input, %ReadLines{path: "test/data/orders.csv"}),
+        module(:input, Decompose),
+        module(:input, Recompose),
+        sink(:input, %WriteLines{path: "test/data/telegram.txt"}, true)
+      ]
+    end
   end
 
   test "run flow" do

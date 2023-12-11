@@ -21,7 +21,7 @@ defmodule Strom.Flow do
 
   @impl true
   def init(%__MODULE__{module: module} = state) do
-    topology = build(module.flow_topology(state.opts))
+    topology = build(module.topology(state.opts))
     {:ok, %{state | pid: self(), topology: topology}}
   end
 
