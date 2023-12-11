@@ -29,18 +29,8 @@ defmodule Strom.DSLTest do
   defmodule MyFlow do
     use Strom.DSL
 
-    source1 = %ReadLines{path: "test/data/numbers1.txt"}
-    source2 = %ReadLines{path: "test/data/numbers2.txt"}
-    sink_odd = %WriteLines{path: "test/data/odd.txt"}
-    sink_even = %WriteLines{path: "test/data/even.txt"}
-
     def odd_fun(event), do: rem(event, 2) == 1
     def even_fun(event), do: rem(event, 2) == 0
-
-    partitions = %{
-      odd: &__MODULE__.odd_fun/1,
-      even: &__MODULE__.even_fun/1
-    }
 
     def to_string(el), do: "#{el}"
 
@@ -52,16 +42,28 @@ defmodule Strom.DSLTest do
       def stop(:state, :opts), do: :ok
     end
 
-    @topology [
-      source(:numbers1, source1),
-      source(:numbers2, source2),
-      mixer([:numbers1, :numbers2], :mixed),
-      module(:mixed, Pipeline, sync: true),
-      splitter(:mixed, partitions),
-      function([:odd, :even], &__MODULE__.to_string/1),
-      sink(:odd, sink_odd, true),
-      sink(:even, sink_even, true)
-    ]
+    def topology(opts) do
+      source1 = %ReadLines{path: "test/data/numbers1.txt"}
+      source2 = %ReadLines{path: "test/data/numbers2.txt"}
+      sink_odd = %WriteLines{path: "test/data/odd.txt"}
+      sink_even = %WriteLines{path: "test/data/even.txt"}
+
+      partitions = %{
+        odd: &__MODULE__.odd_fun/1,
+        even: &__MODULE__.even_fun/1
+      }
+
+      [
+        source(:numbers1, source1),
+        source(:numbers2, source2),
+        mixer([:numbers1, :numbers2], :mixed),
+        module(:mixed, Pipeline, sync: true),
+        splitter(:mixed, partitions),
+        function([:odd, :even], opts[:to_string_fun]),
+        sink(:odd, sink_odd, true),
+        sink(:even, sink_even, true)
+      ]
+    end
   end
 
   def check_output() do
@@ -83,7 +85,7 @@ defmodule Strom.DSLTest do
   end
 
   test "start and run" do
-    MyFlow.start()
+    MyFlow.start(%{to_string_fun: &MyFlow.to_string/1})
     MyFlow.call(%{})
     check_output()
     MyFlow.stop()

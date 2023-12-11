@@ -3,3 +3,5 @@
 - test chunk_every behaviour in mixer and splitter (chunk_every: 1)
 - event referencing and component storage for restarting
 - smart mixer and smart splitter examples
+- use &topology/1 instead of @topology
+- flow and cree in dsl

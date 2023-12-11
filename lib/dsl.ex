@@ -89,14 +89,9 @@ defmodule Strom.DSL do
 
       @before_compile Strom.DSL
 
-      @spec start() :: Strom.Flow.t()
-      def start do
-        Strom.Flow.start(__MODULE__)
-      end
-
-      @spec topology() :: list(map)
-      def topology() do
-        Strom.Flow.topology(__MODULE__)
+      @spec start(term) :: Strom.Flow.t()
+      def start(opts \\ []) do
+        Strom.Flow.start(__MODULE__, opts)
       end
 
       @spec call(map) :: map()
@@ -113,7 +108,20 @@ defmodule Strom.DSL do
 
   defmacro __before_compile__(_env) do
     quote do
-      def flow_topology, do: @topology
+      def flow_topology(opts) do
+        functions = __MODULE__.module_info(:functions)
+
+        cond do
+          Enum.member?(functions, {:topology, 0}) ->
+            apply(__MODULE__, :topology, [])
+
+          Enum.member?(functions, {:topology, 1}) ->
+            apply(__MODULE__, :topology, [opts])
+
+          true ->
+            @topology
+        end
+      end
     end
   end
 end

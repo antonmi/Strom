@@ -2,6 +2,7 @@ defmodule Strom.Flow do
   defstruct pid: nil,
             name: nil,
             module: nil,
+            opts: [],
             topology: []
 
   use GenServer
@@ -10,8 +11,8 @@ defmodule Strom.Flow do
   @type t :: %__MODULE__{}
 
   # TODO Supervisor
-  def start(flow_module, _opts \\ []) when is_atom(flow_module) do
-    state = %__MODULE__{name: flow_module, module: flow_module}
+  def start(flow_module, opts \\ []) when is_atom(flow_module) do
+    state = %__MODULE__{name: flow_module, module: flow_module, opts: opts}
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state, name: flow_module)
 
@@ -20,7 +21,7 @@ defmodule Strom.Flow do
 
   @impl true
   def init(%__MODULE__{module: module} = state) do
-    topology = build(module.flow_topology())
+    topology = build(module.flow_topology(state.opts))
     {:ok, %{state | pid: self(), topology: topology}}
   end
 
@@ -50,7 +51,7 @@ defmodule Strom.Flow do
     end)
   end
 
-  def topology(flow_module), do: GenServer.call(flow_module, :topology)
+  def info(flow_module), do: GenServer.call(flow_module, :info)
 
   def call(flow_module, flow), do: GenServer.call(flow_module, {:call, flow}, :infinity)
 
@@ -59,7 +60,7 @@ defmodule Strom.Flow do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
-  def handle_call(:topology, _from, state), do: {:reply, state.topology, state}
+  def handle_call(:info, _from, state), do: {:reply, state.topology, state}
 
   def handle_call(:__state__, _from, state), do: {:reply, state, state}
 
