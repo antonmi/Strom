@@ -234,9 +234,6 @@ The topology form the first examples (with long and short strings) can be define
 defmodule MyFlow do
   use Strom.DSL
   
-  
-
-
   def topology(_opts) do
     parts = %{
       long: fn event -> String.length(event) > 100 end,
