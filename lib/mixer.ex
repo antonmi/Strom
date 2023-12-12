@@ -45,6 +45,8 @@ defmodule Strom.Mixer do
         fn mixer ->
           case GenServer.call(mixer.pid, :get_data) do
             {:ok, data} ->
+              # sleep a bit
+              if length(data) == 0, do: Process.sleep(1)
               {data, mixer}
 
             {:error, :done} ->

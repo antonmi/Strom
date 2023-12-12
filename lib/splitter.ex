@@ -77,9 +77,9 @@ defmodule Strom.Splitter do
     end)
   end
 
-  defp maybe_wait(data_length, chunk_every) do
-    if data_length > 10 * chunk_every do
-      div = div(data_length, 10 * chunk_every)
+  defp maybe_wait(data_size, chunk_every) do
+    if data_size > 10 * chunk_every do
+      div = div(data_size, 10 * chunk_every)
       to_sleep = trunc(:math.pow(2, div))
       Process.sleep(to_sleep)
     end

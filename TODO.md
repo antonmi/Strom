@@ -3,4 +3,5 @@
 - test chunk_every behaviour in mixer and splitter (chunk_every: 1)
 - event referencing and component storage for restarting
 - smart mixer and smart splitter examples
-- flow and cree in dsl
+- flow and rename in dsl
+- tick source with timeout
