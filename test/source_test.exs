@@ -67,10 +67,8 @@ defmodule Strom.SourceTest do
   end
 
   describe "events source" do
-    alias Strom.Source.Events
-
     test "events" do
-      source = Source.start(%Events{events: [1, 2, 3]})
+      source = Source.start([1, 2, 3])
       %{events: events} = Source.call(%{events: [0]}, source, :events)
       assert Enum.to_list(events) == [0, 1, 2, 3]
     end

@@ -4,7 +4,7 @@ defmodule Strom.Module do
 
   defstruct module: nil, pid: nil, opts: [], state: nil
 
-  def start(module, opts \\ []) do
+  def start(module, opts \\ []) when is_atom(module) do
     state = apply(module, :start, [opts])
     state = %__MODULE__{module: module, opts: opts, state: state}
     {:ok, pid} = GenServer.start_link(__MODULE__, state)

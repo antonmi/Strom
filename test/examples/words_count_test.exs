@@ -4,7 +4,7 @@ defmodule Strom.Examples.WordsCountTest do
   defmodule WordsFlow do
     use Strom.DSL
 
-    alias Strom.Source.{ReadLines, Events}
+    alias Strom.Source.ReadLines
 
     defmodule DoCount do
       def start(_opts), do: %{}
@@ -51,7 +51,7 @@ defmodule Strom.Examples.WordsCountTest do
 
       dones =
         Enum.map(all_names, fn name ->
-          source(name, %Events{events: [:done]})
+          source(name, [:done])
         end)
 
       [
@@ -61,7 +61,7 @@ defmodule Strom.Examples.WordsCountTest do
         [
           module(all_names, DoCount),
           mixer(all_names, :mixed),
-          source(:mixed, %Events{events: [:done]}),
+          source(:mixed, [:done]),
           module(:mixed, SumAll)
         ]
     end

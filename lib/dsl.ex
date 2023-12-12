@@ -25,8 +25,8 @@ defmodule Strom.DSL do
 
   defmacro source(names, origin) do
     quote do
-      unless is_struct(unquote(origin)) do
-        raise "Source origin must be a struct, given: #{inspect(unquote(origin))}"
+      unless is_struct(unquote(origin)) or is_list(unquote(origin)) do
+        raise "Source origin must be a struct or just simple list, given: #{inspect(unquote(origin))}"
       end
 
       %Strom.DSL.Source{origin: unquote(origin), names: unquote(names)}

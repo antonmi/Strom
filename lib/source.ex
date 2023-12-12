@@ -8,7 +8,11 @@ defmodule Strom.Source do
 
   defstruct [:origin, :pid]
 
-  def start(origin) do
+  def start(list) when is_list(list) do
+    start(%Strom.Source.Events{events: list})
+  end
+
+  def start(origin) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
     state = %__MODULE__{origin: origin}
 

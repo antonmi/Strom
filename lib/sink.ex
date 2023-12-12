@@ -7,7 +7,7 @@ defmodule Strom.Sink do
 
   defstruct [:origin, :pid]
 
-  def start(origin) do
+  def start(origin) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
     state = %__MODULE__{origin: origin}
 

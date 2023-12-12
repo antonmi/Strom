@@ -90,4 +90,14 @@ defmodule Strom.DSLTest do
     check_output()
     MyFlow.stop()
   end
+
+  describe "combining several flows" do
+    defmodule Flow1 do
+      use Strom.DSL
+
+      def topology(_) do
+        source(:s1, [1, 2, 3])
+      end
+    end
+  end
 end
