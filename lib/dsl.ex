@@ -1,12 +1,4 @@
 defmodule Strom.DSL do
-  defmodule Module do
-    defstruct module: nil, opts: [], inputs: [], state: nil
-  end
-
-  defmodule Function do
-    defstruct function: nil, opts: [], inputs: []
-  end
-
   defmodule Source do
     defstruct source: nil, origin: nil, names: []
   end
@@ -21,6 +13,18 @@ defmodule Strom.DSL do
 
   defmodule Splitter do
     defstruct splitter: nil, opts: [], input: nil, partitions: %{}
+  end
+
+  defmodule Function do
+    defstruct function: nil, opts: [], inputs: []
+  end
+
+  defmodule Module do
+    defstruct module: nil, opts: [], inputs: [], state: nil
+  end
+
+  defmodule Rename do
+    defstruct names: nil, rename: nil
   end
 
   defmacro source(names, origin) do
@@ -67,12 +71,6 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro module(inputs, module, opts \\ []) do
-    quote do
-      %Strom.DSL.Module{module: unquote(module), opts: unquote(opts), inputs: unquote(inputs)}
-    end
-  end
-
   defmacro function(inputs, function, opts \\ []) do
     quote do
       %Strom.DSL.Function{
@@ -80,6 +78,36 @@ defmodule Strom.DSL do
         opts: unquote(opts),
         inputs: unquote(inputs)
       }
+    end
+  end
+
+  defmacro module(inputs, module, opts \\ []) do
+    quote do
+      %Strom.DSL.Module{
+        module: unquote(module),
+        opts: unquote(opts),
+        inputs: unquote(inputs)
+      }
+    end
+  end
+
+  defmacro from(module, opts \\ []) do
+    quote do
+      unless is_atom(unquote(module)) do
+        raise "Flow must be a module, given: #{inspect(unquote(module))}"
+      end
+
+      apply(unquote(module), :topology, [unquote(opts)])
+    end
+  end
+
+  defmacro rename(names) do
+    quote do
+      unless is_map(unquote(names)) do
+        raise "Names must be a map, given: #{inspect(unquote(names))}"
+      end
+
+      %Strom.DSL.Rename{names: unquote(names)}
     end
   end
 
@@ -100,6 +128,11 @@ defmodule Strom.DSL do
       @spec stop() :: :ok
       def stop do
         Strom.Flow.stop(__MODULE__)
+      end
+
+      @spec info() :: list()
+      def info do
+        Strom.Flow.info(__MODULE__)
       end
     end
   end

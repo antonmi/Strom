@@ -50,6 +50,7 @@ defmodule Strom.Mixer do
                 to_sleep = trunc(:math.pow(2, no_data_counter))
                 Process.sleep(to_sleep)
               end
+
               {data, mixer}
 
             {:error, :done} ->
@@ -126,10 +127,11 @@ defmodule Strom.Mixer do
       no_data_counter = if length(all_data) == 0, do: mixer.no_data_counter + 1, else: 0
 
       mixer = %{
-        mixer |
-        data: data,
-        no_data_counter: no_data_counter
+        mixer
+        | data: data,
+          no_data_counter: no_data_counter
       }
+
       {:reply, {:ok, {all_data, no_data_counter}}, mixer}
     end
   end

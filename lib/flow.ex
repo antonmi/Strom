@@ -21,7 +21,12 @@ defmodule Strom.Flow do
 
   @impl true
   def init(%__MODULE__{module: module} = state) do
-    topology = build(module.topology(state.opts))
+    topology =
+      state.opts
+      |> module.topology()
+      |> List.flatten()
+      |> build()
+
     {:ok, %{state | pid: self(), topology: topology}}
   end
 
@@ -47,6 +52,10 @@ defmodule Strom.Flow do
         %DSL.Module{module: module, opts: opts} = mod ->
           module = Strom.Module.start(module, opts)
           %{mod | module: module}
+
+        %DSL.Rename{names: names} = ren ->
+          rename = Strom.Rename.start(names)
+          %{ren | rename: rename}
       end
     end)
   end
@@ -86,6 +95,9 @@ defmodule Strom.Flow do
 
           %DSL.Module{module: module, inputs: inputs} ->
             Strom.Module.call(flow, module, inputs)
+
+          %DSL.Rename{rename: rename, names: names} ->
+            Strom.Rename.call(flow, rename, names)
         end
       end)
 

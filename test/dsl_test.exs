@@ -95,9 +95,63 @@ defmodule Strom.DSLTest do
     defmodule Flow1 do
       use Strom.DSL
 
-      def topology(_) do
-        source(:s1, [1, 2, 3])
+      def topology(mixed_name) do
+        [
+          source(:s1, [1, 2, 3]),
+          source(:s2, [10, 20, 30]),
+          source(:s3, [100, 200, 300]),
+          mixer([:s1, :s2], mixed_name)
+        ]
       end
+    end
+
+    defmodule Flow2 do
+      use Strom.DSL
+
+      def add_one(el), do: el + 1
+      def to_string(el), do: "#{el}"
+
+      def topology(_) do
+        [
+          function(:stream1, &__MODULE__.add_one/1),
+          function(:stream2, &__MODULE__.add_one/1)
+        ]
+      end
+    end
+
+    defmodule Flow3 do
+      use Strom.DSL
+
+      def add_one(el), do: el + 1
+      def to_string(el), do: "#{el}"
+
+      def topology(name) do
+        [
+          mixer([:str1, :str2], name)
+        ]
+      end
+    end
+
+    defmodule ComposedFlow do
+      use Strom.DSL
+
+      def topology(name) do
+        [
+          from(Flow1, :s12),
+          rename(%{s12: :stream1, s3: :stream2}),
+          from(Flow2),
+          rename(%{stream1: :str1, stream2: :str2}),
+          from(Flow3, name)
+        ]
+      end
+    end
+
+    test "ComposedFlow" do
+      ComposedFlow.start(:mixed)
+      %{mixed: stream} = ComposedFlow.call(%{})
+      results = Enum.to_list(stream)
+      assert length(results) == 9
+      assert Enum.sort(results) == [2, 3, 4, 11, 21, 31, 101, 201, 301]
     end
   end
 end

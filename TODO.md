@@ -1,4 +1,4 @@
 - Proper supervision tree!!!
 - Module behaviour
-- flow and rename in dsl
 - tick source with timeout
+- remove chunk_by, introduce buffer
