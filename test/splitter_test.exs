@@ -43,9 +43,13 @@ defmodule Strom.SplitterTest do
              flow
              |> Splitter.call(splitter, :orders, ["111", "222", "333"])
 
-    orders111 = Enum.to_list(stream1)
-    orders222 = Enum.to_list(stream2)
-    orders333 = Enum.to_list(stream3)
+    task111 = Task.async(fn -> Enum.to_list(stream1) end)
+    task222 = Task.async(fn -> Enum.to_list(stream2) end)
+    task333 = Task.async(fn -> Enum.to_list(stream3) end)
+
+    orders111 = Task.await(task111)
+    orders222 = Task.await(task222)
+    orders333 = Task.await(task333)
 
     {original_orders, original_parcels} = orders_and_parcels()
 

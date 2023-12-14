@@ -7,8 +7,8 @@ defmodule Strom.LoopTest do
     plus_one =
       Strom.Function.start(&(&1 + 1))
 
-    mixer = Strom.Mixer.start(chunk_every: 2)
-    splitter = Strom.Splitter.start(chunk_every: 2)
+    mixer = Strom.Mixer.start()
+    splitter = Strom.Splitter.start()
 
     loop = Strom.Loop.start(timeout: 100)
     source_loop = Strom.Source.start(loop)

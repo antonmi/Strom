@@ -1,18 +1,18 @@
 defmodule Strom.Splitter do
   use GenServer
 
-  @chunk_every 100
+  @buffer 1000
 
   defstruct pid: nil,
             stream: nil,
             partitions: %{},
             running: false,
-            chunk_every: 100,
+            buffer: @buffer,
             no_data_counter: 0
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
+      buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
@@ -47,10 +47,7 @@ defmodule Strom.Splitter do
             fn splitter ->
               case GenServer.call(splitter.pid, {:get_data, {name, fun}}) do
                 {:ok, {data, no_data_counter}} ->
-                  if no_data_counter > 0 do
-                    to_sleep = trunc(:math.pow(2, no_data_counter))
-                    Process.sleep(to_sleep)
-                  end
+                  maybe_wait(no_data_counter, 0)
 
                   {data, splitter}
 
@@ -73,13 +70,12 @@ defmodule Strom.Splitter do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp async_run_stream(stream, chunk_every, pid) do
+  defp async_run_stream(stream, buffer, pid) do
     Task.async(fn ->
       stream
-      |> Stream.chunk_every(chunk_every)
-      |> Stream.each(fn chunk ->
-        data_size = GenServer.call(pid, {:new_data, chunk})
-        maybe_wait(data_size, chunk_every)
+      |> Stream.each(fn el ->
+        data_size = GenServer.call(pid, {:new_data, el})
+        maybe_wait(data_size, buffer)
       end)
       |> Stream.run()
 
@@ -87,25 +83,22 @@ defmodule Strom.Splitter do
     end)
   end
 
-  defp maybe_wait(data_size, chunk_every) do
-    if data_size > 10 * chunk_every do
-      div = div(data_size, 10 * chunk_every)
-      to_sleep = trunc(:math.pow(2, div))
-
+  defp maybe_wait(current, allowed) do
+    if current > allowed do
+      diff = current - allowed
+      to_sleep = trunc(:math.pow(2, diff))
       Process.sleep(to_sleep)
+      to_sleep
     end
   end
 
-  def handle_call({:new_data, data}, _from, %__MODULE__{} = splitter) do
+  def handle_call({:new_data, datum}, _from, %__MODULE__{} = splitter) do
     new_partitions =
       Enum.reduce(splitter.partitions, %{}, fn {{name, fun}, prev_data}, acc ->
-        case Enum.split_with(data, fun) do
-          {[], _} ->
-            Map.put(acc, {name, fun}, prev_data)
-
-          {data, _} ->
-            new_data = prev_data ++ data
-            Map.put(acc, {name, fun}, new_data)
+        if fun.(datum) do
+          Map.put(acc, {name, fun}, [datum | prev_data])
+        else
+          Map.put(acc, {name, fun}, prev_data)
         end
       end)
 
@@ -116,7 +109,7 @@ defmodule Strom.Splitter do
   end
 
   def handle_call({:run_stream, stream}, _from, %__MODULE__{} = splitter) do
-    async_run_stream(stream, splitter.chunk_every, splitter.pid)
+    async_run_stream(stream, splitter.buffer, splitter.pid)
     {:reply, :ok, %{splitter | running: true}}
   end
 
@@ -137,7 +130,10 @@ defmodule Strom.Splitter do
         _from,
         %__MODULE__{partitions: partitions, running: running} = splitter
       ) do
-    data = Map.get(partitions, partition_fun)
+    data =
+      partitions
+      |> Map.get(partition_fun)
+      |> Enum.reverse()
 
     if length(data) == 0 && !running do
       {:reply, {:error, :done}, splitter}

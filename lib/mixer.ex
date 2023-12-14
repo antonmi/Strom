@@ -1,18 +1,18 @@
 defmodule Strom.Mixer do
   use GenServer
 
-  @chunk_every 100
+  @buffer 1000
 
   defstruct streams: %{},
             pid: nil,
             running: false,
             data: %{},
-            chunk_every: @chunk_every,
+            buffer: @buffer,
             no_data_counter: 0
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
+      buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
@@ -46,11 +46,7 @@ defmodule Strom.Mixer do
         fn mixer ->
           case GenServer.call(mixer.pid, :get_data) do
             {:ok, {data, no_data_counter}} ->
-              if no_data_counter > 0 do
-                to_sleep = trunc(:math.pow(2, no_data_counter))
-                Process.sleep(to_sleep)
-              end
-
+              maybe_wait(no_data_counter, 0)
               {data, mixer}
 
             {:error, :done} ->
@@ -69,20 +65,20 @@ defmodule Strom.Mixer do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp run_streams(streams, pid, chunk_every) do
+  defp run_streams(streams, pid, buffer) do
     Enum.map(streams, fn {{name, fun}, stream} ->
-      async_run_stream({name, fun}, stream, chunk_every, pid)
+      async_run_stream({name, fun}, stream, buffer, pid)
     end)
   end
 
-  defp async_run_stream({name, fun}, stream, chunk_every, pid) do
+  defp async_run_stream({name, fun}, stream, buffer, pid) do
     Task.async(fn ->
       stream
-      |> Stream.chunk_every(chunk_every)
-      |> Stream.each(fn chunk ->
-        {chunk, _} = Enum.split_with(chunk, fun)
-        data_length = GenServer.call(pid, {:new_data, {name, fun}, chunk})
-        maybe_wait(data_length, chunk_every)
+      |> Stream.each(fn el ->
+        if fun.(el) do
+          data_length = GenServer.call(pid, {:new_data, {name, fun}, el})
+          maybe_wait(data_length, buffer)
+        end
       end)
       |> Stream.run()
 
@@ -90,24 +86,25 @@ defmodule Strom.Mixer do
     end)
   end
 
-  defp maybe_wait(data_length, chunk_every) do
-    if data_length > 10 * chunk_every do
-      div = div(data_length, 10 * chunk_every)
-      to_sleep = trunc(:math.pow(2, div))
+  defp maybe_wait(current, allowed) do
+    if current > allowed do
+      diff = current - allowed
+      to_sleep = trunc(:math.pow(2, diff))
       Process.sleep(to_sleep)
+      to_sleep
     end
   end
 
-  def handle_call({:new_data, {name, fun}, data}, _from, %__MODULE__{data: prev_data} = mixer) do
+  def handle_call({:new_data, {name, fun}, datum}, _from, %__MODULE__{data: prev_data} = mixer) do
     prev_data_from_stream = Map.get(prev_data, {name, fun}, [])
-    data_from_stream = prev_data_from_stream ++ data
+    data_from_stream = [datum | prev_data_from_stream]
     data = Map.put(prev_data, {name, fun}, data_from_stream)
 
     {:reply, length(data_from_stream), %{mixer | data: data}}
   end
 
   def handle_call({:run_streams, streams_to_mix}, _from, %__MODULE__{} = mixer) do
-    run_streams(streams_to_mix, mixer.pid, mixer.chunk_every)
+    run_streams(streams_to_mix, mixer.pid, mixer.buffer)
 
     {:reply, :ok, %{mixer | running: true, streams: streams_to_mix}}
   end
@@ -118,7 +115,7 @@ defmodule Strom.Mixer do
   end
 
   def handle_call(:get_data, _from, %__MODULE__{data: data, streams: streams} = mixer) do
-    all_data = Enum.reduce(data, [], fn {_, d}, acc -> acc ++ d end)
+    all_data = Enum.reduce(data, [], fn {_, d}, acc -> acc ++ Enum.reverse(d) end)
 
     if length(all_data) == 0 && map_size(streams) == 0 do
       {:reply, {:error, :done}, mixer}
