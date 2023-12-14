@@ -1,14 +1,18 @@
 defmodule Strom.Splitter do
   use GenServer
 
-  defstruct [:pid, :stream, :partitions, :running, :chunk_every]
-
   @chunk_every 100
+
+  defstruct pid: nil,
+            stream: nil,
+            partitions: %{},
+            running: false,
+            chunk_every: 100,
+            no_data_counter: 0
+
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      running: false,
-      partitions: %{},
       chunk_every: Keyword.get(opts, :chunk_every, @chunk_every)
     }
 
@@ -43,7 +47,11 @@ defmodule Strom.Splitter do
             fn -> splitter end,
             fn splitter ->
               case GenServer.call(splitter.pid, {:get_data, {name, fun}}) do
-                {:ok, data} ->
+                {:ok, {data, no_data_counter}} ->
+                  if no_data_counter > 0 do
+                    to_sleep = trunc(:math.pow(2, no_data_counter))
+                    Process.sleep(to_sleep)
+                  end
                   {data, splitter}
 
                 {:error, :done} ->
@@ -134,7 +142,14 @@ defmodule Strom.Splitter do
     if length(data) == 0 && !running do
       {:reply, {:error, :done}, splitter}
     else
-      {:reply, {:ok, data}, %{splitter | partitions: Map.put(partitions, partition_fun, [])}}
+      no_data_counter = if length(data) == 0, do: splitter.no_data_counter + 1, else: 0
+      splitter = %{
+        splitter |
+        partitions: Map.put(partitions, partition_fun, []),
+        no_data_counter: no_data_counter
+      }
+
+      {:reply, {:ok, {data, no_data_counter}}, splitter}
     end
   end
 

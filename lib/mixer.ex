@@ -7,7 +7,8 @@ defmodule Strom.Mixer do
             pid: nil,
             running: false,
             data: %{},
-            chunk_every: @chunk_every
+            chunk_every: @chunk_every,
+            no_data_counter: 0
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
@@ -44,9 +45,11 @@ defmodule Strom.Mixer do
         fn -> mixer end,
         fn mixer ->
           case GenServer.call(mixer.pid, :get_data) do
-            {:ok, data} ->
-              # sleep a bit
-              if length(data) == 0, do: Process.sleep(1)
+            {:ok, {data, no_data_counter}} ->
+              if no_data_counter > 0 do
+                to_sleep = trunc(:math.pow(2, no_data_counter))
+                Process.sleep(to_sleep)
+              end
               {data, mixer}
 
             {:error, :done} ->
@@ -120,7 +123,14 @@ defmodule Strom.Mixer do
       {:reply, {:error, :done}, mixer}
     else
       data = Enum.reduce(data, %{}, fn {name, _}, acc -> Map.put(acc, name, []) end)
-      {:reply, {:ok, all_data}, %{mixer | data: data}}
+      no_data_counter = if length(all_data) == 0, do: mixer.no_data_counter + 1, else: 0
+
+      mixer = %{
+        mixer |
+        data: data,
+        no_data_counter: no_data_counter
+      }
+      {:reply, {:ok, {all_data, no_data_counter}}, mixer}
     end
   end
 
