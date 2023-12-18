@@ -34,14 +34,6 @@ defmodule Strom.DSLTest do
 
     def to_string(el), do: "#{el}"
 
-    defmodule ToStringModule do
-      def start(:opts), do: :state
-
-      def call(event, :state, :opts), do: "#{event}"
-
-      def stop(:state, :opts), do: :ok
-    end
-
     def topology(opts) do
       source1 = %ReadLines{path: "test/data/numbers1.txt"}
       source2 = %ReadLines{path: "test/data/numbers2.txt"}

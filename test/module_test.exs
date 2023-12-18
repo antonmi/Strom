@@ -33,7 +33,7 @@ defmodule Strom.ModuleTest do
     refute Process.alive?(module.pid)
   end
 
-  test "function", %{flow: flow} do
+  test "module", %{flow: flow} do
     module = Module.start(MyModule, prefix: "foo")
     %{orders: orders} = Module.call(flow, module, [:orders])
     orders = Enum.to_list(orders)

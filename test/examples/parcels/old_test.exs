@@ -155,7 +155,7 @@ defmodule Strom.Examples.Parcels.Pipeline do
   end
 end
 
-defmodule Strom.Examples.Parcels.ParcelsTest do
+defmodule Strom.Examples.Parcels.OldParcelsTest do
   use ExUnit.Case, async: true
 
   alias Strom.Examples.Parcels.BuildPipeline

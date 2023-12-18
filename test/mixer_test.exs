@@ -33,6 +33,13 @@ defmodule Strom.MixerTest do
     %{flow: flow}
   end
 
+  test "start and stop" do
+    mixer = Mixer.start()
+    assert Process.alive?(mixer.pid)
+    :ok = Mixer.stop(mixer)
+    refute Process.alive?(mixer.pid)
+  end
+
   test "call with map", %{flow: flow} do
     mixer = Mixer.start()
 
@@ -65,13 +72,6 @@ defmodule Strom.MixerTest do
     assert length(source3_lines) == length(parcels)
   end
 
-  test "stop" do
-    mixer = Mixer.start()
-    assert Process.alive?(mixer.pid)
-    :ok = Mixer.stop(mixer)
-    refute Process.alive?(mixer.pid)
-  end
-
   test "stream two identical sources" do
     source = Source.start(%ReadLines{path: "test/data/orders.csv"})
     mixer = Mixer.start()
@@ -86,5 +86,23 @@ defmodule Strom.MixerTest do
 
     {orders, _parcels} = orders_and_parcels()
     assert length(lines) == length(orders)
+  end
+
+  test "mixer as filter" do
+    source1 = Source.start(%ReadLines{path: "test/data/orders.csv"})
+    mixer = Mixer.start()
+
+    partitions = %{
+      stream: fn el -> String.contains?(el, "111,3") end
+    }
+
+    %{stream: stream} =
+      %{}
+      |> Source.call(source1, :stream)
+      |> Mixer.call(mixer, partitions, :stream)
+
+    stream
+    |> Enum.to_list()
+    |> Enum.each(fn el -> assert String.contains?(el, "111,3") end)
   end
 end
