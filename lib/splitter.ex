@@ -8,7 +8,9 @@ defmodule Strom.Splitter do
             partitions: %{},
             running: false,
             buffer: @buffer,
-            no_data_counter: 0
+            no_data_counter: 0,
+            task: nil,
+            consumers: []
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
@@ -36,19 +38,29 @@ defmodule Strom.Splitter do
     GenServer.call(splitter.pid, {:set_partitions, partitions})
     stream_to_run = Map.fetch!(flow, name)
 
-    :ok = GenServer.call(splitter.pid, {:run_stream, stream_to_run})
+    task = GenServer.call(splitter.pid, {:run_stream, stream_to_run})
 
     sub_flow =
       partitions
       |> Enum.reduce(%{}, fn {name, fun}, flow ->
         stream =
           Stream.resource(
-            fn -> splitter end,
+            fn ->
+              GenServer.call(splitter.pid, {:register_consumer, self()})
+              |> IO.inspect
+            end,
             fn splitter ->
               case GenServer.call(splitter.pid, {:get_data, {name, fun}}) do
                 {:ok, {data, no_data_counter}} ->
-                  maybe_wait(no_data_counter, 0)
-
+#                if rem(no_data_counter, 10) == 9 do
+                if length(data) == 0 do
+#                  Process.sleep(1)
+                  IO.inspect(no_data_counter, label: "no_data_counter_splitter: #{name}")
+                  receive do
+                    :continue ->
+                      flush()
+                  end
+                end
                   {data, splitter}
 
                 {:error, :done} ->
@@ -73,44 +85,47 @@ defmodule Strom.Splitter do
   defp async_run_stream(stream, buffer, pid) do
     Task.async(fn ->
       stream
-      |> Stream.each(fn el ->
-        data_size = GenServer.call(pid, {:new_data, el})
-        maybe_wait(data_size, buffer)
+      |> Stream.chunk_every(buffer)
+      |> Stream.each(fn chunk ->
+        GenServer.cast(pid, {:new_data, chunk})
+        receive do
+          :continue ->
+            flush()
+        end
       end)
       |> Stream.run()
 
       GenServer.call(pid, :done)
     end)
+    |> IO.inspect(label: "slitter task")
   end
 
-  defp maybe_wait(current, allowed) do
-    if current > allowed do
-      diff = current - allowed
-      to_sleep = trunc(:math.pow(2, diff))
-      Process.sleep(to_sleep)
-      to_sleep
+  defp flush do
+    receive do
+      _ -> flush()
+    after
+      0 -> :ok
     end
   end
 
-  def handle_call({:new_data, datum}, _from, %__MODULE__{} = splitter) do
+  def handle_cast({:new_data, data}, %__MODULE__{} = splitter) do
     new_partitions =
       Enum.reduce(splitter.partitions, %{}, fn {{name, fun}, prev_data}, acc ->
-        if fun.(datum) do
-          Map.put(acc, {name, fun}, [datum | prev_data])
-        else
-          Map.put(acc, {name, fun}, prev_data)
-        end
+        {valid_data, _} = Enum.split_with(data, fun)
+        new_data = prev_data ++ valid_data
+        Map.put(acc, {name, fun}, new_data)
       end)
 
-    data_size =
-      Enum.reduce(new_partitions, 0, fn {_key, data}, acc -> acc + length(data) end)
+    splitter.consumers
+    |> Enum.shuffle()
+    |> Enum.each(&send(&1, :continue))
 
-    {:reply, data_size, %{splitter | partitions: new_partitions}}
+    {:noreply, %{splitter | partitions: new_partitions}}
   end
 
   def handle_call({:run_stream, stream}, _from, %__MODULE__{} = splitter) do
-    async_run_stream(stream, splitter.buffer, splitter.pid)
-    {:reply, :ok, %{splitter | running: true}}
+    task = async_run_stream(stream, splitter.buffer, splitter.pid)
+    {:reply, :ok, %{splitter | running: true, task: task}}
   end
 
   def handle_call({:set_partitions, partitions}, _from, %__MODULE__{} = splitter) do
@@ -125,16 +140,19 @@ defmodule Strom.Splitter do
     {:reply, :ok, %{splitter | running: false}}
   end
 
+  def handle_call({:register_consumer, pid},_from,%__MODULE__{consumers: consumers} = splitter) do
+    splitter = %{splitter | consumers: [pid | consumers]}
+    {:reply, splitter, splitter}
+  end
+
   def handle_call(
         {:get_data, partition_fun},
         _from,
         %__MODULE__{partitions: partitions, running: running} = splitter
       ) do
-    data =
-      partitions
-      |> Map.get(partition_fun)
-      |> Enum.reverse()
+    send(splitter.task.pid, :continue)
 
+    data = Map.get(partitions, partition_fun)
     if length(data) == 0 && !running do
       {:reply, {:error, :done}, splitter}
     else
