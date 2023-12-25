@@ -10,11 +10,13 @@ defmodule Strom.Distributor do
             buffer: @buffer,
             no_data_counter: 0,
             in_tasks: %{},
-            consumers: %{}
+            consumers: %{},
+            function: nil
 
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      buffer: Keyword.get(opts, :buffer, @buffer)
+      buffer: Keyword.get(opts, :buffer, @buffer),
+      function: Keyword.get(opts, :function, {fn el, nil -> {[el], nil} end, nil})
     }
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
@@ -87,10 +89,20 @@ defmodule Strom.Distributor do
   end
 
   def handle_cast({:new_data, {name, fun}, chunk}, %__MODULE__{} = distributor) do
+    {fun, acc} = distributor.function
+
+    {new_chunk, new_acc} =
+      Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+        {new_events, acc} = fun.(el, acc)
+        {events ++ new_events, acc}
+      end)
+
     Enum.each(distributor.consumers, fn {{name, fun}, cons} ->
-      GenServer.cast(cons.pid, {:put_data, chunk})
+      GenServer.cast(cons.pid, {:put_data, new_chunk})
       GenServer.cast(cons.pid, :continue)
     end)
+
+    distributor = %{distributor | function: {fun, new_acc}}
 
     {:noreply, distributor}
   end
