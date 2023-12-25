@@ -1,8 +1,6 @@
 defmodule Strom.Cons do
   use GenServer
 
-  @buffer 2
-
   defstruct pid: nil,
             distributor_pid: nil,
             running: false,
@@ -36,6 +34,7 @@ defmodule Strom.Cons do
                   flush()
               end
             end
+
             {data, cons}
 
           {:error, :done} ->
@@ -77,26 +76,29 @@ defmodule Strom.Cons do
     {:reply, cons, cons}
   end
 
-  def handle_call({:put_data, new_data}, _from, cons) do
+  def handle_cast({:put_data, new_data}, cons) do
     {new_data, _} = Enum.split_with(new_data, cons.fun)
     cons = %{cons | data: cons.data ++ new_data}
+
     if cons.client do
       send(cons.client, :continue)
     end
-    {:reply, cons, cons}
+
+    {:noreply, cons}
   end
 
   def handle_cast(:continue, cons) do
     if cons.client do
       send(cons.client, :continue)
     end
+
     {:noreply, cons}
   end
 
-  def handle_call(:stop, _from, cons) do
+  def handle_cast(:stop, cons) do
     cons = %{cons | running: false}
 
-    {:reply, cons, cons}
+    {:noreply, cons}
   end
 
   def handle_call(:__state__, _from, cons), do: {:reply, cons, cons}

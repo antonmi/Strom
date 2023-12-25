@@ -1,7 +1,7 @@
 defmodule Strom.Distributor do
   use GenServer
 
-  @buffer 2
+  @buffer 1000
 
   defstruct streams: %{},
             pid: nil,
@@ -74,7 +74,7 @@ defmodule Strom.Distributor do
       end)
       |> Stream.run()
 
-      GenServer.call(pid, {:done, {name, fun}})
+      GenServer.cast(pid, {:done, {name, fun}})
     end)
   end
 
@@ -87,8 +87,8 @@ defmodule Strom.Distributor do
   end
 
   def handle_cast({:new_data, {name, fun}, chunk}, %__MODULE__{} = distributor) do
-    Enum.each(distributor.consumers, fn {{name, fun}, cons}->
-      GenServer.call(cons.pid, {:put_data, chunk})
+    Enum.each(distributor.consumers, fn {{name, fun}, cons} ->
+      GenServer.cast(cons.pid, {:put_data, chunk})
       GenServer.cast(cons.pid, :continue)
     end)
 
@@ -110,22 +110,25 @@ defmodule Strom.Distributor do
     {:stop, :normal, :ok, %{mixer | running: false}}
   end
 
-  def handle_call({:done, {name, fun}}, _from, %__MODULE__{} = distributor) do
+  def handle_cast({:done, {name, fun}}, %__MODULE__{} = distributor) do
     in_tasks = Map.delete(distributor.in_tasks, {name, fun})
     distributor = %{distributor | in_tasks: in_tasks}
+
     if map_size(distributor.in_tasks) == 0 do
-      Enum.each(distributor.consumers, fn {{name, fun}, cons}->
+      Enum.each(distributor.consumers, fn {{name, fun}, cons} ->
         GenServer.cast(cons.pid, :continue)
-        GenServer.call(cons.pid, :stop)
+        GenServer.cast(cons.pid, :stop)
       end)
     end
-    {:reply, :ok, distributor}
+
+    {:noreply, distributor}
   end
 
   def handle_cast(:continue, %__MODULE__{} = distributor) do
-    Enum.each(distributor.in_tasks, fn {{name, fun}, task}->
+    Enum.each(distributor.in_tasks, fn {{name, fun}, task} ->
       send(task.pid, :continue)
     end)
+
     {:noreply, distributor}
   end
 
