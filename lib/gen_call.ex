@@ -1,7 +1,7 @@
 defmodule Strom.GenCall do
   use GenServer
 
-  @buffer 2
+  @buffer 1000
 
   defstruct pid: nil,
             running: false,
@@ -67,6 +67,12 @@ defmodule Strom.GenCall do
     flow
     |> Map.drop(names)
     |> Map.merge(sub_flow)
+  end
+
+  def call(flow, %__MODULE__{} = call, names, function)
+      when is_map(flow) and is_list(names) and is_function(function) do
+    fun = fn el, nil -> {[function.(el)], nil} end
+    call(flow, %__MODULE__{} = call, names, {fun, nil})
   end
 
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)

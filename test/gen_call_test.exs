@@ -12,13 +12,9 @@ defmodule Strom.GenCallTest do
 
   test "call" do
     call = GenCall.start()
-
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
-#    fun = fn el ->  el * el end
-
-    function = fn el, nil -> {[el * el], nil} end
-
-    flow = GenCall.call(flow, call, [:numbers1, :numbers2], {function, nil})
+    fun = &(&1*&1)
+    flow = GenCall.call(flow, call, [:numbers1, :numbers2], fun)
 
     assert Enum.sort(Enum.to_list(flow[:numbers1])) == [1, 4, 9, 16, 25]
     assert Enum.sort(Enum.to_list(flow[:numbers2])) == [36, 49, 64, 81, 100]
