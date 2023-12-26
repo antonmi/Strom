@@ -25,12 +25,12 @@ defmodule Strom.GenCall do
     {:ok, %{call | pid: self()}}
   end
 
-  def call(flow, %__MODULE__{} = call, names, function)
+  def call(flow, %__MODULE__{} = call, names, {function, acc})
       when is_map(flow) and is_list(names) and is_function(function) do
 
     input_streams =
-      Enum.reduce(names, %{}, fn name, acc ->
-        Map.put(acc, {name, function}, Map.fetch!(flow, name))
+      Enum.reduce(names, %{}, fn name, streams ->
+        Map.put(streams, {name, function, acc}, Map.fetch!(flow, name))
       end)
 
     :ok = GenServer.call(call.pid, {:run_inputs, input_streams})
@@ -74,24 +74,29 @@ defmodule Strom.GenCall do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp run_inputs(streams, pid, buffer) do
-    Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
-      task = async_run_stream({name, fun}, stream, buffer, pid)
-      Map.put(acc, name, task)
+    Enum.reduce(streams, %{}, fn {{name, fun, acc}, stream}, streams_acc ->
+      task = async_run_stream({name, fun, acc}, stream, buffer, pid)
+      Map.put(streams_acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun}, stream, buffer, pid) do
+  defp async_run_stream({name, fun, acc}, stream, buffer, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(buffer)
-      |> Stream.each(fn chunk ->
-        chunk = Enum.map(chunk, &fun.(&1))
-        GenServer.cast(pid, {:new_data, name, chunk})
+      |> Stream.transform(acc, fn chunk, acc ->
+        {chunk, new_acc} = Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+          {new_events, acc} = fun.(el, acc)
+          {events ++ new_events, acc}
+        end)
 
+        GenServer.cast(pid, {:new_data, name, chunk})
         receive do
           :continue ->
             flush()
         end
+
+        {[], new_acc}
       end)
       |> Stream.run()
 

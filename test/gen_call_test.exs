@@ -14,8 +14,11 @@ defmodule Strom.GenCallTest do
     call = GenCall.start()
 
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
-    fun = fn el -> el * el end
-    flow = GenCall.call(flow, call, [:numbers1, :numbers2], fun)
+#    fun = fn el ->  el * el end
+
+    function = fn el, nil -> {[el * el], nil} end
+
+    flow = GenCall.call(flow, call, [:numbers1, :numbers2], {function, nil})
 
     assert Enum.sort(Enum.to_list(flow[:numbers1])) == [1, 4, 9, 16, 25]
     assert Enum.sort(Enum.to_list(flow[:numbers2])) == [36, 49, 64, 81, 100]
@@ -31,10 +34,10 @@ defmodule Strom.GenCallTest do
       {[el, acc], acc + 1}
     end
 
-    flow = GenCall.call(flow, call, [:numbers1, :numbers2], {fun, 0})
+    flow = GenCall.call(flow, call, [:numbers1, :numbers2], {fun, 100})
 
-    assert Enum.sort(Enum.to_list(flow[:numbers1])) == [1, 4, 9, 16, 25]
-#    assert Enum.sort(Enum.to_list(flow[:numbers2])) == [36, 49, 64, 81, 100]
-#    assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
+    assert Enum.sort(Enum.to_list(flow[:numbers1])) == [1, 2, 3, 4, 5, 100, 101, 102, 103, 104]
+    assert Enum.sort(Enum.to_list(flow[:numbers2])) == [6, 7, 8, 9, 10, 100, 101, 102, 103, 104]
+    assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
   end
 end
