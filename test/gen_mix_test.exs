@@ -3,15 +3,15 @@ defmodule Strom.GenMixTest do
 
   alias Strom.GenMix
 
-    test "start and stop" do
-      mix = GenMix.start()
-      assert Process.alive?(mix.pid)
-      :ok = GenMix.stop(mix)
-      refute Process.alive?(mix.pid)
-    end
+  test "start and stop" do
+    mix = GenMix.start()
+    assert Process.alive?(mix.pid)
+    :ok = GenMix.stop(mix)
+    refute Process.alive?(mix.pid)
+  end
 
   test "call" do
-    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10]}
+    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
 
     mix = GenMix.start()
 
@@ -29,6 +29,7 @@ defmodule Strom.GenMixTest do
 
     assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 7, 9]
     assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 8, 10]
+    assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
   end
 
   test "massive call" do
@@ -70,34 +71,34 @@ defmodule Strom.GenMixTest do
     Task.await(task2, :infinity)
   end
 
-#  test "huge files" do
-#    :observer.start()
-#    source1 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/orders.csv"})
-#    source2 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/parcels.csv"})
-#
-#    sink1 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/odd.csv"})
-#    sink2 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/even.csv"})
-#
-#    flow =
-#      %{}
-#      |> Strom.Source.call(source1, :source1)
-#      |> Strom.Source.call(source2, :source2)
-#
-#    mix = GenMix.start()
-#
-#    inputs = %{
-#      source1: fn el -> el end,
-#      source2: fn el -> el end
-#    }
-#
-#    outputs = %{
-#      odd: fn el -> String.contains?(el, "ORDER_CREATED") end,
-#      even: fn el -> String.contains?(el, "PARCEL_SHIPPED") end
-#    }
-#
-#    flow
-#    |> GenMix.call(mix, inputs, outputs)
-#    |> Strom.Sink.call(sink1, [:odd])
-#    |> Strom.Sink.call(sink2, [:even], true)
-#  end
+  #  test "huge files" do
+  #    :observer.start()
+  #    source1 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/orders.csv"})
+  #    source2 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/parcels.csv"})
+  #
+  #    sink1 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/odd.csv"})
+  #    sink2 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/even.csv"})
+  #
+  #    flow =
+  #      %{}
+  #      |> Strom.Source.call(source1, :source1)
+  #      |> Strom.Source.call(source2, :source2)
+  #
+  #    mix = GenMix.start()
+  #
+  #    inputs = %{
+  #      source1: fn el -> el end,
+  #      source2: fn el -> el end
+  #    }
+  #
+  #    outputs = %{
+  #      odd: fn el -> String.contains?(el, "ORDER_CREATED") end,
+  #      even: fn el -> String.contains?(el, "PARCEL_SHIPPED") end
+  #    }
+  #
+  #    flow
+  #    |> GenMix.call(mix, inputs, outputs)
+  #    |> Strom.Sink.call(sink1, [:odd])
+  #    |> Strom.Sink.call(sink2, [:even], true)
+  #  end
 end

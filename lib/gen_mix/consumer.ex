@@ -16,6 +16,7 @@ defmodule Strom.GenMix.Consumer do
     __state__(pid)
   end
 
+  @impl true
   def init(%__MODULE__{} = cons) do
     {:ok, %{cons | pid: self()}}
   end
@@ -59,6 +60,7 @@ defmodule Strom.GenMix.Consumer do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
+  @impl true
   def handle_call(:get_data, _from, cons) do
     if length(cons.data) == 0 and !cons.running do
       {:reply, {:error, :done}, cons}
@@ -70,12 +72,15 @@ defmodule Strom.GenMix.Consumer do
     end
   end
 
-  def handle_call(:register_client, {pid, ref}, cons) do
+  def handle_call(:register_client, {pid, _ref}, cons) do
     cons = %{cons | client: pid}
 
     {:reply, cons, cons}
   end
 
+  def handle_call(:__state__, _from, cons), do: {:reply, cons, cons}
+
+  @impl true
   def handle_cast({:put_data, new_data}, cons) do
     {new_data, _} = Enum.split_with(new_data, cons.fun)
     cons = %{cons | data: cons.data ++ new_data}
@@ -96,6 +101,4 @@ defmodule Strom.GenMix.Consumer do
 
     {:noreply, cons}
   end
-
-  def handle_call(:__state__, _from, cons), do: {:reply, cons, cons}
 end
