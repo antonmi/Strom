@@ -1,16 +1,16 @@
-defmodule Strom.Cons do
+defmodule Strom.GenMix.Consumer do
   use GenServer
 
   defstruct pid: nil,
-            distributor_pid: nil,
+            mix_pid: nil,
             running: false,
             client: nil,
             name: nil,
             fun: nil,
             data: []
 
-  def start({name, fun}, distributor_pid, opts \\ []) when is_list(opts) do
-    state = %__MODULE__{distributor_pid: distributor_pid, name: name, fun: fun, running: true}
+  def start({name, fun}, mix_pid, opts \\ []) when is_list(opts) do
+    state = %__MODULE__{mix_pid: mix_pid, name: name, fun: fun, running: true}
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
@@ -65,7 +65,7 @@ defmodule Strom.Cons do
     else
       data = cons.data
       cons = %{cons | data: []}
-      GenServer.cast(cons.distributor_pid, :continue)
+      GenServer.cast(cons.mix_pid, {:consumer_got_data, {cons.name, cons.fun}})
       {:reply, {:ok, data}, cons}
     end
   end
@@ -79,10 +79,6 @@ defmodule Strom.Cons do
   def handle_cast({:put_data, new_data}, cons) do
     {new_data, _} = Enum.split_with(new_data, cons.fun)
     cons = %{cons | data: cons.data ++ new_data}
-
-    if cons.client do
-      send(cons.client, :continue)
-    end
 
     {:noreply, cons}
   end
