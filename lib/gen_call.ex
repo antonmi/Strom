@@ -1,0 +1,163 @@
+defmodule Strom.GenCall do
+  use GenServer
+
+  @buffer 2
+
+  defstruct pid: nil,
+            running: false,
+            buffer: @buffer,
+            function: nil,
+            tasks: %{},
+            data: %{}
+
+  # TODO supervisor
+  def start(opts \\ []) when is_list(opts) do
+    state = %__MODULE__{
+      buffer: Keyword.get(opts, :buffer, @buffer)
+    }
+
+    {:ok, pid} = GenServer.start_link(__MODULE__, state)
+    __state__(pid)
+  end
+
+  @impl true
+  def init(%__MODULE__{} = call) do
+    {:ok, %{call | pid: self()}}
+  end
+
+  def call(flow, %__MODULE__{} = call, names, function)
+      when is_map(flow) and is_list(names) and is_function(function) do
+
+    input_streams =
+      Enum.reduce(names, %{}, fn name, acc ->
+        Map.put(acc, {name, function}, Map.fetch!(flow, name))
+      end)
+
+    :ok = GenServer.call(call.pid, {:run_inputs, input_streams})
+
+    sub_flow =
+      names
+      |> Enum.reduce(%{}, fn name, flow ->
+        stream = Stream.resource(
+          fn ->
+            nil
+          end,
+          fn nil ->
+            case GenServer.call(call.pid, {:get_data, name}) do
+              {:ok, data} ->
+                if length(data) == 0 do
+                  receive do
+                    :continue ->
+                      flush()
+                  end
+                end
+
+                {data, nil}
+
+              {:error, :done} ->
+                {:halt, nil}
+            end
+          end,
+          fn nil -> nil end
+        )
+        Map.put(flow, name, stream)
+      end)
+
+
+    flow
+    |> Map.drop(names)
+    |> Map.merge(sub_flow)
+  end
+
+  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+
+  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
+
+  defp run_inputs(streams, pid, buffer) do
+    Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
+      task = async_run_stream({name, fun}, stream, buffer, pid)
+      Map.put(acc, name, task)
+    end)
+  end
+
+  defp async_run_stream({name, fun}, stream, buffer, pid) do
+    Task.async(fn ->
+      stream
+      |> Stream.chunk_every(buffer)
+      |> Stream.each(fn chunk ->
+        chunk = Enum.map(chunk, &fun.(&1))
+        GenServer.cast(pid, {:new_data, name, chunk})
+
+        receive do
+          :continue ->
+            flush()
+        end
+      end)
+      |> Stream.run()
+
+      GenServer.cast(pid, {:done, name})
+    end)
+  end
+
+  defp flush do
+    receive do
+      _ -> flush()
+    after
+      0 -> :ok
+    end
+  end
+
+  @impl true
+  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = call) do
+    tasks = run_inputs(streams_to_call, call.pid, call.buffer)
+
+    {:reply, :ok, %{call | running: true, tasks: tasks}}
+  end
+
+  def handle_call({:get_data, name}, {pid, _ref}, call) do
+    send(pid, :continue)
+
+    data = Map.get(call.data, name, [])
+    if length(data) == 0 and !call.running do
+      {:reply, {:error, :done}, call}
+    else
+      call = %{call | data: Map.put(call.data, name, [])}
+      {:reply, {:ok, data}, call}
+    end
+  end
+
+  def handle_call(:stop, _from, %__MODULE__{} = call) do
+    {:stop, :normal, :ok, %{call | running: false}}
+  end
+
+  def handle_call(:__state__, _from, call), do: {:reply, call, call}
+
+  @impl true
+  def handle_cast({:new_data, name, chunk}, %__MODULE__{} = call) do
+    task = Map.fetch!(call.tasks, name)
+    send(task.pid, :continue)
+
+    prev_data = Map.get(call.data, name, [])
+    new_data = Map.put(call.data, name, prev_data ++ chunk)
+    call = %{call | data: new_data}
+
+    {:noreply, call}
+  end
+
+  def handle_cast({:done, name}, %__MODULE__{} = call) do
+    call = %{call | tasks: Map.delete(call.tasks, name)}
+    running = map_size(call.tasks) > 0
+    {:noreply, %{call | running: running}}
+  end
+
+  @impl true
+  def handle_info({_task_ref, :ok}, call) do
+    # do nothing for now
+    {:noreply, call}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, call) do
+    # do nothing for now
+    {:noreply, call}
+  end
+end
