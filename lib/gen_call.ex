@@ -27,7 +27,6 @@ defmodule Strom.GenCall do
 
   def call(flow, %__MODULE__{} = call, names, {function, acc})
       when is_map(flow) and is_list(names) and is_function(function) do
-
     input_streams =
       Enum.reduce(names, %{}, fn name, streams ->
         Map.put(streams, {name, function, acc}, Map.fetch!(flow, name))
@@ -38,31 +37,32 @@ defmodule Strom.GenCall do
     sub_flow =
       names
       |> Enum.reduce(%{}, fn name, flow ->
-        stream = Stream.resource(
-          fn ->
-            nil
-          end,
-          fn nil ->
-            case GenServer.call(call.pid, {:get_data, name}) do
-              {:ok, data} ->
-                if length(data) == 0 do
-                  receive do
-                    :continue ->
-                      flush()
+        stream =
+          Stream.resource(
+            fn ->
+              nil
+            end,
+            fn nil ->
+              case GenServer.call(call.pid, {:get_data, name}) do
+                {:ok, data} ->
+                  if length(data) == 0 do
+                    receive do
+                      :continue ->
+                        flush()
+                    end
                   end
-                end
 
-                {data, nil}
+                  {data, nil}
 
-              {:error, :done} ->
-                {:halt, nil}
-            end
-          end,
-          fn nil -> nil end
-        )
+                {:error, :done} ->
+                  {:halt, nil}
+              end
+            end,
+            fn nil -> nil end
+          )
+
         Map.put(flow, name, stream)
       end)
-
 
     flow
     |> Map.drop(names)
@@ -91,12 +91,14 @@ defmodule Strom.GenCall do
       stream
       |> Stream.chunk_every(buffer)
       |> Stream.transform(acc, fn chunk, acc ->
-        {chunk, new_acc} = Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-          {new_events, acc} = fun.(el, acc)
-          {events ++ new_events, acc}
-        end)
+        {chunk, new_acc} =
+          Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+            {new_events, acc} = fun.(el, acc)
+            {events ++ new_events, acc}
+          end)
 
         GenServer.cast(pid, {:new_data, name, chunk})
+
         receive do
           :continue ->
             flush()
@@ -129,6 +131,7 @@ defmodule Strom.GenCall do
     send(pid, :continue)
 
     data = Map.get(call.data, name, [])
+
     if length(data) == 0 and !call.running do
       {:reply, {:error, :done}, call}
     else

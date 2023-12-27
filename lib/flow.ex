@@ -49,6 +49,9 @@ defmodule Strom.Flow do
         %DSL.Function{function: function, opts: opts} = fun ->
           %{fun | function: Strom.Function.start(function, opts)}
 
+        %DSL.Transform{} = fun ->
+          %{fun | call: Strom.GenCall.start()}
+
         %DSL.Module{module: module, opts: opts} = mod ->
           module = Strom.Module.start(module, opts)
           %{mod | module: module}
@@ -93,6 +96,9 @@ defmodule Strom.Flow do
           %DSL.Function{function: function, inputs: inputs} ->
             Strom.Function.call(flow, function, inputs)
 
+          %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
+            Strom.GenCall.call(flow, call, inputs, {function, acc})
+
           %DSL.Module{module: module, inputs: inputs} ->
             Strom.Module.call(flow, module, inputs)
 
@@ -122,6 +128,9 @@ defmodule Strom.Flow do
 
         %DSL.Function{function: function} ->
           Strom.Function.stop(function)
+
+        %DSL.Transform{call: call} ->
+          Strom.GenCall.stop(call)
 
         %DSL.Module{module: module} ->
           Strom.Module.stop(module)

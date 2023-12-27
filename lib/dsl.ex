@@ -19,6 +19,10 @@ defmodule Strom.DSL do
     defstruct function: nil, opts: [], inputs: []
   end
 
+  defmodule Transform do
+    defstruct function: nil, acc: nil, inputs: [], call: nil
+  end
+
   defmodule Module do
     defstruct module: nil, opts: [], inputs: [], state: nil
   end
@@ -76,6 +80,16 @@ defmodule Strom.DSL do
       %Strom.DSL.Function{
         function: unquote(function),
         opts: unquote(opts),
+        inputs: unquote(inputs)
+      }
+    end
+  end
+
+  defmacro transform(inputs, function, acc \\ nil) do
+    quote do
+      %Strom.DSL.Transform{
+        function: unquote(function),
+        acc: unquote(acc),
         inputs: unquote(inputs)
       }
     end

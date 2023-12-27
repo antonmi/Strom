@@ -71,34 +71,43 @@ defmodule Strom.GenMixTest do
     Task.await(task2, :infinity)
   end
 
-  #  test "huge files" do
-  #    :observer.start()
-  #    source1 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/orders.csv"})
-  #    source2 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/parcels.csv"})
-  #
-  #    sink1 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/odd.csv"})
-  #    sink2 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/even.csv"})
-  #
-  #    flow =
-  #      %{}
-  #      |> Strom.Source.call(source1, :source1)
-  #      |> Strom.Source.call(source2, :source2)
-  #
-  #    mix = GenMix.start()
-  #
-  #    inputs = %{
-  #      source1: fn el -> el end,
-  #      source2: fn el -> el end
-  #    }
-  #
-  #    outputs = %{
-  #      odd: fn el -> String.contains?(el, "ORDER_CREATED") end,
-  #      even: fn el -> String.contains?(el, "PARCEL_SHIPPED") end
-  #    }
-  #
-  #    flow
-  #    |> GenMix.call(mix, inputs, outputs)
-  #    |> Strom.Sink.call(sink1, [:odd])
-  #    |> Strom.Sink.call(sink2, [:even], true)
-  #  end
+  test "huge files" do
+    :observer.start()
+    source1 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/orders.csv"})
+    source2 = Strom.Source.start(%Strom.Source.ReadLines{path: "test_data/parcels.csv"})
+
+    sink1 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/odd.csv"})
+    sink2 = Strom.Sink.start(%Strom.Sink.WriteLines{path: "test_data/even.csv"})
+
+    flow =
+      %{}
+      |> Strom.Source.call(source1, :source1)
+      |> Strom.Source.call(source2, :source2)
+
+    mix1 = GenMix.start()
+    mix2 = GenMix.start()
+    call1 = Strom.GenCall.start()
+    call2 = Strom.GenCall.start()
+
+    inputs = %{
+      source1: fn el -> el end,
+      source2: fn el -> el end
+    }
+
+    outputs = %{
+      odd: fn el -> rem(el, 2) == 1 end,
+      even: fn el -> rem(el, 2) == 0 end
+    }
+
+    function1 = fn el -> String.length(el) end
+    function2 = fn el -> "#{el}" end
+
+    flow
+    |> GenMix.call(mix1, inputs, inputs)
+    |> Strom.GenCall.call(call1, [:source1, :source2], function1)
+    |> GenMix.call(mix2, inputs, outputs)
+    |> Strom.GenCall.call(call2, [:odd, :even], function2)
+    |> Strom.Sink.call(sink1, [:odd])
+    |> Strom.Sink.call(sink2, [:even], true)
+  end
 end

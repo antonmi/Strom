@@ -28,11 +28,11 @@ defmodule Strom.GenMix do
 
   def call(flow, %__MODULE__{} = mix, inputs, outputs)
       when is_map(flow) and is_map(inputs) and is_map(outputs) do
-
     input_streams =
       Enum.reduce(inputs, %{}, fn {name, fun}, acc ->
         Map.put(acc, {name, fun}, Map.fetch!(flow, name))
       end)
+
     sub_flow =
       outputs
       |> Enum.reduce(%{}, fn {name, fun}, flow ->

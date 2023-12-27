@@ -19,6 +19,11 @@ defmodule Strom.Examples.ParcelsDataTest do
         to_ship = :rand.uniform(5)
         order_number = last_order[:order_number] + 1
 
+        if order_number > 10_010 do
+          Process.sleep(5000)
+          raise("done")
+        end
+
         order = %{
           type: "ORDER_CREATED",
           occurred_at: occurred_at,
@@ -28,7 +33,7 @@ defmodule Strom.Examples.ParcelsDataTest do
 
         {parcels, _} =
           Enum.reduce(1..to_ship, {[], order[:occurred_at]}, fn _i, {acc, occurred_at} ->
-            occurred_at = DateTime.add(occurred_at, :rand.uniform(2) * 24 * 3600, :second)
+            occurred_at = DateTime.add(occurred_at, :rand.uniform(2 * 24 * 3600), :second)
 
             parcel = %{
               type: "PARCEL_SHIPPED",
@@ -69,7 +74,7 @@ defmodule Strom.Examples.ParcelsDataTest do
   end
 
   test "test" do
-    #    GenData.start()
-    #    GenData.call(%{stream: Stream.cycle([:tick])})
+    GenData.start()
+    GenData.call(%{stream: Stream.cycle([:tick])})
   end
 end
