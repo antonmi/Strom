@@ -97,7 +97,11 @@ defmodule Strom.Flow do
             Strom.Function.call(flow, function, inputs)
 
           %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
-            Strom.GenCall.call(flow, call, inputs, {function, acc})
+            if is_function(function, 2) do
+              Strom.GenCall.call(flow, call, inputs, {function, acc})
+            else
+              Strom.GenCall.call(flow, call, inputs, function)
+            end
 
           %DSL.Module{module: module, inputs: inputs} ->
             Strom.Module.call(flow, module, inputs)

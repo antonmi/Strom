@@ -135,15 +135,15 @@ defmodule Strom.Examples.ParcelsTest do
 
       [
         source(:orders, %ReadLines{path: "test_data/orders.csv"}),
-        function(:orders, &__MODULE__.build_order/1),
+        transform([:orders], &__MODULE__.build_order/1),
         source(:parcels, %ReadLines{path: "test_data/parcels.csv"}),
-        function(:parcels, &__MODULE__.build_parcel/1),
+        transform([:parcels], &__MODULE__.build_parcel/1),
         mixer([:orders, :parcels], :mixed),
         transform([:mixed], &ParcelsFlow.force_order/2, %{}),
         source(:mixed, [%{type: :end}]),
         transform([:mixed], &ParcelsFlow.decide/2, %{}),
         splitter(:mixed, partitions),
-        function([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
+        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
         sink(:threshold_exceeded, %WriteLines{path: "test_data/threshold_exceeded.csv"}),
         sink(:all_parcels_shipped, %WriteLines{path: "test_data/all_parcels_shipped.csv"}, true)
       ]

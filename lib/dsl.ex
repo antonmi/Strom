@@ -85,11 +85,21 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro transform(inputs, function, acc \\ nil) do
+  defmacro transform(inputs, function, acc) do
     quote do
       %Strom.DSL.Transform{
         function: unquote(function),
         acc: unquote(acc),
+        inputs: unquote(inputs)
+      }
+    end
+  end
+
+  defmacro transform(inputs, function) do
+    quote do
+      %Strom.DSL.Transform{
+        function: unquote(function),
+        acc: nil,
         inputs: unquote(inputs)
       }
     end
