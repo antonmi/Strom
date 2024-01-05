@@ -57,7 +57,7 @@ defmodule Strom.Flow do
           %{mod | module: module}
 
         %DSL.Rename{names: names} = ren ->
-          rename = Strom.Rename.start(names)
+          rename = Strom.Renamer.start(names)
           %{ren | rename: rename}
       end
     end)
@@ -107,7 +107,7 @@ defmodule Strom.Flow do
             Strom.Module.call(flow, module, inputs)
 
           %DSL.Rename{rename: rename, names: names} ->
-            Strom.Rename.call(flow, rename, names)
+            Strom.Renamer.call(flow, rename, names)
         end
       end)
 
