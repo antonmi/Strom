@@ -8,21 +8,15 @@ defmodule Strom.Integration.TelegramTest do
     alias Strom.Sink.WriteLines
 
     defmodule Decompose do
-      def start([]), do: nil
-
-      def call(event, nil, []) do
+      def call(event, nil) do
         {String.split(event, ","), nil}
       end
-
-      def stop(nil, []), do: :ok
     end
 
     defmodule Recompose do
       @length 100
 
-      def start([]), do: []
-
-      def call(event, words, []) do
+      def call(event, words) do
         line = Enum.join(words, " ")
         new_line = line <> " " <> event
 
@@ -32,15 +26,13 @@ defmodule Strom.Integration.TelegramTest do
           {[], words ++ [event]}
         end
       end
-
-      def stop(_acc, []), do: :ok
     end
 
     def topology(_opts) do
       [
         source(:input, %ReadLines{path: "test/data/orders.csv"}),
-        module(:input, Decompose),
-        module(:input, Recompose),
+        transform(:input, &Decompose.call/2, nil),
+        transform(:input, &Recompose.call/2, []),
         sink(:input, %WriteLines{path: "test/data/telegram.txt"}, true)
       ]
     end

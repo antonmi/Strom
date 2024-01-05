@@ -5,24 +5,10 @@ defmodule Strom.Examples.ParcelsDataTest do
     use Strom.DSL
 
     defmodule BuildEvent do
-      def start(_opts) do
-        %{
-          occurred_at: DateTime.add(DateTime.now!("Etc/UTC"), -(3600 * 24 * 30), :second),
-          order_number: 0
-        }
-      end
-
-      def stop(_opts, _acc), do: :ok
-
-      def call(:tick, last_order, _opts) do
+      def call(:tick, last_order) do
         occurred_at = DateTime.add(last_order[:occurred_at], :rand.uniform(10), :second)
         to_ship = :rand.uniform(5)
         order_number = last_order[:order_number] + 1
-
-        if order_number > 10_010 do
-          Process.sleep(5000)
-          raise("done")
-        end
 
         order = %{
           type: "ORDER_CREATED",
@@ -62,19 +48,25 @@ defmodule Strom.Examples.ParcelsDataTest do
         parcels: &(&1[:type] == "PARCEL_SHIPPED")
       }
 
+      acc = %{
+        occurred_at: DateTime.add(DateTime.now!("Etc/UTC"), -(3600 * 24 * 30), :second),
+        order_number: 0
+      }
+
       [
-        module(:stream, BuildEvent),
+        transform(:stream, &BuildEvent.call/2, acc),
         splitter(:stream, partitions),
-        function(:orders, &__MODULE__.order_to_string/1),
-        function(:parcels, &__MODULE__.parcel_to_string/1),
+        transform(:orders, &__MODULE__.order_to_string/1),
+        transform(:parcels, &__MODULE__.parcel_to_string/1),
         sink(:orders, %Strom.Sink.WriteLines{path: "test_data/orders.csv"}),
         sink(:parcels, %Strom.Sink.WriteLines{path: "test_data/parcels.csv"}, true)
       ]
     end
   end
 
-  #  test "test" do
-  #    GenData.start()
-  #    GenData.call(%{stream: Stream.cycle([:tick])})
-  #  end
+#  test "test" do
+#    GenData.start()
+#    GenData.call(%{stream: List.duplicate(:tick, 10_000)})
+#    GenData.stop()
+#  end
 end

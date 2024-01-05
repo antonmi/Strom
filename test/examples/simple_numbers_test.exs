@@ -1,7 +1,7 @@
 defmodule Strom.Examples.SimpleNumbersTest do
   use ExUnit.Case
 
-  alias Strom.{Mixer, Splitter, Function}
+  alias Strom.{Mixer, Splitter, Transformer}
 
   test "simple numbers" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10]}
@@ -14,12 +14,12 @@ defmodule Strom.Examples.SimpleNumbersTest do
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    function = Function.start(&(&1 + 1))
+    transformer = Transformer.start()
 
     %{odd: odd, even: even} =
       flow
       |> Mixer.call(mixer, [:numbers1, :numbers2], :number)
-      |> Function.call(function, :number)
+      |> Transformer.call(transformer, :number, &(&1 + 1))
       |> Splitter.call(splitter, :number, partitions)
 
     assert Enum.sort(Enum.to_list(odd)) == [3, 5, 7, 9, 11]
@@ -30,35 +30,29 @@ defmodule Strom.Examples.SimpleNumbersTest do
     defmodule RoundRobin do
       use Strom.DSL
 
-      def add_label(event, label), do: {event, label}
+      def add_label(event, label) do
+        {[{event, label}], label}
+      end
 
-      defmodule DoMix do
-        def start(names) do
-          Enum.reduce(names, %{}, &Map.put(&2, &1, []))
+      def call({number, label}, acc) do
+        [another] = Enum.reject(Map.keys(acc), &(&1 == label))
+
+        case Map.fetch!(acc, another) do
+          [hd | tl] ->
+            {[hd, number], Map.put(acc, another, tl)}
+
+          [] ->
+            numbers = Map.fetch!(acc, label)
+            {[], Map.put(acc, label, numbers ++ [number])}
         end
-
-        def call({number, label}, acc, names) do
-          [another] = Enum.reject(names, &(&1 == label))
-
-          case Map.fetch!(acc, another) do
-            [hd | tl] ->
-              {[hd, number], Map.put(acc, another, tl)}
-
-            [] ->
-              numbers = Map.fetch!(acc, label)
-              {[], Map.put(acc, label, numbers ++ [number])}
-          end
-        end
-
-        def stop(_acc, _opts), do: :ok
       end
 
       def topology(_opts) do
         [
-          function(:first, &__MODULE__.add_label/2, :first),
-          function(:second, &__MODULE__.add_label/2, :second),
+          transform(:first, &__MODULE__.add_label/2, :first),
+          transform(:second, &__MODULE__.add_label/2, :second),
           mixer([:first, :second], :mixed),
-          module(:mixed, DoMix, [:first, :second])
+          transform(:mixed, &__MODULE__.call/2, %{first: [], second: []})
         ]
       end
     end
@@ -84,37 +78,31 @@ defmodule Strom.Examples.SimpleNumbersTest do
     defmodule RoundRobinMany do
       use Strom.DSL
 
-      def add_label(event, label), do: {event, label}
+      def add_label(event, label) do
+        {[{event, label}], label}
+      end
 
-      defmodule DoMix do
-        def start(names) do
-          Enum.reduce(names, %{}, &Map.put(&2, &1, []))
+      def call({number, label}, acc) do
+        others = Enum.reject(Map.keys(acc), &(&1 == label))
+
+        if Enum.all?(others, &(length(Map.fetch!(acc, &1)) > 0)) do
+          Enum.reduce(others, {[number], acc}, fn other, {nums, acc} ->
+            [hd | tl] = Map.fetch!(acc, other)
+            {[hd | nums], Map.put(acc, other, tl)}
+          end)
+        else
+          numbers = Map.fetch!(acc, label)
+          {[], Map.put(acc, label, numbers ++ [number])}
         end
-
-        def call({number, label}, acc, names) do
-          others = Enum.reject(names, &(&1 == label))
-
-          if Enum.all?(others, &(length(Map.fetch!(acc, &1)) > 0)) do
-            Enum.reduce(others, {[number], acc}, fn other, {nums, acc} ->
-              [hd | tl] = Map.fetch!(acc, other)
-              {[hd | nums], Map.put(acc, other, tl)}
-            end)
-          else
-            numbers = Map.fetch!(acc, label)
-            {[], Map.put(acc, label, numbers ++ [number])}
-          end
-        end
-
-        def stop(_acc, _opts), do: :ok
       end
 
       def topology(names) do
         Enum.map(names, fn name ->
-          function(name, &__MODULE__.add_label/2, name)
+          transform(name, &__MODULE__.add_label/2, name)
         end) ++
           [
             mixer(names, :mixed),
-            module(:mixed, DoMix, names)
+            transform(:mixed, &__MODULE__.call/2, Enum.reduce(names, %{}, &Map.put(&2, &1, [])))
           ]
       end
     end

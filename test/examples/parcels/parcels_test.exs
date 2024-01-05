@@ -3,7 +3,6 @@ defmodule Strom.Examples.ParcelsTest do
 
   defmodule ParcelsFlow do
     alias Strom.Source.ReadLines
-    alias Strom.Sink.WriteLines
 
     use Strom.DSL
 

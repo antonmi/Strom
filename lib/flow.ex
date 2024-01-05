@@ -46,8 +46,11 @@ defmodule Strom.Flow do
         %DSL.Splitter{opts: opts} = splitter ->
           %{splitter | splitter: Strom.Splitter.start(opts)}
 
-        %DSL.Transform{} = fun ->
+        %DSL.Transform{opts: nil} = fun ->
           %{fun | call: Strom.Transformer.start()}
+
+        %DSL.Transform{opts: opts} = fun when is_list(opts) ->
+          %{fun | call: Strom.Transformer.start(opts)}
 
         %DSL.Rename{names: names} = ren ->
           rename = Strom.Renamer.start(names)
@@ -87,10 +90,10 @@ defmodule Strom.Flow do
             Strom.Splitter.call(flow, splitter, input, partitions)
 
           %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
-            if is_function(function, 2) do
-              Strom.Transformer.call(flow, call, inputs, {function, acc})
-            else
+            if is_function(function, 1) do
               Strom.Transformer.call(flow, call, inputs, function)
+            else
+              Strom.Transformer.call(flow, call, inputs, {function, acc})
             end
 
           %DSL.Rename{rename: rename, names: names} ->
@@ -126,13 +129,17 @@ defmodule Strom.Flow do
   end
 
   @impl true
-  def handle_info({_task_ref, :ok}, mixer) do
-    # do nothing for now
-    {:noreply, mixer}
+  def handle_info(:continue, flow) do
+    {:noreply, flow}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mixer) do
+  def handle_info({_task_ref, :ok}, flow) do
     # do nothing for now
-    {:noreply, mixer}
+    {:noreply, flow}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, flow) do
+    # do nothing for now
+    {:noreply, flow}
   end
 end

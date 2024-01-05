@@ -16,7 +16,7 @@ defmodule Strom.DSL do
   end
 
   defmodule Transform do
-    defstruct function: nil, acc: nil, inputs: [], call: nil
+    defstruct function: nil, acc: nil, opts: nil, inputs: [], call: nil
   end
 
   defmodule Rename do
@@ -63,6 +63,17 @@ defmodule Strom.DSL do
         input: unquote(input),
         partitions: unquote(partitions),
         opts: unquote(opts)
+      }
+    end
+  end
+
+  defmacro transform(inputs, function, acc, opts) do
+    quote do
+      %Strom.DSL.Transform{
+        function: unquote(function),
+        acc: unquote(acc),
+        opts: unquote(opts),
+        inputs: unquote(inputs)
       }
     end
   end
