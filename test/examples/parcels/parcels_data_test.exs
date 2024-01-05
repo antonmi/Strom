@@ -55,7 +55,7 @@ defmodule Strom.Examples.ParcelsDataTest do
 
       [
         transform(:stream, &BuildEvent.call/2, acc),
-        splitter(:stream, partitions),
+        split(:stream, partitions),
         transform(:orders, &__MODULE__.order_to_string/1),
         transform(:parcels, &__MODULE__.parcel_to_string/1),
         sink(:orders, %Strom.Sink.WriteLines{path: "test_data/orders.csv"}),
@@ -64,9 +64,9 @@ defmodule Strom.Examples.ParcelsDataTest do
     end
   end
 
-#  test "test" do
-#    GenData.start()
-#    GenData.call(%{stream: List.duplicate(:tick, 10_000)})
-#    GenData.stop()
-#  end
+  #  test "test" do
+  #    GenData.start()
+  #    GenData.call(%{stream: List.duplicate(:tick, 10_000)})
+  #    GenData.stop()
+  #  end
 end

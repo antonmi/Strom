@@ -11,7 +11,7 @@ defmodule Strom.DSL do
     defstruct mixer: nil, opts: [], inputs: [], output: nil
   end
 
-  defmodule Splitter do
+  defmodule Split do
     defstruct splitter: nil, opts: [], input: nil, partitions: %{}
   end
 
@@ -53,13 +53,13 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro splitter(input, partitions, opts \\ []) do
+  defmacro split(input, partitions, opts \\ []) do
     quote do
       unless is_map(unquote(partitions)) and map_size(unquote(partitions)) > 0 do
         raise "Branches in splitter must be a map, given: #{inspect(unquote(partitions))}"
       end
 
-      %Strom.DSL.Splitter{
+      %Strom.DSL.Split{
         input: unquote(input),
         partitions: unquote(partitions),
         opts: unquote(opts)

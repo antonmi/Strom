@@ -29,7 +29,7 @@ defmodule Strom.DSLTest do
         mix([:numbers1, :numbers2], :mixed),
         transform(:mixed, &__MODULE__.to_integer/1),
         transform(:mixed, &__MODULE__.add_one/1),
-        splitter(:mixed, partitions),
+        split(:mixed, partitions),
         transform([:odd, :even], opts[:to_string_fun]),
         sink(:odd, %WriteLines{path: "test/data/odd.txt"}, true),
         sink(:even, %WriteLines{path: "test/data/even.txt"}, true)

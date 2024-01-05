@@ -43,8 +43,8 @@ defmodule Strom.Flow do
         %DSL.Mix{opts: opts} = mix ->
           %{mix | mixer: Strom.Mixer.start(opts)}
 
-        %DSL.Splitter{opts: opts} = splitter ->
-          %{splitter | splitter: Strom.Splitter.start(opts)}
+        %DSL.Split{opts: opts} = split ->
+          %{split | splitter: Strom.Splitter.start(opts)}
 
         %DSL.Transform{opts: nil} = fun ->
           %{fun | call: Strom.Transformer.start()}
@@ -86,7 +86,7 @@ defmodule Strom.Flow do
           %DSL.Mix{mixer: mixer, inputs: inputs, output: output} ->
             Strom.Mixer.call(flow, mixer, inputs, output)
 
-          %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
+          %DSL.Split{splitter: splitter, input: input, partitions: partitions} ->
             Strom.Splitter.call(flow, splitter, input, partitions)
 
           %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
@@ -117,7 +117,7 @@ defmodule Strom.Flow do
         %DSL.Mix{mixer: mixer} ->
           Strom.Mixer.stop(mixer)
 
-        %DSL.Splitter{splitter: splitter} ->
+        %DSL.Split{splitter: splitter} ->
           Strom.Splitter.stop(splitter)
 
         %DSL.Transform{call: call} ->
