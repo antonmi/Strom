@@ -30,46 +30,43 @@ There are several operators (functions) that can be applied to flows.
 Each operator accept flow as input and return a modified flow.
 
 
-#### Source
+#### Source (source)
 Adds a stream of "external data" to a flow. 
 ```elixir
 %{} -> source(Src, :foo) -> %{foo: sfoo} 
 %{bar: Sbar} -> source(Src, :foo) -> %{foo: sfoo, bar: sbar} 
 ```
 
-#### Sink
+#### Sink (sink)
 Writes a stream data back to somewhere.
 ```elixir
 %{foo: sfoo} -> sink(Snk, :foo) -> %{} 
 %{foo: sfoo, bar: sbar} -> sink(Snk, :foo) -> %{bar: sbar} 
 ```
 
-#### Mixer
+#### Mixer (mix)
 Mixes several streams.
 ```elixir
-%{foo: sfoo, bar: sbar} -> mixer([:foo, :bar], :mixed) -> %{mixed: smixed} 
+%{foo: sfoo, bar: sbar} -> mix([:foo, :bar], :mixed) -> %{mixed: smixed} 
 ```
 
-#### Splitter
+#### Splitter (split)
 Split a stream into several streams.
 ```elixir
-%{foo: sfoo} -> splitter(:foo, [:bar, :baz]) -> %{bar: sbar, baz: sbaz} 
+%{foo: sfoo} -> split(:foo, [:bar, :baz]) -> %{bar: sbar, baz: sbaz} 
 ```
 
-#### Function
+#### Transformer (transform)
 Applies a function to each event of a stream or streams.
 
 ```elixir
-%{foo: sfoo, bar: sbar} -> funtion(F, :foo) -> %{foo: F(sfoo)} 
-%{foo: sfoo, bar: sbar} -> funtion(F, [:foo, :bar]) -> %{foo: F(sfoo), bar: F(sbar} 
+%{foo: sfoo, bar: sbar} -> transform(:foo, F) -> %{foo: F(sfoo)} 
+%{foo: sfoo, bar: sbar} -> transform([:foo, :bar], F) -> %{foo: F(sfoo), bar: F(sbar} 
 ```
 
 A function gets an event as input and must return a modified event.
 So, it's the map operation. Think about &Stream.map/2, which is used under the hood.
 
-#### Module
-Does almost the same as function, but allows to accumulate events and may return many events (or none).
-Details are below.
 
 ### Symbolic representation
 
@@ -83,7 +80,7 @@ Component is a separate process - GenServer.
 A component can be:
 - started - `start/0`, `start/1`
 - stopped - `stop/1` 
-- and called - `call/3`, `call/4`
+- and called - `call/3` and `call/4`
 
 #### Example
 Let's say one wants to stream a file:
@@ -149,17 +146,18 @@ sink_long = Sink.start(%WriteLines{path: "long.txt"})
 # the second sink (see `true` as the last argument) runs the stream synchronously
 ```
 
-#### Function and Module
+#### Transformer
 With the Function component everything is straightforward.
 Let's calculate the length of each string and produce a stream of numbers:
 
 ```elixir
-alias Strom.Function
+alias Strom.Transformer
 
-function = Function.start(&String.length(&1))
+transformer = Transformer.start()
+function = &String.length(&1)
 %{short: short} =
   %{short: short} 
-  |> Function.call(function, :short)
+  |> Transformer.call(transformer, :short, function)
 # now the stream is the stream of numbers
 ```
 
@@ -168,15 +166,33 @@ The function can be applied to several steams simultaneously:
 ```elixir
 %{short: short, long: long} =
   %{short: short, long: long}
-  |> Function.call(function, [:short, :long])
+  |> Transformer.call(transformer, [:short, :long], function)
 ```
 
-With a Module one can perform more complex transformations.
+Transformer can operate 2-arity functions with accumulator.
 
-User's module must implement three functions:
-- `start(opts)` - the function will be called when the corresponding component is starting. The function must return the initial accumulator, or `memo`. 
-- `call(event, memo, acc)` - will be called on each event in a stream. Must return a tuple `{events, memo}`. `events` - is a list of new events (can be empty), `memo` is a new accumulated value.
-- `stop(memo, opts)` - for clean-up actions, when the module component is stopped.
+The function must return 2-elements tuple.
+```elixir
+{list(event), acc}
+```
+The first element is a list of events that will be returned from the component.
+The second is a new accumulator.
+
+```elixir
+alias Strom.Transformer
+
+function = fn event, acc ->
+  {[event * acc, :new_event], acc + 1}   
+end
+
+transformer = Transformer.start()
+
+%{events: stream} = Transformer.call(%{events: [1, 2, 3]}, transformer, :events, {function, 0})
+
+Enum.to_list(stream)
+# returns
+[0, :new_event, 2, :new_event, 6, :new_event]
+```
 
 Let's consider the ["Telegram problem"](https://jpaulm.github.io/fbp/examples.html).
 
@@ -188,39 +204,50 @@ The first will split strings into words. The second will "recompose" words into 
 The decomposer module is quite simple
 ```elixir
 defmodule Decompose do
-  def start([]), do: nil # we don't need memo in a decomposer
-
-  def call(event, nil, []) do
-    {String.split(event, " "), nil} # events are words
+  def call(event, nil) do
+    {String.split(event, ","), nil}
   end
-
-  def stop(nil, []), do: :ok
 end
 ```
 
 The recomposer will store incoming words and when a line is ready, it will produce an event.
 ```elixir
 defmodule Recompose do
-  @length 30
-
-  def start([]), do: [] # memo is an empty list initially
-
-  def call(event, words, []) do # words is the memo here
+    @length 100
+    
+    def call(event, words) do
     line = Enum.join(words, " ")
     new_line = line <> " " <> event
-
+    
     if String.length(new_line) > @length do
-      {[line], [event]} # produces a line and stores the extra word in memo
+      {[new_line], [event]}
     else
-      {[], words ++ [event]} # just collects more words in memo
+      {[], words ++ [event]}
     end
   end
-
-  def stop(_acc, _memo), do: :ok
 end
 ```
 
-See [telegram_test.exs](https://github.com/antonmi/Strom/blob/main/test/examples/telegram_test.exs) 
+See [telegram_test.exs](https://github.com/antonmi/Strom/blob/main/test/examples/telegram_test.exs)
+
+It's also possible to parameterize the Transformer component by passing `opts` to its `start/1` function:
+
+```elixir
+alias Strom.Transformer
+
+function = fn event, acc, opts ->
+  {[event * acc], acc + opts[:inc]}   
+end
+
+transformer = Transformer.start(opts: %{inc: 1})
+
+%{events: stream} = Transformer.call(%{events: [1, 2, 3]}, transformer, :events, {function, 0})
+
+Enum.to_list(stream)
+# returns
+[0, 2, 6]
+```
+
 
 ### Strom.DSL
 
@@ -233,6 +260,8 @@ The topology form the first examples (with long and short strings) can be define
 ```elixir
 defmodule MyFlow do
   use Strom.DSL
+  alias Strom.Source.ReadLines
+  alias Strom.Sink.WriteLines
   
   def topology(_opts) do
     parts = %{
@@ -242,7 +271,7 @@ defmodule MyFlow do
     
     [
       source(:lines, %ReadLines{path: "input.txt"}),
-      splitter(:lines, parts),
+      split(:lines, parts),
       sink(:short, %WriteLines{path: "short.txt"}),
       sink(:long, %WriteLines{path: "long.txt"})
     ] 
@@ -251,4 +280,3 @@ end
 ```
 
 See more examples in tests.
-
