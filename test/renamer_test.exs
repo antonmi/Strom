@@ -1,22 +1,22 @@
-defmodule Strom.RenameTest do
+defmodule Strom.RenamerTest do
   use ExUnit.Case, async: true
 
-  alias Strom.Rename
+  alias Strom.Renamer
 
   test "start and stop" do
-    rename = Rename.start(%{s1: :s2})
+    rename = Renamer.start(%{s1: :s2})
     assert Process.alive?(rename.pid)
-    :ok = Rename.stop(rename)
+    :ok = Renamer.stop(rename)
     refute Process.alive?(rename.pid)
   end
 
   test "rename" do
     names = %{s1: :foo1, s2: :foo2}
-    rename = Rename.start(names)
+    rename = Renamer.start(names)
 
     flow = %{s1: [1], s2: [2], s3: [3]}
 
-    new_flow = Rename.call(flow, rename, names)
+    new_flow = Renamer.call(flow, rename, names)
 
     refute new_flow[:s1]
     refute new_flow[:s2]
@@ -28,11 +28,11 @@ defmodule Strom.RenameTest do
 
   test "raise when there is no such name" do
     names = %{s2: :foo2}
-    rename = Rename.start(names)
+    rename = Renamer.start(names)
     flow = %{s1: [1]}
 
     assert_raise KeyError, fn ->
-      Rename.call(flow, rename, names)
+      Renamer.call(flow, rename, names)
     end
   end
 end

@@ -7,11 +7,9 @@ defmodule Strom.Examples.WordsCountTest do
     alias Strom.Source.ReadLines
 
     defmodule DoCount do
-      def start(_opts), do: %{}
+      def call(:done, acc), do: {[acc], %{}}
 
-      def call(:done, acc, _), do: {[acc], %{}}
-
-      def call(string, acc, _) do
+      def call(string, acc) do
         acc =
           string
           |> String.downcase()
@@ -23,16 +21,12 @@ defmodule Strom.Examples.WordsCountTest do
 
         {[], acc}
       end
-
-      def stop(_acc, _opts), do: :ok
     end
 
     defmodule SumAll do
-      def start(_opts), do: %{}
+      def call(:done, acc), do: {[acc], %{}}
 
-      def call(:done, acc, _), do: {[acc], %{}}
-
-      def call(sums, acc, _) do
+      def call(sums, acc) do
         acc =
           sums
           |> Enum.reduce(acc, fn {word, count}, acc ->
@@ -42,8 +36,6 @@ defmodule Strom.Examples.WordsCountTest do
 
         {[], acc}
       end
-
-      def stop(_acc, _opts), do: :ok
     end
 
     def topology({file_name, count}) do
@@ -59,10 +51,10 @@ defmodule Strom.Examples.WordsCountTest do
       ] ++
         dones ++
         [
-          module(all_names, DoCount),
+          transform(all_names, &DoCount.call/2, %{}),
           mixer(all_names, :mixed),
           source(:mixed, [:done]),
-          module(:mixed, SumAll)
+          transform(:mixed, &SumAll.call/2, %{})
         ]
     end
   end

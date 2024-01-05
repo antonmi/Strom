@@ -46,15 +46,14 @@ defmodule Strom.Flow do
         %DSL.Splitter{opts: opts} = splitter ->
           %{splitter | splitter: Strom.Splitter.start(opts)}
 
-        %DSL.Function{function: function, opts: opts} = fun ->
-          %{fun | function: Strom.Function.start(function, opts)}
+        %DSL.Transform{opts: nil} = fun ->
+          %{fun | call: Strom.Transformer.start()}
 
-        %DSL.Module{module: module, opts: opts} = mod ->
-          module = Strom.Module.start(module, opts)
-          %{mod | module: module}
+        %DSL.Transform{opts: opts} = fun when is_list(opts) ->
+          %{fun | call: Strom.Transformer.start(opts)}
 
         %DSL.Rename{names: names} = ren ->
-          rename = Strom.Rename.start(names)
+          rename = Strom.Renamer.start(names)
           %{ren | rename: rename}
       end
     end)
@@ -90,14 +89,15 @@ defmodule Strom.Flow do
           %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
             Strom.Splitter.call(flow, splitter, input, partitions)
 
-          %DSL.Function{function: function, inputs: inputs} ->
-            Strom.Function.call(flow, function, inputs)
-
-          %DSL.Module{module: module, inputs: inputs} ->
-            Strom.Module.call(flow, module, inputs)
+          %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
+            if is_function(function, 1) do
+              Strom.Transformer.call(flow, call, inputs, function)
+            else
+              Strom.Transformer.call(flow, call, inputs, {function, acc})
+            end
 
           %DSL.Rename{rename: rename, names: names} ->
-            Strom.Rename.call(flow, rename, names)
+            Strom.Renamer.call(flow, rename, names)
         end
       end)
 
@@ -120,11 +120,8 @@ defmodule Strom.Flow do
         %DSL.Splitter{splitter: splitter} ->
           Strom.Splitter.stop(splitter)
 
-        %DSL.Function{function: function} ->
-          Strom.Function.stop(function)
-
-        %DSL.Module{module: module} ->
-          Strom.Module.stop(module)
+        %DSL.Transform{call: call} ->
+          Strom.Transformer.stop(call)
       end
     end)
 
@@ -132,13 +129,17 @@ defmodule Strom.Flow do
   end
 
   @impl true
-  def handle_info({_task_ref, :ok}, mixer) do
-    # do nothing for now
-    {:noreply, mixer}
+  def handle_info(:continue, flow) do
+    {:noreply, flow}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mixer) do
+  def handle_info({_task_ref, :ok}, flow) do
     # do nothing for now
-    {:noreply, mixer}
+    {:noreply, flow}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, flow) do
+    # do nothing for now
+    {:noreply, flow}
   end
 end

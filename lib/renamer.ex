@@ -1,4 +1,4 @@
-defmodule Strom.Rename do
+defmodule Strom.Renamer do
   use GenServer
 
   defstruct names: nil, pid: nil

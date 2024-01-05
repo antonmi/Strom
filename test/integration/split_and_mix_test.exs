@@ -1,7 +1,7 @@
 defmodule Strom.Integration.SplitAndMixTest do
   use ExUnit.Case
 
-  alias Strom.{Source, Mixer, Splitter, Function}
+  alias Strom.{Source, Mixer, Splitter, Transformer}
   alias Strom.Source.ReadLines
 
   setup do
@@ -13,7 +13,7 @@ defmodule Strom.Integration.SplitAndMixTest do
     splitter = Splitter.start()
     mixer = Mixer.start()
 
-    function = Function.start(&"foo-#{&1}")
+    transformer = Transformer.start()
 
     partitions = %{
       "111" => fn el -> String.contains?(el, ",111,") end,
@@ -25,7 +25,7 @@ defmodule Strom.Integration.SplitAndMixTest do
       %{}
       |> Source.call(orders_source, :orders)
       |> Splitter.call(splitter, :orders, partitions)
-      |> Function.call(function, ["111", "222", "333"])
+      |> Transformer.call(transformer, ["111", "222", "333"], &"foo-#{&1}")
       |> Mixer.call(mixer, ["111", "222", "333"], :modified)
 
     modified = Enum.to_list(stream)
