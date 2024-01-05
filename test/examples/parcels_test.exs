@@ -7,6 +7,8 @@ defmodule Strom.Examples.ParcelsTest do
 
     use Strom.DSL
 
+    @seconds_in_week 3600 * 24 * 7
+
     def build_order(event) do
       list = String.split(event, ",")
       type = Enum.at(list, 0)
@@ -38,8 +40,7 @@ defmodule Strom.Examples.ParcelsTest do
         "PARCEL_SHIPPED" ->
           case Map.get(memo, order_number) do
             nil ->
-              memo = Map.put(memo, order_number, [event])
-              {[], memo}
+              {[], Map.put(memo, order_number, [event])}
 
             true ->
               {[event], memo}
@@ -58,8 +59,6 @@ defmodule Strom.Examples.ParcelsTest do
           end
       end
     end
-
-    @seconds_in_week 3600 * 24 * 7
 
     def decide(event, memo) do
       order_number = event[:order_number]
@@ -112,19 +111,11 @@ defmodule Strom.Examples.ParcelsTest do
                 {[], memo}
               end
           end
-
-        :end ->
-          IO.inspect(memo, limit: :infinity, label: ":end")
-          {[], memo}
       end
     end
 
     def to_string(event) do
       "#{event[:type]},#{event[:order_number]},#{event[:occurred_at]}"
-    end
-
-    def buffer(event) do
-      {event[:order_number], 1000}
     end
 
     def topology(_opts) do
@@ -134,48 +125,29 @@ defmodule Strom.Examples.ParcelsTest do
       }
 
       [
-        source(:orders, %ReadLines{path: "test_data/orders.csv"}),
+        source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
         transform([:orders], &__MODULE__.build_order/1),
-        source(:parcels, %ReadLines{path: "test_data/parcels.csv"}),
+        source(:parcels, %ReadLines{path: "test/examples/parcels/parcels.csv"}),
         transform([:parcels], &__MODULE__.build_parcel/1),
         mixer([:orders, :parcels], :mixed),
         transform([:mixed], &ParcelsFlow.force_order/2, %{}),
-        source(:mixed, [%{type: :end}]),
         transform([:mixed], &ParcelsFlow.decide/2, %{}),
         splitter(:mixed, partitions),
-        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
-        sink(:threshold_exceeded, %WriteLines{path: "test_data/threshold_exceeded.csv"}),
-        sink(:all_parcels_shipped, %WriteLines{path: "test_data/all_parcels_shipped.csv"}, true)
+        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1)
+        #        sink(:threshold_exceeded, %WriteLines{path: "test_data/threshold_exceeded.csv"}),
+        #        sink(:all_parcels_shipped, %WriteLines{path: "test_data/all_parcels_shipped.csv"}, true)
       ]
     end
   end
 
-  def expected_results do
-    [
-      %{
-        order_number: 111,
-        type: "ALL_PARCELS_SHIPPED",
-        occurred_at: ~U[2017-04-21T08:00:00.000Z]
-      },
-      %{
-        order_number: 222,
-        type: "THRESHOLD_EXCEEDED",
-        occurred_at: ~U[2017-04-30 08:00:00.000Z]
-      },
-      %{
-        order_number: 333,
-        type: "THRESHOLD_EXCEEDED",
-        occurred_at: ~U[2017-05-01 08:00:00.000Z]
-      }
-    ]
-  end
-
-  @tag timeout: 3000_000
   test "flow" do
     #    :observer.start()
     ParcelsFlow.start()
-    ParcelsFlow.call(%{})
-    #
-    #        assert Enum.sort(Enum.to_list(mixed)) == Enum.sort(expected_results())
+
+    %{threshold_exceeded: threshold_exceeded, all_parcels_shipped: all_parcels_shipped} =
+      ParcelsFlow.call(%{})
+
+    assert length(Enum.to_list(threshold_exceeded)) == 2
+    assert length(Enum.to_list(all_parcels_shipped)) == 1
   end
 end

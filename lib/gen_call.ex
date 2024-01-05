@@ -7,13 +7,15 @@ defmodule Strom.GenCall do
             running: false,
             buffer: @buffer,
             function: nil,
+            opts: nil,
             tasks: %{},
             data: %{}
 
   # TODO supervisor
   def start(opts \\ []) when is_list(opts) do
     state = %__MODULE__{
-      buffer: Keyword.get(opts, :buffer, @buffer)
+      buffer: Keyword.get(opts, :buffer, @buffer),
+      opts: Keyword.get(opts, :opts, nil)
     }
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
@@ -26,7 +28,7 @@ defmodule Strom.GenCall do
   end
 
   def call(flow, %__MODULE__{} = call, names, {function, acc})
-      when is_map(flow) and is_list(names) and is_function(function) do
+      when is_map(flow) and is_list(names) and is_function(function, 3) do
     input_streams =
       Enum.reduce(names, %{}, fn name, streams ->
         Map.put(streams, {name, function, acc}, Map.fetch!(flow, name))
@@ -69,9 +71,15 @@ defmodule Strom.GenCall do
     |> Map.merge(sub_flow)
   end
 
+  def call(flow, %__MODULE__{} = call, names, {function, acc})
+      when is_map(flow) and is_list(names) and is_function(function, 2) do
+    fun = fn el, acc, nil -> function.(el, acc) end
+    call(flow, %__MODULE__{} = call, names, {fun, acc})
+  end
+
   def call(flow, %__MODULE__{} = call, names, function)
-      when is_map(flow) and is_list(names) and is_function(function) do
-    fun = fn el, nil -> {[function.(el)], nil} end
+      when is_map(flow) and is_list(names) and is_function(function, 1) do
+    fun = fn el, nil, nil -> {[function.(el)], nil} end
     call(flow, %__MODULE__{} = call, names, {fun, nil})
   end
 
@@ -79,21 +87,21 @@ defmodule Strom.GenCall do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp run_inputs(streams, pid, buffer) do
+  defp run_inputs(streams, pid, buffer, opts) do
     Enum.reduce(streams, %{}, fn {{name, fun, acc}, stream}, streams_acc ->
-      task = async_run_stream({name, fun, acc}, stream, buffer, pid)
+      task = async_run_stream({name, fun, acc, opts}, stream, buffer, pid)
       Map.put(streams_acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun, acc}, stream, buffer, pid) do
+  defp async_run_stream({name, fun, acc, opts}, stream, buffer, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(buffer)
       |> Stream.transform(acc, fn chunk, acc ->
         {chunk, new_acc} =
           Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-            {new_events, acc} = fun.(el, acc)
+            {new_events, acc} = fun.(el, acc, opts)
             {events ++ new_events, acc}
           end)
 
@@ -121,8 +129,8 @@ defmodule Strom.GenCall do
   end
 
   @impl true
-  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = call) do
-    tasks = run_inputs(streams_to_call, call.pid, call.buffer)
+  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{opts: opts} = call) do
+    tasks = run_inputs(streams_to_call, call.pid, call.buffer, opts)
 
     {:reply, :ok, %{call | running: true, tasks: tasks}}
   end

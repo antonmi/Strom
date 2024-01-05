@@ -73,8 +73,8 @@ defmodule Strom.Examples.ParcelsDataTest do
     end
   end
 
-  test "test" do
-    GenData.start()
-    GenData.call(%{stream: Stream.cycle([:tick])})
-  end
+  #  test "test" do
+  #    GenData.start()
+  #    GenData.call(%{stream: Stream.cycle([:tick])})
+  #  end
 end

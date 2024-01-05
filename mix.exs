@@ -16,7 +16,7 @@ defmodule Strom.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :observer, :runtime_tools, :wx],
       mod: {Strom.Application, []}
     ]
   end
