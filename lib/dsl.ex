@@ -16,7 +16,7 @@ defmodule Strom.DSL do
   end
 
   defmodule Transform do
-    defstruct function: nil, acc: nil, opts: nil, inputs: [], call: nil
+    defstruct transformer: nil, function: nil, acc: nil, opts: nil, inputs: []
   end
 
   defmodule Rename do
