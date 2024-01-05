@@ -26,7 +26,7 @@ defmodule Strom.DSLTest do
       [
         source(:numbers1, %ReadLines{path: "test/data/numbers1.txt"}),
         source(:numbers2, %ReadLines{path: "test/data/numbers2.txt"}),
-        mixer([:numbers1, :numbers2], :mixed),
+        mix([:numbers1, :numbers2], :mixed),
         transform(:mixed, &__MODULE__.to_integer/1),
         transform(:mixed, &__MODULE__.add_one/1),
         splitter(:mixed, partitions),
@@ -94,7 +94,7 @@ defmodule Strom.DSLTest do
           source(:s1, [1, 2, 3]),
           source(:s2, [10, 20, 30]),
           source(:s3, [100, 200, 300]),
-          mixer([:s1, :s2], mixed_name)
+          mix([:s1, :s2], mixed_name)
         ]
       end
     end
@@ -121,7 +121,7 @@ defmodule Strom.DSLTest do
 
       def topology(name) do
         [
-          mixer([:str1, :str2], name)
+          mix([:str1, :str2], name)
         ]
       end
     end

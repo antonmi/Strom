@@ -7,7 +7,7 @@ defmodule Strom.DSL do
     defstruct sink: nil, origin: nil, names: [], sync: false
   end
 
-  defmodule Mixer do
+  defmodule Mix do
     defstruct mixer: nil, opts: [], inputs: [], output: nil
   end
 
@@ -43,13 +43,13 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro mixer(inputs, output, opts \\ []) do
+  defmacro mix(inputs, output, opts \\ []) do
     quote do
       unless is_list(unquote(inputs)) do
         raise "Mixer sources must be a list, given: #{inspect(unquote(inputs))}"
       end
 
-      %Strom.DSL.Mixer{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
+      %Strom.DSL.Mix{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
     end
   end
 

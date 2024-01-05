@@ -52,7 +52,7 @@ defmodule Strom.Examples.WordsCountTest do
         dones ++
         [
           transform(all_names, &DoCount.call/2, %{}),
-          mixer(all_names, :mixed),
+          mix(all_names, :mixed),
           source(:mixed, [:done]),
           transform(:mixed, &SumAll.call/2, %{})
         ]

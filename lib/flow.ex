@@ -40,8 +40,8 @@ defmodule Strom.Flow do
         %DSL.Sink{origin: origin} = sink ->
           %{sink | sink: Strom.Sink.start(origin)}
 
-        %DSL.Mixer{opts: opts} = mixer ->
-          %{mixer | mixer: Strom.Mixer.start(opts)}
+        %DSL.Mix{opts: opts} = mix ->
+          %{mix | mixer: Strom.Mixer.start(opts)}
 
         %DSL.Splitter{opts: opts} = splitter ->
           %{splitter | splitter: Strom.Splitter.start(opts)}
@@ -83,7 +83,7 @@ defmodule Strom.Flow do
           %DSL.Sink{sink: sink, names: names, sync: sync} ->
             Strom.Sink.call(flow, sink, names, sync)
 
-          %DSL.Mixer{mixer: mixer, inputs: inputs, output: output} ->
+          %DSL.Mix{mixer: mixer, inputs: inputs, output: output} ->
             Strom.Mixer.call(flow, mixer, inputs, output)
 
           %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
@@ -114,7 +114,7 @@ defmodule Strom.Flow do
         %DSL.Sink{sink: sink} ->
           Strom.Sink.stop(sink)
 
-        %DSL.Mixer{mixer: mixer} ->
+        %DSL.Mix{mixer: mixer} ->
           Strom.Mixer.stop(mixer)
 
         %DSL.Splitter{splitter: splitter} ->

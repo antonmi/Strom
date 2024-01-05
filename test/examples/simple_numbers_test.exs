@@ -51,7 +51,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
         [
           transform(:first, &__MODULE__.add_label/2, :first),
           transform(:second, &__MODULE__.add_label/2, :second),
-          mixer([:first, :second], :mixed),
+          mix([:first, :second], :mixed),
           transform(:mixed, &__MODULE__.call/2, %{first: [], second: []})
         ]
       end
@@ -101,7 +101,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
           transform(name, &__MODULE__.add_label/2, name)
         end) ++
           [
-            mixer(names, :mixed),
+            mix(names, :mixed),
             transform(:mixed, &__MODULE__.call/2, Enum.reduce(names, %{}, &Map.put(&2, &1, [])))
           ]
       end
