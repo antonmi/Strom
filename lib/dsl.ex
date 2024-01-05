@@ -15,16 +15,8 @@ defmodule Strom.DSL do
     defstruct splitter: nil, opts: [], input: nil, partitions: %{}
   end
 
-  defmodule Function do
-    defstruct function: nil, opts: [], inputs: []
-  end
-
   defmodule Transform do
     defstruct function: nil, acc: nil, inputs: [], call: nil
-  end
-
-  defmodule Module do
-    defstruct module: nil, opts: [], inputs: [], state: nil
   end
 
   defmodule Rename do
@@ -75,16 +67,6 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro function(inputs, function, opts \\ []) do
-    quote do
-      %Strom.DSL.Function{
-        function: unquote(function),
-        opts: unquote(opts),
-        inputs: unquote(inputs)
-      }
-    end
-  end
-
   defmacro transform(inputs, function, acc) do
     quote do
       %Strom.DSL.Transform{
@@ -100,16 +82,6 @@ defmodule Strom.DSL do
       %Strom.DSL.Transform{
         function: unquote(function),
         acc: nil,
-        inputs: unquote(inputs)
-      }
-    end
-  end
-
-  defmacro module(inputs, module, opts \\ []) do
-    quote do
-      %Strom.DSL.Module{
-        module: unquote(module),
-        opts: unquote(opts),
         inputs: unquote(inputs)
       }
     end

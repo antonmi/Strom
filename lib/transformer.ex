@@ -28,7 +28,9 @@ defmodule Strom.Transformer do
   end
 
   def call(flow, %__MODULE__{} = call, names, {function, acc})
-      when is_map(flow) and is_list(names) and is_function(function, 3) do
+      when is_map(flow) and is_function(function, 3) do
+    names = if is_list(names), do: names, else: [names]
+
     input_streams =
       Enum.reduce(names, %{}, fn name, streams ->
         Map.put(streams, {name, function, acc}, Map.fetch!(flow, name))
@@ -72,13 +74,13 @@ defmodule Strom.Transformer do
   end
 
   def call(flow, %__MODULE__{} = call, names, {function, acc})
-      when is_map(flow) and is_list(names) and is_function(function, 2) do
+      when is_map(flow) and is_function(function, 2) do
     fun = fn el, acc, nil -> function.(el, acc) end
     call(flow, %__MODULE__{} = call, names, {fun, acc})
   end
 
   def call(flow, %__MODULE__{} = call, names, function)
-      when is_map(flow) and is_list(names) and is_function(function, 1) do
+      when is_map(flow) and is_function(function, 1) do
     fun = fn el, nil, nil -> {[function.(el)], nil} end
     call(flow, %__MODULE__{} = call, names, {fun, nil})
   end

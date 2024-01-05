@@ -46,15 +46,8 @@ defmodule Strom.Flow do
         %DSL.Splitter{opts: opts} = splitter ->
           %{splitter | splitter: Strom.Splitter.start(opts)}
 
-        %DSL.Function{function: function, opts: opts} = fun ->
-          %{fun | function: Strom.Function.start(function, opts)}
-
         %DSL.Transform{} = fun ->
           %{fun | call: Strom.Transformer.start()}
-
-        %DSL.Module{module: module, opts: opts} = mod ->
-          module = Strom.Module.start(module, opts)
-          %{mod | module: module}
 
         %DSL.Rename{names: names} = ren ->
           rename = Strom.Renamer.start(names)
@@ -93,18 +86,12 @@ defmodule Strom.Flow do
           %DSL.Splitter{splitter: splitter, input: input, partitions: partitions} ->
             Strom.Splitter.call(flow, splitter, input, partitions)
 
-          %DSL.Function{function: function, inputs: inputs} ->
-            Strom.Function.call(flow, function, inputs)
-
           %DSL.Transform{call: call, function: function, acc: acc, inputs: inputs} ->
             if is_function(function, 2) do
               Strom.Transformer.call(flow, call, inputs, {function, acc})
             else
               Strom.Transformer.call(flow, call, inputs, function)
             end
-
-          %DSL.Module{module: module, inputs: inputs} ->
-            Strom.Module.call(flow, module, inputs)
 
           %DSL.Rename{rename: rename, names: names} ->
             Strom.Renamer.call(flow, rename, names)
@@ -130,14 +117,8 @@ defmodule Strom.Flow do
         %DSL.Splitter{splitter: splitter} ->
           Strom.Splitter.stop(splitter)
 
-        %DSL.Function{function: function} ->
-          Strom.Function.stop(function)
-
         %DSL.Transform{call: call} ->
           Strom.Transformer.stop(call)
-
-        %DSL.Module{module: module} ->
-          Strom.Module.stop(module)
       end
     end)
 
