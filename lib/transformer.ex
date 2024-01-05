@@ -1,4 +1,4 @@
-defmodule Strom.GenCall do
+defmodule Strom.Transformer do
   use GenServer
 
   @buffer 1000
