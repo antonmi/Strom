@@ -7,16 +7,6 @@ defmodule Strom.DSLTest do
   defmodule MyFlow do
     use Strom.DSL
 
-    def odd_fun(event), do: rem(event, 2) == 1
-
-    def even_fun(event), do: rem(event, 2) == 0
-
-    def to_string(el), do: "#{el}"
-
-    def to_integer(event), do: String.to_integer(event)
-
-    def add_one(event), do: event + 1
-
     def topology(opts) do
       partitions = %{
         odd: &__MODULE__.odd_fun/1,
@@ -35,6 +25,16 @@ defmodule Strom.DSLTest do
         sink(:even, %WriteLines{path: "test/data/even.txt"}, true)
       ]
     end
+
+    def odd_fun(event), do: rem(event, 2) == 1
+
+    def even_fun(event), do: rem(event, 2) == 0
+
+    def to_string(el), do: "#{el}"
+
+    def to_integer(event), do: String.to_integer(event)
+
+    def add_one(event), do: event + 1
   end
 
   def check_output() do
