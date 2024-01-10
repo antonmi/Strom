@@ -1,7 +1,16 @@
 defmodule Strom.Mixer do
   alias Strom.GenMix
 
-  def start(opts \\ []) when is_list(opts) do
+  defstruct [:opts, :flow_pid, :sup_pid]
+
+  def start(args \\ [])
+
+  def start(%__MODULE__{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}) do
+    gen_mix = %GenMix{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
+    GenMix.start(gen_mix)
+  end
+
+  def start(opts) when is_list(opts) do
     GenMix.start(opts)
   end
 

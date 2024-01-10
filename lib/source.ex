@@ -6,7 +6,18 @@ defmodule Strom.Source do
 
   use GenServer
 
-  defstruct [:origin, :pid]
+  defstruct [:origin, :pid, :flow_pid, :sup_pid]
+
+  def start(%__MODULE__{origin: list} = source) when is_list(list) do
+    start(%{source | origin: %Strom.Source.Events{events: list}})
+  end
+
+  def start(%__MODULE__{origin: origin} = source) when is_struct(origin) do
+    origin = apply(origin.__struct__, :start, [origin])
+    source = %{source | origin: origin}
+    {:ok, pid} = DynamicSupervisor.start_child(source.sup_pid, {__MODULE__, source})
+    __state__(pid)
+  end
 
   def start(list) when is_list(list) do
     start(%Strom.Source.Events{events: list})
@@ -20,6 +31,10 @@ defmodule Strom.Source do
     __state__(pid)
   end
 
+  def start_link(%__MODULE__{} = state) do
+    GenServer.start_link(__MODULE__, state)
+  end
+
   @impl true
   def init(%__MODULE__{} = state), do: {:ok, %{state | pid: self()}}
 
@@ -27,7 +42,15 @@ defmodule Strom.Source do
 
   def infinite?(%__MODULE__{pid: pid}), do: GenServer.call(pid, :infinite)
 
-  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
+    apply(origin.__struct__, :stop, [origin])
+
+    if sup_pid do
+      :ok
+    else
+      GenServer.call(pid, :stop)
+    end
+  end
 
   def call(flow, %__MODULE__{} = source, names) when is_map(flow) and is_list(names) do
     sub_flow =

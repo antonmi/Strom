@@ -27,7 +27,7 @@ defmodule Strom.GenMix.Consumer do
         GenServer.call(cons.pid, :register_client)
       end,
       fn cons ->
-        case GenServer.call(cons.pid, :get_data) do
+        case GenServer.call(cons.pid, :get_data, :infinity) do
           {:ok, data} ->
             if length(data) == 0 do
               receive do

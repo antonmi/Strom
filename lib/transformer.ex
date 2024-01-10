@@ -8,11 +8,25 @@ defmodule Strom.Transformer do
             buffer: @buffer,
             function: nil,
             opts: nil,
+            sup_pid: nil,
+            flow_pid: nil,
             tasks: %{},
             data: %{}
 
-  # TODO supervisor
-  def start(opts \\ []) when is_list(opts) do
+  def start(args \\ [])
+
+  def start(%__MODULE__{opts: opts, sup_pid: sup_pid} = transformer) do
+    transformer = %{
+      transformer
+      | buffer: Keyword.get(opts, :buffer, @buffer),
+        opts: Keyword.get(opts, :opts, nil)
+    }
+
+    {:ok, pid} = DynamicSupervisor.start_child(sup_pid, {__MODULE__, transformer})
+    __state__(pid)
+  end
+
+  def start(opts) when is_list(opts) do
     state = %__MODULE__{
       buffer: Keyword.get(opts, :buffer, @buffer),
       opts: Keyword.get(opts, :opts, nil)
@@ -20,6 +34,10 @@ defmodule Strom.Transformer do
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
+  end
+
+  def start_link(%__MODULE__{} = state) do
+    GenServer.start_link(__MODULE__, state)
   end
 
   @impl true
@@ -47,7 +65,7 @@ defmodule Strom.Transformer do
               nil
             end,
             fn nil ->
-              case GenServer.call(call.pid, {:get_data, name}) do
+              case GenServer.call(call.pid, {:get_data, name}, :infinity) do
                 {:ok, data} ->
                   if length(data) == 0 do
                     receive do
@@ -85,7 +103,13 @@ defmodule Strom.Transformer do
     call(flow, %__MODULE__{} = call, names, {fun, nil})
   end
 
-  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}) do
+    if sup_pid do
+      :ok
+    else
+      GenServer.call(pid, :stop)
+    end
+  end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
