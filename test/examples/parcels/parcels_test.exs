@@ -1,5 +1,6 @@
 defmodule Strom.Examples.ParcelsTest do
   use ExUnit.Case
+  @moduletag timeout: :infinity
 
   defmodule GenData do
     use Strom.DSL
@@ -76,25 +77,25 @@ defmodule Strom.Examples.ParcelsTest do
 
     def build_order(event) do
       list = String.split(event, ",")
-      type = Enum.at(list, 0)
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
-      order_number = String.to_integer(Enum.at(list, 2))
 
       %{
-        type: type,
+        type: Enum.at(list, 0),
         occurred_at: occurred_at,
-        order_number: order_number,
+        order_number: String.to_integer(Enum.at(list, 2)),
         to_ship: String.to_integer(Enum.at(list, 3))
       }
     end
 
     def build_parcel(event) do
       list = String.split(event, ",")
-      type = Enum.at(list, 0)
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
-      order_number = String.to_integer(Enum.at(list, 2))
 
-      %{type: type, occurred_at: occurred_at, order_number: order_number}
+      %{
+        type: Enum.at(list, 0),
+        occurred_at: occurred_at,
+        order_number: String.to_integer(Enum.at(list, 2))
+      }
     end
 
     def force_order(event, memo) do
@@ -210,16 +211,15 @@ defmodule Strom.Examples.ParcelsTest do
     end
   end
 
-  def generate_data(parcels_count) do
+  @parcels_count 1_000
+
+  test "generate_data" do
     GenData.start()
-    GenData.call(%{stream: List.duplicate(:tick, parcels_count)})
+    GenData.call(%{stream: List.duplicate(:tick, @parcels_count)})
     GenData.stop()
   end
 
-  test "flow" do
-    parcels_count = 1_000
-    generate_data(parcels_count)
-
+  test "solve" do
     ParcelsFlow.start()
     ParcelsFlow.call(%{})
 
@@ -237,6 +237,8 @@ defmodule Strom.Examples.ParcelsTest do
       |> length()
       |> then(&(&1 - 1))
 
-    assert shipped_length + threshold_length == parcels_count
+    assert shipped_length + threshold_length == @parcels_count
+
+    ParcelsFlow.stop()
   end
 end

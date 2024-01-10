@@ -1,2 +1,3 @@
 - restart strategy
+- renamer can be just a simple module
 - tick source with timeout
