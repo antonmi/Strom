@@ -55,7 +55,7 @@ defmodule Strom.DSLTest do
     assert odd == ["11", "21", "3", "31", "41", "5", "51"]
   end
 
-  test "start and run" do
+  test "start, run, and stop" do
     MyFlow.start(%{to_string_fun: &MyFlow.to_string/1})
     MyFlow.call(%{})
     check_output()

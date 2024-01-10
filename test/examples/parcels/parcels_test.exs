@@ -1,8 +1,74 @@
 defmodule Strom.Examples.ParcelsTest do
   use ExUnit.Case
 
+  defmodule GenData do
+    use Strom.DSL
+
+    alias Strom.Sink.WriteLines
+
+    defmodule BuildEvent do
+      def call(:tick, last_order) do
+        occurred_at = DateTime.add(last_order[:occurred_at], :rand.uniform(10), :second)
+        to_ship = :rand.uniform(5)
+        order_number = last_order[:order_number] + 1
+
+        order = %{
+          type: "ORDER_CREATED",
+          occurred_at: occurred_at,
+          order_number: order_number,
+          to_ship: to_ship
+        }
+
+        {parcels, _} =
+          Enum.reduce(1..to_ship, {[], order[:occurred_at]}, fn _i, {acc, occurred_at} ->
+            occurred_at = DateTime.add(occurred_at, :rand.uniform(2 * 24 * 3600), :second)
+
+            parcel = %{
+              type: "PARCEL_SHIPPED",
+              occurred_at: occurred_at,
+              order_number: order_number
+            }
+
+            {[parcel | acc], occurred_at}
+          end)
+
+        {[order | parcels], order}
+      end
+    end
+
+    def order_to_string(order) do
+      "#{order[:type]},#{DateTime.to_iso8601(order[:occurred_at])},#{order[:order_number]},#{order[:to_ship]}"
+    end
+
+    def parcel_to_string(parcel) do
+      "#{parcel[:type]},#{DateTime.to_iso8601(parcel[:occurred_at])},#{parcel[:order_number]}"
+    end
+
+    def topology(_) do
+      partitions = %{
+        orders: &(&1[:type] == "ORDER_CREATED"),
+        parcels: &(&1[:type] == "PARCEL_SHIPPED")
+      }
+
+      acc = %{
+        occurred_at: DateTime.add(DateTime.now!("Etc/UTC"), -(3600 * 24 * 30), :second),
+        order_number: 0
+      }
+
+      [
+        transform(:stream, &BuildEvent.call/2, acc),
+        split(:stream, partitions),
+        transform(:orders, &__MODULE__.order_to_string/1),
+        transform(:parcels, &__MODULE__.parcel_to_string/1),
+        sink(:orders, %WriteLines{path: "test/examples/parcels/orders.csv"}),
+        sink(:parcels, %WriteLines{path: "test/examples/parcels/parcels.csv"}, true)
+      ]
+    end
+  end
+
   defmodule ParcelsFlow do
     alias Strom.Source.ReadLines
+    alias Strom.Sink.WriteLines
 
     use Strom.DSL
 
@@ -13,7 +79,6 @@ defmodule Strom.Examples.ParcelsTest do
       type = Enum.at(list, 0)
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
       order_number = String.to_integer(Enum.at(list, 2))
-      Process.sleep(1)
 
       %{
         type: type,
@@ -132,21 +197,46 @@ defmodule Strom.Examples.ParcelsTest do
         transform([:mixed], &ParcelsFlow.force_order/2, %{}),
         transform([:mixed], &ParcelsFlow.decide/2, %{}),
         split(:mixed, partitions),
-        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1)
-        #        sink(:threshold_exceeded, %WriteLines{path: "test_data/threshold_exceeded.csv"}),
-        #        sink(:all_parcels_shipped, %WriteLines{path: "test_data/all_parcels_shipped.csv"}, true)
+        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
+        sink(:threshold_exceeded, %WriteLines{
+          path: "test/examples/parcels/threshold_exceeded.csv"
+        }),
+        sink(
+          :all_parcels_shipped,
+          %WriteLines{path: "test/examples/parcels/all_parcels_shipped.csv"},
+          true
+        )
       ]
     end
   end
 
+  def generate_data(parcels_count) do
+    GenData.start()
+    GenData.call(%{stream: List.duplicate(:tick, parcels_count)})
+    GenData.stop()
+  end
+
   test "flow" do
-    #    :observer.start()
+    parcels_count = 1_000
+    generate_data(parcels_count)
+
     ParcelsFlow.start()
+    ParcelsFlow.call(%{})
 
-    %{threshold_exceeded: threshold_exceeded, all_parcels_shipped: all_parcels_shipped} =
-      ParcelsFlow.call(%{})
+    shipped_length =
+      "test/examples/parcels/all_parcels_shipped.csv"
+      |> File.read!()
+      |> String.split("\n")
+      |> length()
+      |> then(&(&1 - 1))
 
-    assert length(Enum.to_list(threshold_exceeded)) == 2
-    assert length(Enum.to_list(all_parcels_shipped)) == 1
+    threshold_length =
+      "test/examples/parcels/threshold_exceeded.csv"
+      |> File.read!()
+      |> String.split("\n")
+      |> length()
+      |> then(&(&1 - 1))
+
+    assert shipped_length + threshold_length == parcels_count
   end
 end

@@ -2,55 +2,92 @@ defmodule Strom.Flow do
   defstruct pid: nil,
             name: nil,
             module: nil,
+            sup_pid: nil,
             opts: [],
             topology: []
 
   use GenServer
   alias Strom.DSL
+  alias Strom.FlowSupervisor
 
   @type t :: %__MODULE__{}
 
-  # TODO Supervisor
   def start(flow_module, opts \\ []) when is_atom(flow_module) do
-    state = %__MODULE__{name: flow_module, module: flow_module, opts: opts}
+    strom_sup_pid = Process.whereis(Strom.DynamicSupervisor)
 
-    {:ok, pid} = GenServer.start_link(__MODULE__, state, name: flow_module)
+    pid =
+      case DynamicSupervisor.start_child(
+             strom_sup_pid,
+             %{
+               id: __MODULE__,
+               start:
+                 {__MODULE__, :start_link,
+                  [%__MODULE__{name: flow_module, module: flow_module, opts: opts}]},
+               restart: :transient
+             }
+           ) do
+        {:ok, pid} ->
+          pid
+
+        {:error, {:already_started, pid}} ->
+          pid
+      end
 
     __state__(pid)
   end
 
-  @impl true
-  def init(%__MODULE__{module: module} = state) do
-    topology =
-      state.opts
-      |> module.topology()
-      |> List.flatten()
-      |> build()
-
-    {:ok, %{state | pid: self(), topology: topology}}
+  def start_link(%__MODULE__{} = flow) do
+    GenServer.start_link(__MODULE__, flow, name: flow.name)
   end
 
-  defp build(components) do
+  @impl true
+  def init(%__MODULE__{module: module} = flow) do
+    sup_pid = start_flow_supervisor(flow.name)
+
+    topology =
+      flow.opts
+      |> module.topology()
+      |> List.flatten()
+      |> build(self(), sup_pid)
+
+    {:ok, %{flow | pid: self(), sup_pid: sup_pid, topology: topology}}
+  end
+
+  defp start_flow_supervisor(name) do
+    sup_pid =
+      case FlowSupervisor.start_link(%{name: :"#{name}_Supervisor"}) do
+        {:ok, pid} -> pid
+        {:error, {:already_started, pid}} -> pid
+      end
+
+    Process.unlink(sup_pid)
+    Process.monitor(sup_pid)
+    sup_pid
+  end
+
+  defp build(components, flow_pid, sup_pid) do
     components
     |> Enum.map(fn component ->
       case component do
         %DSL.Source{origin: origin} = source ->
-          %{source | source: Strom.Source.start(origin)}
+          src = %Strom.Source{origin: origin, flow_pid: flow_pid, sup_pid: sup_pid}
+          %{source | source: Strom.Source.start(src)}
 
         %DSL.Sink{origin: origin} = sink ->
-          %{sink | sink: Strom.Sink.start(origin)}
+          snk = %Strom.Sink{origin: origin, flow_pid: flow_pid, sup_pid: sup_pid}
+          %{sink | sink: Strom.Sink.start(snk)}
 
         %DSL.Mix{opts: opts} = mix ->
-          %{mix | mixer: Strom.Mixer.start(opts)}
+          mixer = %Strom.Mixer{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
+          %{mix | mixer: Strom.Mixer.start(mixer)}
 
         %DSL.Split{opts: opts} = split ->
-          %{split | splitter: Strom.Splitter.start(opts)}
-
-        %DSL.Transform{opts: nil} = transform ->
-          %{transform | transformer: Strom.Transformer.start()}
+          splitter = %Strom.Splitter{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
+          %{split | splitter: Strom.Splitter.start(splitter)}
 
         %DSL.Transform{opts: opts} = transform when is_list(opts) ->
-          %{transform | transformer: Strom.Transformer.start(opts)}
+          transformer = %Strom.Transformer{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
+          %{transform | transformer: Strom.Transformer.start(transformer)}
 
         %DSL.Rename{names: names} = ren ->
           rename = Strom.Renamer.start(names)
@@ -104,8 +141,8 @@ defmodule Strom.Flow do
     {:reply, flow, state}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{} = state) do
-    state.topology
+  def handle_call(:stop, _from, %__MODULE__{} = flow) do
+    flow.topology
     |> Enum.each(fn component ->
       case component do
         %DSL.Source{source: source} ->
@@ -125,7 +162,8 @@ defmodule Strom.Flow do
       end
     end)
 
-    {:stop, :normal, :ok, state}
+    Supervisor.stop(flow.sup_pid)
+    {:stop, :normal, :ok, flow}
   end
 
   @impl true

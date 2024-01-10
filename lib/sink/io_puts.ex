@@ -1,7 +1,7 @@
 defmodule Strom.Sink.IOPuts do
   @behaviour Strom.Sink
 
-  defstruct line_sep: "\n", prefix: ""
+  defstruct line_sep: "", prefix: ""
 
   @impl true
   def start(%__MODULE__{} = io_puts), do: io_puts

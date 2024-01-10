@@ -1,5 +1,2 @@
-- Proper supervision tree!!!
-- Module behaviour
+- restart strategy
 - tick source with timeout
-- remove chunk_by, introduce buffer
-- explicit "map" and "reduce" with function/1,2, and "transform" as module

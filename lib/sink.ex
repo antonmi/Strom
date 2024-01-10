@@ -5,7 +5,14 @@ defmodule Strom.Sink do
 
   use GenServer
 
-  defstruct [:origin, :pid]
+  defstruct [:origin, :pid, :flow_pid, :sup_pid]
+
+  def start(%__MODULE__{origin: origin} = sink) when is_struct(origin) do
+    origin = apply(origin.__struct__, :start, [origin])
+    sink = %{sink | origin: origin}
+    {:ok, pid} = DynamicSupervisor.start_child(sink.sup_pid, {__MODULE__, sink})
+    __state__(pid)
+  end
 
   def start(origin) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
@@ -15,12 +22,24 @@ defmodule Strom.Sink do
     __state__(pid)
   end
 
+  def start_link(%__MODULE__{} = state) do
+    GenServer.start_link(__MODULE__, state)
+  end
+
   @impl true
   def init(%__MODULE__{} = state), do: {:ok, %{state | pid: self()}}
 
   def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data})
 
-  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
+    apply(origin.__struct__, :stop, [origin])
+
+    if sup_pid do
+      :ok
+    else
+      GenServer.call(pid, :stop)
+    end
+  end
 
   def call(flow, sink, names, sync \\ false)
 

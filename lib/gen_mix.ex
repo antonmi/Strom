@@ -4,6 +4,9 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
+            opts: [],
+            flow_pid: nil,
+            sup_pid: nil,
             running: false,
             buffer: @buffer,
             producers: %{},
@@ -11,14 +14,29 @@ defmodule Strom.GenMix do
 
   alias Strom.GenMix.Consumer
 
-  # TODO supervisor
-  def start(opts \\ []) when is_list(opts) do
+  def start(opts \\ [])
+
+  def start(%__MODULE__{opts: opts} = gen_mix) when is_list(opts) do
+    gen_mix = %{
+      gen_mix
+      | buffer: Keyword.get(opts, :buffer, @buffer)
+    }
+
+    {:ok, pid} = DynamicSupervisor.start_child(gen_mix.sup_pid, {__MODULE__, gen_mix})
+    __state__(pid)
+  end
+
+  def start(opts) when is_list(opts) do
     state = %__MODULE__{
       buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
     {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
+  end
+
+  def start_link(%__MODULE__{} = state) do
+    GenServer.start_link(__MODULE__, state)
   end
 
   @impl true
@@ -49,7 +67,13 @@ defmodule Strom.GenMix do
     |> Map.merge(sub_flow)
   end
 
-  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}) do
+    if sup_pid do
+      :ok
+    else
+      GenServer.call(pid, :stop)
+    end
+  end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
