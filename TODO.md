@@ -1,3 +1,4 @@
 - restart strategy
 - renamer can be just a simple module
+- source and sink behaviours
 - tick source with timeout
