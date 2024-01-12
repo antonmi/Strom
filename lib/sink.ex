@@ -5,14 +5,19 @@ defmodule Strom.Sink do
 
   use GenServer
 
-  defstruct [:origin, :pid, :flow_pid, :sup_pid]
+  defstruct origin: nil,
+            names: [],
+            sync: false,
+            pid: nil,
+            flow_pid: nil,
+            sup_pid: nil
 
   def new(names, origin, sync \\ false) do
     unless is_struct(origin) do
       raise "Sink origin must be a struct, given: #{inspect(origin)}"
     end
 
-    %Strom.DSL.Sink{origin: origin, names: names, sync: sync}
+    %__MODULE__{origin: origin, names: names, sync: sync}
   end
 
   def start(%__MODULE__{origin: origin} = sink) when is_struct(origin) do

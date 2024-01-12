@@ -7,14 +7,16 @@ defmodule Strom.Transformer do
             running: false,
             buffer: @buffer,
             function: nil,
+            acc: nil,
             opts: nil,
+            inputs: [],
             sup_pid: nil,
             flow_pid: nil,
             tasks: %{},
             data: %{}
 
   def new(inputs, function, acc \\ nil, opts \\ []) do
-    %Strom.DSL.Transform{
+    %__MODULE__{
       function: function,
       acc: acc,
       opts: opts,

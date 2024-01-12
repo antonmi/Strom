@@ -37,22 +37,22 @@ defmodule Strom.TopologyTest do
 
   def check_alive(topology) do
     [source1, source2, mixer, transformer, splitter, sink1] = topology.components
-    assert Process.alive?(source1.source.pid)
-    assert Process.alive?(source2.source.pid)
-    assert Process.alive?(mixer.mixer.pid)
-    assert Process.alive?(transformer.transformer.pid)
-    assert Process.alive?(splitter.splitter.pid)
-    assert Process.alive?(sink1.sink.pid)
+    assert Process.alive?(source1.pid)
+    assert Process.alive?(source2.pid)
+    assert Process.alive?(mixer.gen_mix.pid)
+    assert Process.alive?(transformer.pid)
+    assert Process.alive?(splitter.gen_mix.pid)
+    assert Process.alive?(sink1.pid)
   end
 
   def check_dead(topology) do
     [source1, source2, mixer, transformer, splitter, sink1] = topology.components
-    refute Process.alive?(source1.source.pid)
-    refute Process.alive?(source2.source.pid)
-    refute Process.alive?(mixer.mixer.pid)
-    refute Process.alive?(transformer.transformer.pid)
-    refute Process.alive?(splitter.splitter.pid)
-    refute Process.alive?(sink1.sink.pid)
+    refute Process.alive?(source1.pid)
+    refute Process.alive?(source2.pid)
+    refute Process.alive?(mixer.gen_mix.pid)
+    refute Process.alive?(transformer.pid)
+    refute Process.alive?(splitter.gen_mix.pid)
+    refute Process.alive?(sink1.pid)
   end
 
   describe "using components directly" do
@@ -103,12 +103,13 @@ defmodule Strom.TopologyTest do
       topology = Topology.start(MyTopology.components())
       another_topology = Topology.start(AnotherTopology.components())
       transformer = Transformer.start()
+      renamer = Renamer.start(%{even: :numbers})
 
       flow =
         %{}
         |> Topology.call(topology)
         |> Transformer.call(transformer, :even, &(&1 * 3))
-        |> Renamer.call(%{even: :numbers})
+        |> Renamer.call(renamer)
         |> Topology.call(another_topology)
 
       assert Enum.sort(Enum.to_list(flow[:more])) == [12, 18]

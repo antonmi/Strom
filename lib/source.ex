@@ -6,14 +6,18 @@ defmodule Strom.Source do
 
   use GenServer
 
-  defstruct [:origin, :pid, :flow_pid, :sup_pid]
+  defstruct origin: nil,
+            names: [],
+            pid: nil,
+            flow_pid: nil,
+            sup_pid: nil
 
   def new(names, origin) do
     unless is_struct(origin) or is_list(origin) do
       raise "Source origin must be a struct or just simple list, given: #{inspect(origin)}"
     end
 
-    %Strom.DSL.Source{origin: origin, names: names}
+    %__MODULE__{origin: origin, names: names}
   end
 
   def start(%__MODULE__{origin: list} = source) when is_list(list) do

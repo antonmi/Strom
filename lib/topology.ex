@@ -28,23 +28,24 @@ defmodule Strom.Topology do
     components
     |> Enum.map(fn component ->
       case component do
-        %DSL.Source{origin: origin} = source ->
-          %{source | source: Strom.Source.start(origin)}
+        %Strom.Source{origin: origin, names: names} ->
+          %{Strom.Source.start(origin) | names: names}
 
-        %DSL.Sink{origin: origin} = sink ->
-          %{sink | sink: Strom.Sink.start(origin)}
+        %Strom.Sink{origin: origin, names: names} ->
+          %{Strom.Sink.start(origin) | names: names}
 
-        %DSL.Mix{opts: opts} = mix ->
-          %{mix | mixer: Strom.Mixer.start(opts)}
+        %Strom.Mixer{opts: opts} = mixer ->
+          %{mixer | gen_mix: Strom.Mixer.start(opts)}
 
-        %DSL.Split{opts: opts} = split ->
-          %{split | splitter: Strom.Splitter.start(opts)}
+        %Strom.Splitter{opts: opts} = split ->
+          %{split | gen_mix: Strom.Splitter.start(opts)}
 
-        %DSL.Transform{opts: opts} = transform when is_list(opts) ->
-          %{transform | transformer: Strom.Transformer.start(opts)}
+        %Strom.Transformer{opts: opts, function: function, acc: acc, inputs: inputs}
+        when is_list(opts) ->
+          %{Strom.Transformer.start(opts) | function: function, acc: acc, inputs: inputs}
 
-        %DSL.Rename{} = ren ->
-          %{ren | rename: Strom.Renamer.start()}
+        %Strom.Renamer{names: names} ->
+          Strom.Renamer.start(names)
       end
     end)
   end
@@ -62,27 +63,27 @@ defmodule Strom.Topology do
     flow =
       Enum.reduce(topology.components, init_flow, fn component, flow ->
         case component do
-          %DSL.Source{source: source, names: names} ->
+          %Strom.Source{names: names} = source ->
             Strom.Source.call(flow, source, names)
 
-          %DSL.Sink{sink: sink, names: names, sync: sync} ->
+          %Strom.Sink{names: names, sync: sync} = sink ->
             Strom.Sink.call(flow, sink, names, sync)
 
-          %DSL.Mix{mixer: mixer, inputs: inputs, output: output} ->
+          %Strom.Mixer{inputs: inputs, output: output} = mixer ->
             Strom.Mixer.call(flow, mixer, inputs, output)
 
-          %DSL.Split{splitter: splitter, input: input, partitions: partitions} ->
+          %Strom.Splitter{input: input, partitions: partitions} = splitter ->
             Strom.Splitter.call(flow, splitter, input, partitions)
 
-          %DSL.Transform{transformer: transformer, function: function, acc: acc, inputs: inputs} ->
+          %Strom.Transformer{function: function, acc: acc, inputs: inputs} = transformer ->
             if is_function(function, 1) do
               Strom.Transformer.call(flow, transformer, inputs, function)
             else
               Strom.Transformer.call(flow, transformer, inputs, {function, acc})
             end
 
-          %DSL.Rename{names: names} ->
-            Strom.Renamer.call(flow, names)
+          %Strom.Renamer{} = renamer ->
+            Strom.Renamer.call(flow, renamer)
         end
       end)
 
@@ -92,23 +93,23 @@ defmodule Strom.Topology do
   def handle_call(:stop, _from, %__MODULE__{components: components} = topology) do
     Enum.each(components, fn component ->
       case component do
-        %DSL.Source{source: source} ->
+        %Strom.Source{} = source ->
           Strom.Source.stop(source)
 
-        %DSL.Sink{sink: sink} ->
+        %Strom.Sink{} = sink ->
           Strom.Sink.stop(sink)
 
-        %DSL.Mix{mixer: mixer} ->
+        %Strom.Mixer{} = mixer ->
           Strom.Mixer.stop(mixer)
 
-        %DSL.Split{splitter: splitter} ->
+        %Strom.Splitter{} = splitter ->
           Strom.Splitter.stop(splitter)
 
-        %DSL.Transform{transformer: transformer} ->
+        %Strom.Transformer{} = transformer ->
           Strom.Transformer.stop(transformer)
 
-        %DSL.Rename{rename: rename} ->
-          Strom.Renamer.stop(rename)
+        %Strom.Renamer{} = renamer ->
+          Strom.Renamer.stop(renamer)
       end
     end)
 

@@ -1,35 +1,11 @@
 defmodule Strom.DSL do
-  defmodule Source do
-    defstruct source: nil, origin: nil, names: []
-  end
-
-  defmodule Sink do
-    defstruct sink: nil, origin: nil, names: [], sync: false
-  end
-
-  defmodule Mix do
-    defstruct mixer: nil, opts: [], inputs: [], output: nil
-  end
-
-  defmodule Split do
-    defstruct splitter: nil, opts: [], input: nil, partitions: %{}
-  end
-
-  defmodule Transform do
-    defstruct transformer: nil, function: nil, acc: nil, opts: nil, inputs: []
-  end
-
-  defmodule Rename do
-    defstruct names: nil, rename: nil
-  end
-
   defmacro source(names, origin) do
     quote do
       unless is_struct(unquote(origin)) or is_list(unquote(origin)) do
         raise "Source origin must be a struct or just simple list, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Source{origin: unquote(origin), names: unquote(names)}
+      %Strom.Source{origin: unquote(origin), names: unquote(names)}
     end
   end
 
@@ -39,7 +15,7 @@ defmodule Strom.DSL do
         raise "Sink origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.DSL.Sink{origin: unquote(origin), names: unquote(names), sync: unquote(sync)}
+      %Strom.Sink{origin: unquote(origin), names: unquote(names), sync: unquote(sync)}
     end
   end
 
@@ -49,7 +25,7 @@ defmodule Strom.DSL do
         raise "Mixer sources must be a list, given: #{inspect(unquote(inputs))}"
       end
 
-      %Strom.DSL.Mix{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
+      %Strom.Mixer{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
     end
   end
 
@@ -59,7 +35,7 @@ defmodule Strom.DSL do
         raise "Branches in splitter must be a map, given: #{inspect(unquote(partitions))}"
       end
 
-      %Strom.DSL.Split{
+      %Strom.Splitter{
         input: unquote(input),
         partitions: unquote(partitions),
         opts: unquote(opts)
@@ -69,7 +45,7 @@ defmodule Strom.DSL do
 
   defmacro transform(inputs, function, acc \\ nil, opts \\ []) do
     quote do
-      %Strom.DSL.Transform{
+      %Strom.Transformer{
         function: unquote(function),
         acc: unquote(acc),
         opts: unquote(opts),
@@ -94,7 +70,7 @@ defmodule Strom.DSL do
         raise "Names must be a map, given: #{inspect(unquote(names))}"
       end
 
-      %Strom.DSL.Rename{names: unquote(names)}
+      %Strom.Renamer{names: unquote(names)}
     end
   end
 

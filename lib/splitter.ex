@@ -1,18 +1,14 @@
 defmodule Strom.Splitter do
   alias Strom.GenMix
 
-  defstruct [:opts, :flow_pid, :sup_pid]
+  defstruct [:gen_mix, :input, :partitions, :opts, :flow_pid, :sup_pid]
 
   def new(input, partitions, opts \\ []) do
     unless is_map(partitions) and map_size(partitions) > 0 do
       raise "Branches in splitter must be a map, given: #{inspect(partitions)}"
     end
 
-    %Strom.DSL.Split{
-      input: input,
-      partitions: partitions,
-      opts: opts
-    }
+    %Strom.Splitter{input: input, partitions: partitions, opts: opts}
   end
 
   def start(args \\ [])
@@ -26,7 +22,7 @@ defmodule Strom.Splitter do
     GenMix.start(opts)
   end
 
-  def call(flow, %GenMix{} = mix, name, partitions) when is_list(partitions) do
+  def call(flow, %__MODULE__{gen_mix: mix}, name, partitions) when is_list(partitions) do
     inputs = %{name => fn _el -> true end}
 
     outputs =
@@ -37,10 +33,10 @@ defmodule Strom.Splitter do
     GenMix.call(flow, mix, inputs, outputs)
   end
 
-  def call(flow, %GenMix{} = mix, name, partitions) when is_map(partitions) do
+  def call(flow, %__MODULE__{gen_mix: mix}, name, partitions) when is_map(partitions) do
     inputs = %{name => fn _el -> true end}
     GenMix.call(flow, mix, inputs, partitions)
   end
 
-  def stop(%GenMix{} = mix), do: GenMix.stop(mix)
+  def stop(%__MODULE__{gen_mix: mix}), do: GenMix.stop(mix)
 end
