@@ -89,9 +89,8 @@ defmodule Strom.Flow do
           transformer = %Strom.Transformer{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
           %{transform | transformer: Strom.Transformer.start(transformer)}
 
-        %DSL.Rename{names: names} = ren ->
-          rename = Strom.Renamer.start(names)
-          %{ren | rename: rename}
+        %DSL.Rename{} = ren ->
+          %{ren | rename: Strom.Renamer.start()}
       end
     end)
   end
@@ -133,8 +132,8 @@ defmodule Strom.Flow do
               Strom.Transformer.call(flow, transformer, inputs, {function, acc})
             end
 
-          %DSL.Rename{rename: rename, names: names} ->
-            Strom.Renamer.call(flow, rename, names)
+          %DSL.Rename{names: names} ->
+            Strom.Renamer.call(flow, names)
         end
       end)
 
@@ -159,6 +158,9 @@ defmodule Strom.Flow do
 
         %DSL.Transform{transformer: transformer} ->
           Strom.Transformer.stop(transformer)
+
+        %DSL.Rename{rename: rename} ->
+          Strom.Renamer.stop(rename)
       end
     end)
 

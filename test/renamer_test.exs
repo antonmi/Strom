@@ -4,19 +4,15 @@ defmodule Strom.RenamerTest do
   alias Strom.Renamer
 
   test "start and stop" do
-    rename = Renamer.start(%{s1: :s2})
-    assert Process.alive?(rename.pid)
-    :ok = Renamer.stop(rename)
-    refute Process.alive?(rename.pid)
+    assert Renamer.start() == %Renamer{}
+    assert :ok = Renamer.stop(%Renamer{})
   end
 
   test "rename" do
     names = %{s1: :foo1, s2: :foo2}
-    rename = Renamer.start(names)
-
     flow = %{s1: [1], s2: [2], s3: [3]}
 
-    new_flow = Renamer.call(flow, rename, names)
+    new_flow = Renamer.call(flow, names)
 
     refute new_flow[:s1]
     refute new_flow[:s2]
@@ -27,12 +23,8 @@ defmodule Strom.RenamerTest do
   end
 
   test "raise when there is no such name" do
-    names = %{s2: :foo2}
-    rename = Renamer.start(names)
-    flow = %{s1: [1]}
-
     assert_raise KeyError, fn ->
-      Renamer.call(flow, rename, names)
+      Renamer.call(%{s1: [1]}, %{s2: :foo2})
     end
   end
 end

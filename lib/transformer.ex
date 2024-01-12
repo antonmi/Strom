@@ -13,6 +13,15 @@ defmodule Strom.Transformer do
             tasks: %{},
             data: %{}
 
+  def new(inputs, function, acc \\ nil, opts \\ []) do
+    %Strom.DSL.Transform{
+      function: function,
+      acc: acc,
+      opts: opts,
+      inputs: inputs
+    }
+  end
+
   def start(args \\ [])
 
   def start(%__MODULE__{opts: opts, sup_pid: sup_pid} = transformer) do

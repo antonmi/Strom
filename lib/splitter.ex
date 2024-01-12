@@ -3,6 +3,18 @@ defmodule Strom.Splitter do
 
   defstruct [:opts, :flow_pid, :sup_pid]
 
+  def new(input, partitions, opts \\ []) do
+    unless is_map(partitions) and map_size(partitions) > 0 do
+      raise "Branches in splitter must be a map, given: #{inspect(partitions)}"
+    end
+
+    %Strom.DSL.Split{
+      input: input,
+      partitions: partitions,
+      opts: opts
+    }
+  end
+
   def start(args \\ [])
 
   def start(%__MODULE__{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}) do

@@ -7,6 +7,14 @@ defmodule Strom.Sink do
 
   defstruct [:origin, :pid, :flow_pid, :sup_pid]
 
+  def new(names, origin, sync \\ false) do
+    unless is_struct(origin) do
+      raise "Sink origin must be a struct, given: #{inspect(origin)}"
+    end
+
+    %Strom.DSL.Sink{origin: origin, names: names, sync: sync}
+  end
+
   def start(%__MODULE__{origin: origin} = sink) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
     sink = %{sink | origin: origin}

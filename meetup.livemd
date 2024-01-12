@@ -392,21 +392,14 @@ function = fn event, acc ->
 end
 
 RoundRobin.start()
-%{mixed: mixed} = RoundRobin.call(%{first: [1, 2, 3], second: [10, 20, 30]})
-%{mixed: mixed} = Strom.Transformer.call(%{mixed: mixed}, transformer, :mixed, {function, nil})
-result = Enum.to_list(mixed)
+
+flow =
+  %{first: [1, 2, 3], second: [10, 20, 30]}
+  |> RoundRobin.call()
+  |> Strom.Transformer.call(transformer, :mixed, {function, nil})
+
+result = Enum.to_list(flow[:mixed])
 RoundRobin.stop()
-result
-```
-
-```elixir
-RoundRobinMany.start([:first, :second, :third])
-
-%{mixed: mixed} =
-  RoundRobinMany.call(%{first: [1, 2, 3], second: [10, 20, 30], third: [100, 200, 300]})
-
-result = Enum.to_list(mixed)
-RoundRobinMany.stop()
 result
 ```
 
@@ -565,4 +558,4 @@ So it's around 12k order events per second.
 
 ####
 
-<!-- livebook:{"offset":14295,"stamp":{"token":"XCP.4LVC-at5SPTcQQ_Ev1hOZYmArmVov0FyRXehEBaGlFkD-XRXwgXKcBZ0fuIhC9y4PGrt2rXb8hKdL-YPWVExh3ZD67oJiIwN5-U7aA","version":2}} -->
+<!-- livebook:{"offset":14041,"stamp":{"token":"XCP.m17G-ZEiNI5J3glb0HfppWo9hel2sBNgc2d5hGeGdsEbFEURcO0d5SIwhLcCChv686iGdXZi0hW8oqvgiEhuXYoRWD_tL0jqaR3GjA","version":2}} -->

@@ -8,6 +8,14 @@ defmodule Strom.Source do
 
   defstruct [:origin, :pid, :flow_pid, :sup_pid]
 
+  def new(names, origin) do
+    unless is_struct(origin) or is_list(origin) do
+      raise "Source origin must be a struct or just simple list, given: #{inspect(origin)}"
+    end
+
+    %Strom.DSL.Source{origin: origin, names: names}
+  end
+
   def start(%__MODULE__{origin: list} = source) when is_list(list) do
     start(%{source | origin: %Strom.Source.Events{events: list}})
   end

@@ -1,4 +1,7 @@
 - restart strategy
 - renamer can be just a simple module
-- source and sink behaviours
+- composite component
+- rename from to topology
+- Different words for flow as data-structure and Flow module (maybe Topology with the call function)
 - tick source with timeout
+- :__all__ for calling components on all streams in flow

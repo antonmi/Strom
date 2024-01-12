@@ -3,6 +3,14 @@ defmodule Strom.Mixer do
 
   defstruct [:opts, :flow_pid, :sup_pid]
 
+  def new(inputs, output, opts \\ []) do
+    unless is_list(inputs) do
+      raise "Mixer sources must be a list, given: #{inspect(inputs)}"
+    end
+
+    %Strom.DSL.Mix{inputs: inputs, output: output, opts: opts}
+  end
+
   def start(args \\ [])
 
   def start(%__MODULE__{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}) do

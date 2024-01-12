@@ -3,7 +3,7 @@ defmodule Strom.FlowTest do
 
   defmodule MyFlow do
     use Strom.DSL
-    alias Strom.Sink.IOPuts
+    alias Strom.Sink.Null
 
     def topology(_) do
       odd_even = %{
@@ -17,8 +17,8 @@ defmodule Strom.FlowTest do
         mix([:s1, :s2], :s),
         transform(:s, &(&1 + 1)),
         split(:s, odd_even),
-        sink(:odd, %IOPuts{}, true),
-        sink(:even, %IOPuts{}, true)
+        sink(:odd, %Null{}, true),
+        sink(:even, %Null{}, true)
       ]
     end
   end
