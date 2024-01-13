@@ -1,6 +1,6 @@
 defmodule Strom.CompositeTest do
   use ExUnit.Case
-  alias Strom.{Mixer, Renamer, Sink, Source, Splitter, Composite, Transformer}
+  alias Strom.{Composite, Mixer, Renamer, Sink, Source, Splitter, Transformer}
   alias Strom.Sink.Null
 
   defmodule MyComposite do

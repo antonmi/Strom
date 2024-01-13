@@ -4,24 +4,14 @@ defmodule Strom.Mixer do
   defstruct pid: nil,
             inputs: [],
             output: nil,
-            opts: [],
-            flow_pid: nil,
-            sup_pid: nil
+            opts: []
 
   def new(inputs, output)
       when is_list(inputs) or (is_map(inputs) and map_size(inputs) > 0) do
     %__MODULE__{inputs: inputs, output: output}
   end
 
-  def start(
-        %__MODULE__{
-          inputs: inputs,
-          output: output,
-          flow_pid: flow_pid,
-          sup_pid: sup_pid
-        } = mixer,
-        opts \\ []
-      ) do
+  def start(%__MODULE__{inputs: inputs, output: output} = mixer, opts \\ []) do
     inputs =
       if is_list(inputs) do
         Enum.reduce(inputs, %{}, fn name, acc ->
@@ -36,9 +26,7 @@ defmodule Strom.Mixer do
     gen_mix = %GenMix{
       inputs: inputs,
       outputs: outputs,
-      opts: opts,
-      flow_pid: flow_pid,
-      sup_pid: sup_pid
+      opts: opts
     }
 
     {:ok, pid} = GenMix.start(gen_mix)
@@ -49,5 +37,5 @@ defmodule Strom.Mixer do
     GenMix.call(flow, pid)
   end
 
-  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}), do: GenMix.stop(pid, sup_pid)
+  def stop(%__MODULE__{pid: pid}), do: GenMix.stop(pid)
 end

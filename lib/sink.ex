@@ -8,9 +8,7 @@ defmodule Strom.Sink do
   defstruct origin: nil,
             name: nil,
             sync: false,
-            pid: nil,
-            flow_pid: nil,
-            sup_pid: nil
+            pid: nil
 
   def new(name, origin, sync \\ false) do
     unless is_struct(origin) do
@@ -24,13 +22,7 @@ defmodule Strom.Sink do
     origin = apply(origin.__struct__, :start, [origin])
     sink = %{sink | origin: origin}
 
-    {:ok, pid} =
-      if sink.sup_pid do
-        DynamicSupervisor.start_child(sink.sup_pid, {__MODULE__, sink})
-      else
-        start_link(sink)
-      end
-
+    {:ok, pid} = start_link(sink)
     __state__(pid)
   end
 
@@ -61,14 +53,9 @@ defmodule Strom.Sink do
     Map.delete(flow, name)
   end
 
-  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
+  def stop(%__MODULE__{origin: origin, pid: pid}) do
     apply(origin.__struct__, :stop, [origin])
-
-    if sup_pid do
-      :ok
-    else
-      GenServer.call(pid, :stop)
-    end
+    GenServer.call(pid, :stop)
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

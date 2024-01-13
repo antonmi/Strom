@@ -6,7 +6,7 @@ defmodule Strom.GenMixTest do
   test "start and stop" do
     {:ok, pid} = GenMix.start(%GenMix{})
     assert Process.alive?(pid)
-    :ok = GenMix.stop(pid, nil)
+    :ok = GenMix.stop(pid)
     refute Process.alive?(pid)
   end
 

@@ -7,8 +7,6 @@ defmodule Strom.GenMix do
             inputs: [],
             outputs: [],
             opts: [],
-            flow_pid: nil,
-            sup_pid: nil,
             running: false,
             buffer: @buffer,
             producers: %{},
@@ -24,11 +22,7 @@ defmodule Strom.GenMix do
       | buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
-    if gen_mix.sup_pid do
-      DynamicSupervisor.start_child(gen_mix.sup_pid, {__MODULE__, gen_mix})
-    else
-      start_link(gen_mix)
-    end
+    start_link(gen_mix)
   end
 
   def start_link(%__MODULE__{} = state) do
@@ -44,12 +38,8 @@ defmodule Strom.GenMix do
     GenServer.call(pid, {:call, flow})
   end
 
-  def stop(pid, sup_pid) do
-    if sup_pid do
-      :ok
-    else
-      GenServer.call(pid, :stop)
-    end
+  def stop(pid) do
+    GenServer.call(pid, :stop)
   end
 
   defp run_inputs(streams, pid, buffer) do

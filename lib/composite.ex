@@ -23,7 +23,7 @@ defmodule Strom.Composite do
     {:ok, %{composite | pid: self(), components: components}}
   end
 
-  defp build(components) do
+  def build(components) do
     components
     |> Enum.map(fn component ->
       case component do
@@ -58,33 +58,42 @@ defmodule Strom.Composite do
   def handle_call(:__state__, _from, composite), do: {:reply, composite, composite}
 
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
-    flow =
-      Enum.reduce(composite.components, init_flow, fn component, flow ->
-        case component do
-          %Strom.Source{} = source ->
-            Strom.Source.call(flow, source)
-
-          %Strom.Sink{} = sink ->
-            Strom.Sink.call(flow, sink)
-
-          %Strom.Mixer{} = mixer ->
-            Strom.Mixer.call(flow, mixer)
-
-          %Strom.Splitter{} = splitter ->
-            Strom.Splitter.call(flow, splitter)
-
-          %Strom.Transformer{} = transformer ->
-            Strom.Transformer.call(flow, transformer)
-
-          %Strom.Renamer{} = renamer ->
-            Strom.Renamer.call(flow, renamer)
-        end
-      end)
+    flow = reduce_flow(composite.components, init_flow)
 
     {:reply, flow, composite}
   end
 
   def handle_call(:stop, _from, %__MODULE__{components: components} = composite) do
+    stop_components(components)
+
+    {:stop, :normal, :ok, composite}
+  end
+
+  def reduce_flow(components, init_flow) do
+    Enum.reduce(components, init_flow, fn component, flow ->
+      case component do
+        %Strom.Source{} = source ->
+          Strom.Source.call(flow, source)
+
+        %Strom.Sink{} = sink ->
+          Strom.Sink.call(flow, sink)
+
+        %Strom.Mixer{} = mixer ->
+          Strom.Mixer.call(flow, mixer)
+
+        %Strom.Splitter{} = splitter ->
+          Strom.Splitter.call(flow, splitter)
+
+        %Strom.Transformer{} = transformer ->
+          Strom.Transformer.call(flow, transformer)
+
+        %Strom.Renamer{} = renamer ->
+          Strom.Renamer.call(flow, renamer)
+      end
+    end)
+  end
+
+  def stop_components(components) do
     Enum.each(components, fn component ->
       case component do
         %Strom.Source{} = source ->
@@ -106,8 +115,6 @@ defmodule Strom.Composite do
           Strom.Renamer.stop(renamer)
       end
     end)
-
-    {:stop, :normal, :ok, composite}
   end
 
   @impl true

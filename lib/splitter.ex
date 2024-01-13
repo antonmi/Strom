@@ -4,16 +4,14 @@ defmodule Strom.Splitter do
   defstruct pid: nil,
             input: nil,
             outputs: [],
-            opts: [],
-            flow_pid: nil,
-            sup_pid: nil
+            opts: []
 
   def new(input, outputs) when is_list(outputs) or (is_map(outputs) and map_size(outputs)) > 0 do
     %Strom.Splitter{input: input, outputs: outputs}
   end
 
   def start(
-        %__MODULE__{input: input, outputs: outputs, flow_pid: flow_pid, sup_pid: sup_pid} =
+        %__MODULE__{input: input, outputs: outputs} =
           splitter,
         opts \\ []
       ) do
@@ -31,9 +29,7 @@ defmodule Strom.Splitter do
     gen_mix = %GenMix{
       inputs: inputs,
       outputs: outputs,
-      opts: opts,
-      flow_pid: flow_pid,
-      sup_pid: sup_pid
+      opts: opts
     }
 
     {:ok, pid} = GenMix.start(gen_mix)
@@ -44,5 +40,5 @@ defmodule Strom.Splitter do
     GenMix.call(flow, pid)
   end
 
-  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}), do: GenMix.stop(pid, sup_pid)
+  def stop(%__MODULE__{pid: pid}), do: GenMix.stop(pid)
 end

@@ -8,9 +8,7 @@ defmodule Strom.Source do
 
   defstruct origin: nil,
             name: nil,
-            pid: nil,
-            flow_pid: nil,
-            sup_pid: nil
+            pid: nil
 
   def new(name, origin) do
     unless is_struct(origin) or is_list(origin) do
@@ -28,13 +26,7 @@ defmodule Strom.Source do
     origin = apply(origin.__struct__, :start, [origin])
     source = %{source | origin: origin}
 
-    {:ok, pid} =
-      if source.sup_pid do
-        DynamicSupervisor.start_child(source.sup_pid, {__MODULE__, source})
-      else
-        start_link(source)
-      end
-
+    {:ok, pid} = start_link(source)
     __state__(pid)
   end
 
@@ -49,14 +41,10 @@ defmodule Strom.Source do
 
   def infinite?(%__MODULE__{pid: pid}), do: GenServer.call(pid, :infinite)
 
-  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
+  def stop(%__MODULE__{origin: origin, pid: pid}) do
     apply(origin.__struct__, :stop, [origin])
 
-    if sup_pid do
-      :ok
-    else
-      GenServer.call(pid, :stop)
-    end
+    GenServer.call(pid, :stop)
   end
 
   def call(flow, %__MODULE__{name: name} = source) when is_map(flow) do
