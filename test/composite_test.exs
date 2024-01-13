@@ -127,7 +127,7 @@ defmodule Strom.CompositeTest do
     end
   end
 
-  describe "reuse topologies" do
+  describe "reuse composites" do
     defmodule Composite1 do
       import Strom.DSL
 
