@@ -219,4 +219,4 @@ Since the operations have a similar interface and behaviour, it's possible to co
 
 See [composite_test.exs](https://github.com/antonmi/Strom/blob/main/test/composite_test.exs).
 
-See more examples in tests.
+See [examples](https://github.com/antonmi/Strom/blob/main/test/examples/).
