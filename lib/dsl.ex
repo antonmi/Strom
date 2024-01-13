@@ -73,30 +73,4 @@ defmodule Strom.DSL do
       %Strom.Renamer{names: unquote(names)}
     end
   end
-
-  defmacro __using__(_opts) do
-    quote do
-      import Strom.DSL
-
-      @spec start(term) :: Strom.Flow.t()
-      def start(opts \\ []) do
-        Strom.Flow.start(__MODULE__, opts)
-      end
-
-      @spec call(map) :: map()
-      def call(flow) when is_map(flow) do
-        Strom.Flow.call(__MODULE__, flow)
-      end
-
-      @spec stop() :: :ok
-      def stop do
-        Strom.Flow.stop(__MODULE__)
-      end
-
-      @spec info() :: list()
-      def info do
-        Strom.Flow.info(__MODULE__)
-      end
-    end
-  end
 end

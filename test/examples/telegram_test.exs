@@ -1,8 +1,10 @@
 defmodule Strom.Integration.TelegramTest do
   use ExUnit.Case
 
-  defmodule TelegramFlow do
-    use Strom.DSL
+  alias Strom.Composite
+
+  defmodule Telegram do
+    import Strom.DSL
 
     alias Strom.Source.ReadLines
     alias Strom.Sink.WriteLines
@@ -28,7 +30,7 @@ defmodule Strom.Integration.TelegramTest do
       end
     end
 
-    def topology(_opts) do
+    def components do
       [
         source(:input, %ReadLines{path: "test/data/orders.csv"}),
         transform(:input, &Decompose.call/2, nil),
@@ -39,8 +41,8 @@ defmodule Strom.Integration.TelegramTest do
   end
 
   test "run flow" do
-    TelegramFlow.start()
-    TelegramFlow.call(%{})
-    TelegramFlow.stop()
+    telegram = Composite.start(Telegram.components())
+    Composite.call(%{}, telegram)
+    Composite.stop(telegram)
   end
 end

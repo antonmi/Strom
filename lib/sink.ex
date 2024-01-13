@@ -43,16 +43,6 @@ defmodule Strom.Sink do
 
   def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data})
 
-  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
-    apply(origin.__struct__, :stop, [origin])
-
-    if sup_pid do
-      :ok
-    else
-      GenServer.call(pid, :stop)
-    end
-  end
-
   def call(flow, %__MODULE__{name: name, sync: sync} = sink) when is_map(flow) do
     stream = Map.fetch!(flow, name)
 
@@ -69,6 +59,16 @@ defmodule Strom.Sink do
     end
 
     Map.delete(flow, name)
+  end
+
+  def stop(%__MODULE__{origin: origin, pid: pid, sup_pid: sup_pid}) do
+    apply(origin.__struct__, :stop, [origin])
+
+    if sup_pid do
+      :ok
+    else
+      GenServer.call(pid, :stop)
+    end
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

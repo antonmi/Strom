@@ -38,12 +38,12 @@ defmodule Strom.Source do
     __state__(pid)
   end
 
-  def start_link(%__MODULE__{} = state) do
-    GenServer.start_link(__MODULE__, state)
+  def start_link(%__MODULE__{} = source) do
+    GenServer.start_link(__MODULE__, source)
   end
 
   @impl true
-  def init(%__MODULE__{} = state), do: {:ok, %{state | pid: self()}}
+  def init(%__MODULE__{} = source), do: {:ok, %{source | pid: self()}}
 
   def call(%__MODULE__{pid: pid}), do: GenServer.call(pid, :call, :infinity)
 
@@ -74,30 +74,30 @@ defmodule Strom.Source do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
-  def handle_call(:call, _from, %__MODULE__{origin: origin} = state) do
-    {events, state} =
+  def handle_call(:call, _from, %__MODULE__{origin: origin} = source) do
+    {events, source} =
       case apply(origin.__struct__, :call, [origin]) do
         {:ok, {events, origin}} ->
-          state = %{state | origin: origin}
-          {events, state}
+          source = %{source | origin: origin}
+          {events, source}
 
         {:error, {:halt, origin}} ->
-          state = %{state | origin: origin}
+          source = %{source | origin: origin}
 
           case apply(origin.__struct__, :infinite?, [origin]) do
-            true -> {[], state}
-            false -> {:halt, state}
+            true -> {[], source}
+            false -> {:halt, source}
           end
       end
 
-    {:reply, {events, state}, state}
+    {:reply, {events, source}, source}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{origin: origin} = state) do
+  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source) do
     origin = apply(origin.__struct__, :stop, [origin])
-    state = %{state | origin: origin}
-    {:stop, :normal, :ok, state}
+    source = %{source | origin: origin}
+    {:stop, :normal, :ok, source}
   end
 
-  def handle_call(:__state__, _from, state), do: {:reply, state, state}
+  def handle_call(:__state__, _from, source), do: {:reply, source, source}
 end

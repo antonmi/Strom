@@ -2,8 +2,10 @@ defmodule Strom.Examples.ParcelsTest do
   use ExUnit.Case
   @moduletag timeout: :infinity
 
+  alias Strom.Composite
+
   defmodule GenData do
-    use Strom.DSL
+    import Strom.DSL
 
     alias Strom.Sink.WriteLines
 
@@ -45,7 +47,7 @@ defmodule Strom.Examples.ParcelsTest do
       "#{parcel[:type]},#{DateTime.to_iso8601(parcel[:occurred_at])},#{parcel[:order_number]}"
     end
 
-    def topology(_) do
+    def components() do
       partitions = %{
         orders: &(&1[:type] == "ORDER_CREATED"),
         parcels: &(&1[:type] == "PARCEL_SHIPPED")
@@ -71,7 +73,7 @@ defmodule Strom.Examples.ParcelsTest do
     alias Strom.Source.ReadLines
     alias Strom.Sink.WriteLines
 
-    use Strom.DSL
+    import Strom.DSL
 
     @seconds_in_week 3600 * 24 * 7
 
@@ -182,7 +184,7 @@ defmodule Strom.Examples.ParcelsTest do
       "#{event[:type]},#{event[:order_number]},#{event[:occurred_at]}"
     end
 
-    def topology(_opts) do
+    def components() do
       [
         source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
         transform([:orders], &__MODULE__.build_order/1),
@@ -211,14 +213,14 @@ defmodule Strom.Examples.ParcelsTest do
   @parcels_count 1_000
 
   test "generate_data" do
-    GenData.start()
-    GenData.call(%{stream: List.duplicate(:tick, @parcels_count)})
-    GenData.stop()
+    gen_data = Composite.start(GenData.components())
+    Composite.call(%{stream: List.duplicate(:tick, @parcels_count)}, gen_data)
+    Composite.stop(gen_data)
   end
 
   test "solve" do
-    ParcelsFlow.start()
-    ParcelsFlow.call(%{})
+    parcels_flow = Composite.start(ParcelsFlow.components())
+    Composite.call(%{}, parcels_flow)
 
     shipped_length =
       "test/examples/parcels/all_parcels_shipped.csv"
@@ -236,6 +238,6 @@ defmodule Strom.Examples.ParcelsTest do
 
     assert shipped_length + threshold_length == @parcels_count
 
-    ParcelsFlow.stop()
+    Composite.stop(parcels_flow)
   end
 end

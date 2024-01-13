@@ -27,7 +27,7 @@ defmodule Strom.Transformer do
     transformer = %{
       transformer
       | buffer: Keyword.get(opts, :buffer, @buffer),
-        opts: if(length(opts) > 0, do: opts, else: Keyword.get(opts, :opts, []))
+        opts: if(length(transformer.opts) > 0, do: opts, else: Keyword.get(opts, :opts, []))
     }
 
     {:ok, pid} =
@@ -40,8 +40,8 @@ defmodule Strom.Transformer do
     __state__(pid)
   end
 
-  def start_link(%__MODULE__{} = state) do
-    GenServer.start_link(__MODULE__, state)
+  def start_link(%__MODULE__{} = transformer) do
+    GenServer.start_link(__MODULE__, transformer)
   end
 
   @impl true

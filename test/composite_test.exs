@@ -1,10 +1,10 @@
-defmodule Strom.TopologyTest do
+defmodule Strom.CompositeTest do
   use ExUnit.Case
-  alias Strom.{Mixer, Renamer, Sink, Source, Splitter, Topology, Transformer}
+  alias Strom.{Mixer, Renamer, Sink, Source, Splitter, Composite, Transformer}
   alias Strom.Sink.Null
 
-  defmodule MyTopology do
-    use Strom.DSL
+  defmodule MyComposite do
+    import Strom.DSL
     alias Strom.Sink.Null
 
     def components do
@@ -24,8 +24,8 @@ defmodule Strom.TopologyTest do
     end
   end
 
-  defmodule AnotherTopology do
-    use Strom.DSL
+  defmodule AnotherComposite do
+    import Strom.DSL
 
     def components do
       [
@@ -35,8 +35,8 @@ defmodule Strom.TopologyTest do
     end
   end
 
-  def check_alive(topology) do
-    [source1, source2, mixer, transformer, splitter, sink1] = topology.components
+  def check_alive(composite) do
+    [source1, source2, mixer, transformer, splitter, sink1] = composite.components
     assert Process.alive?(source1.pid)
     assert Process.alive?(source2.pid)
     assert Process.alive?(mixer.pid)
@@ -45,8 +45,8 @@ defmodule Strom.TopologyTest do
     assert Process.alive?(sink1.pid)
   end
 
-  def check_dead(topology) do
-    [source1, source2, mixer, transformer, splitter, sink1] = topology.components
+  def check_dead(composite) do
+    [source1, source2, mixer, transformer, splitter, sink1] = composite.components
     refute Process.alive?(source1.pid)
     refute Process.alive?(source2.pid)
     refute Process.alive?(mixer.pid)
@@ -71,37 +71,37 @@ defmodule Strom.TopologyTest do
         Sink.new(:odd, %Null{})
       ]
 
-      topology = Topology.start(components)
-      assert Process.alive?(topology.pid)
-      check_alive(topology)
+      composite = Composite.start(components)
+      assert Process.alive?(composite.pid)
+      check_alive(composite)
 
-      Topology.stop(topology)
-      refute Process.alive?(topology.pid)
-      check_dead(topology)
+      Composite.stop(composite)
+      refute Process.alive?(composite.pid)
+      check_dead(composite)
     end
   end
 
   describe "using dsl" do
     test "start and stop" do
-      topology = Topology.start(MyTopology.components())
-      assert Process.alive?(topology.pid)
-      check_alive(topology)
+      composite = Composite.start(MyComposite.components())
+      assert Process.alive?(composite.pid)
+      check_alive(composite)
 
-      Topology.stop(topology)
-      refute Process.alive?(topology.pid)
-      check_dead(topology)
+      Composite.stop(composite)
+      refute Process.alive?(composite.pid)
+      check_dead(composite)
     end
 
     test "call" do
-      topology = Topology.start(MyTopology.components())
-      flow = Topology.call(%{}, topology)
+      composite = Composite.start(MyComposite.components())
+      flow = Composite.call(%{}, composite)
       assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 6]
-      Topology.stop(topology)
+      Composite.stop(composite)
     end
 
     test "compose" do
-      topology = Topology.start(MyTopology.components())
-      another_topology = Topology.start(AnotherTopology.components())
+      composite = Composite.start(MyComposite.components())
+      another_composite = Composite.start(AnotherComposite.components())
 
       transformer =
         :even
@@ -115,21 +115,21 @@ defmodule Strom.TopologyTest do
 
       flow =
         %{}
-        |> Topology.call(topology)
+        |> Composite.call(composite)
         |> Transformer.call(transformer)
         |> Renamer.call(renamer)
-        |> Topology.call(another_topology)
+        |> Composite.call(another_composite)
 
       assert Enum.sort(Enum.to_list(flow[:more])) == [12, 18]
-      Topology.stop(topology)
-      Topology.stop(another_topology)
+      Composite.stop(composite)
+      Composite.stop(another_composite)
       Transformer.stop(transformer)
     end
   end
 
   describe "reuse topologies" do
-    defmodule Topology1 do
-      use Strom.DSL
+    defmodule Composite1 do
+      import Strom.DSL
 
       def comps do
         [
@@ -138,8 +138,8 @@ defmodule Strom.TopologyTest do
       end
     end
 
-    defmodule Topology2 do
-      use Strom.DSL
+    defmodule Composite2 do
+      import Strom.DSL
 
       def comps do
         [
@@ -149,24 +149,24 @@ defmodule Strom.TopologyTest do
     end
 
     test "compose" do
-      top11 = Topology.start(Topology1.comps())
-      top21 = Topology.start(Topology2.comps())
-      top12 = Topology.start(Topology1.comps())
-      top22 = Topology.start(Topology2.comps())
+      comp11 = Composite.start(Composite1.comps())
+      comp21 = Composite.start(Composite2.comps())
+      comp12 = Composite.start(Composite1.comps())
+      comp22 = Composite.start(Composite2.comps())
 
       flow =
         %{numbers: [1, 2, 3]}
-        |> Topology.call(top11)
-        |> Topology.call(top21)
-        |> Topology.call(top12)
-        |> Topology.call(top22)
+        |> Composite.call(comp11)
+        |> Composite.call(comp21)
+        |> Composite.call(comp12)
+        |> Composite.call(comp22)
 
       assert Enum.sort(Enum.to_list(flow[:numbers])) == [10, 14, 18]
 
-      Topology.stop(top11)
-      Topology.stop(top21)
-      Topology.stop(top12)
-      Topology.stop(top22)
+      Composite.stop(comp11)
+      Composite.stop(comp21)
+      Composite.stop(comp12)
+      Composite.stop(comp22)
     end
   end
 end

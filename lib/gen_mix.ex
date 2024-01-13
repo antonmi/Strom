@@ -114,7 +114,6 @@ defmodule Strom.GenMix do
     {:reply, flow, %{mix | running: true, producers: producers}}
   end
 
-
   def handle_call(:stop, _from, %__MODULE__{} = mix) do
     {:stop, :normal, :ok, %{mix | running: false}}
   end

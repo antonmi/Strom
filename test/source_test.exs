@@ -48,7 +48,7 @@ defmodule Strom.SourceTest do
     assert Enum.join(another_list, "\n") == File.read!("test/data/orders.csv")
   end
 
-  test "several sources for one stream", %{source: source} do
+  test "several sources for one stream" do
     source =
       :my_stream
       |> Source.new([4, 5, 6])

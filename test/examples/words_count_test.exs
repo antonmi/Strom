@@ -1,8 +1,10 @@
 defmodule Strom.Examples.WordsCountTest do
   use ExUnit.Case
 
-  defmodule WordsFlow do
-    use Strom.DSL
+  alias Strom.Composite
+
+  defmodule WordsCount do
+    import Strom.DSL
 
     alias Strom.Source.ReadLines
 
@@ -38,8 +40,13 @@ defmodule Strom.Examples.WordsCountTest do
       end
     end
 
-    def topology({file_name, count}) do
+    def components({file_name, count}) do
       all_names = Enum.map(1..count, &:"lines-#{&1}")
+
+      partitions =
+        Enum.reduce(all_names, %{}, fn name, acc ->
+          Map.put(acc, name, fn string -> :erlang.phash2(string, count) end)
+        end)
 
       dones =
         Enum.map(all_names, fn name ->
@@ -47,7 +54,8 @@ defmodule Strom.Examples.WordsCountTest do
         end)
 
       [
-        source(all_names, %ReadLines{path: file_name})
+        source(:file, %ReadLines{path: file_name}),
+        split(:file, partitions)
       ] ++
         dones ++
         [
@@ -60,11 +68,13 @@ defmodule Strom.Examples.WordsCountTest do
   end
 
   test "count" do
-    WordsFlow.start({"test/data/orders.csv", 10})
+    words_count = Composite.start(WordsCount.components({"test/data/orders.csv", 1}))
 
-    %{mixed: counts} = WordsFlow.call(%{})
+    %{mixed: counts} = Composite.call(%{}, words_count)
     [counts] = Enum.to_list(counts)
     assert counts["00"] == 214
     assert counts["order_created"] == 107
+
+    Composite.stop(words_count)
   end
 end
