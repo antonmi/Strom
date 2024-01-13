@@ -78,9 +78,10 @@ Under the hood, each operation is performed inside "components".
 Component is a separate process - GenServer.
 
 A component can be:
-- started - `start/0`, `start/1`
+- build - `new/2`, `new/3`
+- started - `start/1`
 - stopped - `stop/1` 
-- and called - `call/3` and `call/4`
+- and called - `call/2`
 
 #### Example
 Let's say one wants to stream a file:
@@ -89,10 +90,12 @@ Let's say one wants to stream a file:
 alias Strom.Source
 alias Strom.Source.ReadLines
 
-source = Source.start(%ReadLines{path: "input.txt"}) 
-# returns a struct %Source{pid: pid, origin: %ReadLines{}}
-
-%{lines: stream} = Source.call(%{}, source, :lines)
+source = 
+  :lines
+  |> Source.new(%ReadLines{path: "input.txt"})
+  |> Source.start() 
+  
+%{lines: stream} = Source.call(%{}, source)
 # adds the :lines stream to the empty flow (%{})
 
 Enum.to_list(stream) 
@@ -115,35 +118,43 @@ Then, for example, one wants to split the stream into two streams, one with shor
 ```elixir
 alias Strom.Splitter
 
-splitter = Splitter.start()
-# starts the splitter process
-
 parts = %{
-  long: fn event -> String.length(event) > 100 end,
-  short: fn event -> String.length(event) <= 100 end
+  long: &(String.length(&1) > 3),
+  short: &(String.length(&1) <= 3)
 }
 
-%{long: long, short: short} = 
-  Splitter.call(%{lines: stream}, splitter, :lines, parts)
+splitter = 
+    :lines
+    |> Splitter.new(parts)
+    |> Splitter.start()
 
-# Splits the :lines stream into the :long and :short streams based on rules defined in parts  
+stream = ["Hey", "World"]
+
+%{long: long, short: short} = Splitter.call(%{lines: stream}, splitter)
+
+# Splits the :lines stream into the :long and :short streams based on rules defined in parts
 ```
 
 And then, one wants to save the streams into two files:
 
 ```elixir
 alias Strom.Sink
+alias Strom.Sink.WriteLines
 
-sink_short = Sink.start(%WriteLines{path: "short.txt"})
-sink_long = Sink.start(%WriteLines{path: "long.txt"})
+sink_short = 
+  :short
+  |> Sink.new(%WriteLines{path: "short.txt"})
+  |> Sink.start()
 
-%{} =
+sink_long = 
+  :long
+  |> Sink.new(%WriteLines{path: "long.txt"})
+  |> Sink.start()
+
+%{} = 
   %{long: long, short: short}
-  |> Sink.call(sink_short, :short)
-  |> Sink.call(sink_long, :long, true)
-  
-# the first sink will run the stream aynchronously (using the Elixir Task)
-# the second sink (see `true` as the last argument) runs the stream synchronously
+  |> Sink.call(sink_short)
+  |> Sink.call(sink_long)  
 ```
 
 #### Transformer
@@ -153,20 +164,28 @@ Let's calculate the length of each string and produce a stream of numbers:
 ```elixir
 alias Strom.Transformer
 
-transformer = Transformer.start()
 function = &String.length(&1)
-%{short: short} =
-  %{short: short} 
-  |> Transformer.call(transformer, :short, function)
+
+transformer = 
+  :stream
+  |> Transformer.new(function)
+  |> Transformer.start()
+
+%{stream: stream} = Transformer.call(%{stream: ["Hey", "World"]} , transformer)
+
 # now the stream is the stream of numbers
 ```
 
 The function can be applied to several steams simultaneously:
 
 ```elixir
-%{short: short, long: long} =
-  %{short: short, long: long}
-  |> Transformer.call(transformer, [:short, :long], function)
+transformer = 
+  [:short, :long]
+  |> Transformer.new(function)
+  |> Transformer.start()
+  
+flow = %{short: ["Hey"], long: ["World"]}  
+%{short: short, long: long} = Transformer.call(flow, transformer)
 ```
 
 Transformer can operate 2-arity functions with accumulator.
@@ -185,98 +204,19 @@ function = fn event, acc ->
   {[event * acc, :new_event], acc + 1}   
 end
 
-transformer = Transformer.start()
+transformer = :events |> Transformer.new(function, 0) |> Transformer.start()
 
-%{events: stream} = Transformer.call(%{events: [1, 2, 3]}, transformer, :events, {function, 0})
+%{events: stream} = Transformer.call(%{events: [1, 2, 3]}, transformer)
 
 Enum.to_list(stream)
 # returns
 [0, :new_event, 2, :new_event, 6, :new_event]
 ```
 
-Let's consider the ["Telegram problem"](https://jpaulm.github.io/fbp/examples.html).
+### Strom.Composite and Strom.DSL
 
-The program accepts a stream of strings and should produce another stream of string with the length less then a specified value.
+Since the operations have a similar interface and behaviour, it's possible to compose them.
 
-The solution requires two components - decomposer and recomposer.
-The first will split strings into words. The second will "recompose" words into new strings
-
-The decomposer module is quite simple
-```elixir
-defmodule Decompose do
-  def call(event, nil) do
-    {String.split(event, ","), nil}
-  end
-end
-```
-
-The recomposer will store incoming words and when a line is ready, it will produce an event.
-```elixir
-defmodule Recompose do
-    @length 100
-    
-    def call(event, words) do
-    line = Enum.join(words, " ")
-    new_line = line <> " " <> event
-    
-    if String.length(new_line) > @length do
-      {[new_line], [event]}
-    else
-      {[], words ++ [event]}
-    end
-  end
-end
-```
-
-See [telegram_test.exs](https://github.com/antonmi/Strom/blob/main/test/examples/telegram_test.exs)
-
-It's also possible to parameterize the Transformer component by passing `opts` to its `start/1` function:
-
-```elixir
-alias Strom.Transformer
-
-function = fn event, acc, opts ->
-  {[event * acc], acc + opts[:inc]}   
-end
-
-transformer = Transformer.start(opts: %{inc: 1})
-
-%{events: stream} = Transformer.call(%{events: [1, 2, 3]}, transformer, :events, {function, 0})
-
-Enum.to_list(stream)
-# returns
-[0, 2, 6]
-```
-
-
-### Strom.DSL
-
-Since the operations have a similar interface and behaviour, it's possible to define the topology of calculation in a simple declarative way.
-
-Each component has a corresponding macro, see the [Strom.DSL](https://github.com/antonmi/Strom/blob/main/lib/dsl.ex) module and its tests.
-
-The topology form the first examples (with long and short strings) can be defined like that:
-
-```elixir
-defmodule MyFlow do
-  use Strom.DSL
-  alias Strom.Source.ReadLines
-  alias Strom.Sink.WriteLines
-  
-  def topology(_opts) do
-    parts = %{
-      long: fn event -> String.length(event) > 100 end,
-      short: fn event -> String.length(event) <= 100 end
-    }
-    
-    [
-      source(:lines, %ReadLines{path: "input.txt"}),
-      split(:lines, parts),
-      sink(:short, %WriteLines{path: "short.txt"}),
-      sink(:long, %WriteLines{path: "long.txt"})
-    ] 
-  end
-end
-```
+See [composite_test.exs](https://github.com/antonmi/Strom/blob/main/test/composite_test.exs).
 
 See more examples in tests.

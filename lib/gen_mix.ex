@@ -4,9 +4,9 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
+            inputs: [],
+            outputs: [],
             opts: [],
-            flow_pid: nil,
-            sup_pid: nil,
             running: false,
             buffer: @buffer,
             producers: %{},
@@ -22,17 +22,7 @@ defmodule Strom.GenMix do
       | buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
-    {:ok, pid} = DynamicSupervisor.start_child(gen_mix.sup_pid, {__MODULE__, gen_mix})
-    __state__(pid)
-  end
-
-  def start(opts) when is_list(opts) do
-    state = %__MODULE__{
-      buffer: Keyword.get(opts, :buffer, @buffer)
-    }
-
-    {:ok, pid} = GenServer.start_link(__MODULE__, state)
-    __state__(pid)
+    start_link(gen_mix)
   end
 
   def start_link(%__MODULE__{} = state) do
@@ -44,38 +34,13 @@ defmodule Strom.GenMix do
     {:ok, %{mix | pid: self()}}
   end
 
-  def call(flow, %__MODULE__{} = mix, inputs, outputs)
-      when is_map(flow) and is_map(inputs) and is_map(outputs) do
-    input_streams =
-      Enum.reduce(inputs, %{}, fn {name, fun}, acc ->
-        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
-      end)
-
-    sub_flow =
-      outputs
-      |> Enum.reduce(%{}, fn {name, fun}, flow ->
-        consumer = Consumer.start({name, fun}, mix.pid)
-        :ok = GenServer.call(mix.pid, {:register_consumer, {{name, fun}, consumer}})
-        stream = Consumer.call(consumer)
-        Map.put(flow, name, stream)
-      end)
-
-    :ok = GenServer.call(mix.pid, {:run_inputs, input_streams})
-
-    flow
-    |> Map.drop(Map.keys(inputs))
-    |> Map.merge(sub_flow)
+  def call(flow, pid) do
+    GenServer.call(pid, {:call, flow})
   end
 
-  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}) do
-    if sup_pid do
-      :ok
-    else
-      GenServer.call(pid, :stop)
-    end
+  def stop(pid) do
+    GenServer.call(pid, :stop)
   end
-
-  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp run_inputs(streams, pid, buffer) do
     Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
@@ -112,22 +77,36 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_call({:run_inputs, streams_to_mix}, _from, %__MODULE__{} = mix) do
-    producers = run_inputs(streams_to_mix, mix.pid, mix.buffer)
+  def handle_call({:call, flow}, _from, %__MODULE__{} = mix) do
+    input_streams =
+      Enum.reduce(mix.inputs, %{}, fn {name, fun}, acc ->
+        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
+      end)
 
-    {:reply, :ok, %{mix | running: true, producers: producers}}
-  end
+    {sub_flow, mix} =
+      mix.outputs
+      |> Enum.reduce({%{}, mix}, fn {name, fun}, {flow, mix} ->
+        consumer = Consumer.start({name, fun}, mix.pid)
 
-  def handle_call({:register_consumer, {{name, fun}, cons}}, _from, %__MODULE__{} = mix) do
-    mix = %{mix | consumers: Map.put(mix.consumers, {name, fun}, cons)}
-    {:reply, :ok, mix}
+        mix = %{mix | consumers: Map.put(mix.consumers, {name, fun}, consumer)}
+
+        stream = Consumer.call(consumer)
+        {Map.put(flow, name, stream), mix}
+      end)
+
+    producers = run_inputs(input_streams, mix.pid, mix.buffer)
+
+    flow =
+      flow
+      |> Map.drop(Map.keys(mix.inputs))
+      |> Map.merge(sub_flow)
+
+    {:reply, flow, %{mix | running: true, producers: producers}}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = mix) do
     {:stop, :normal, :ok, %{mix | running: false}}
   end
-
-  def handle_call(:__state__, _from, mix), do: {:reply, mix, mix}
 
   @impl true
   def handle_cast({:new_data, {_name, _fun}, chunk}, %__MODULE__{} = mix) do

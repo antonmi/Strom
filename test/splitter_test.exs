@@ -20,19 +20,36 @@ defmodule Strom.SplitterTest do
   end
 
   setup do
-    source1 = Source.start(%ReadLines{path: "test/data/orders.csv"})
-    source2 = Source.start(%ReadLines{path: "test/data/parcels.csv"})
+    source1 =
+      :orders
+      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.start()
+
+    source2 =
+      :parcels
+      |> Source.new(%ReadLines{path: "test/data/parcels.csv"})
+      |> Source.start()
 
     flow =
       %{}
-      |> Source.call(source1, :orders)
-      |> Source.call(source2, :parcels)
+      |> Source.call(source1)
+      |> Source.call(source2)
 
     %{flow: flow}
   end
 
+  test "start and stop" do
+    splitter = Splitter.start(Splitter.new(:s, [:s1, :s2]))
+    assert Process.alive?(splitter.pid)
+    :ok = Splitter.stop(splitter)
+    refute Process.alive?(splitter.pid)
+  end
+
   test "splitter with list of streams", %{flow: flow} do
-    splitter = Splitter.start([])
+    splitter =
+      :orders
+      |> Splitter.new(["111", "222", "333"])
+      |> Splitter.start()
 
     assert %{
              :parcels => parcels,
@@ -41,7 +58,7 @@ defmodule Strom.SplitterTest do
              "333" => stream3
            } =
              flow
-             |> Splitter.call(splitter, :orders, ["111", "222", "333"])
+             |> Splitter.call(splitter)
 
     task111 = Task.async(fn -> Enum.to_list(stream1) end)
     task222 = Task.async(fn -> Enum.to_list(stream2) end)
@@ -63,20 +80,21 @@ defmodule Strom.SplitterTest do
   end
 
   test "splitter with partitions", %{flow: flow} do
-    splitter = Splitter.start([])
+    splitter =
+      :orders
+      |> Splitter.new(%{
+        "111" => fn el -> String.contains?(el, ",111,") end,
+        "222" => fn el -> String.contains?(el, ",222,") end,
+        "333" => fn el -> String.contains?(el, ",333,") end
+      })
+      |> Splitter.start()
 
     assert %{
              :parcels => parcels,
              "111" => stream1,
              "222" => stream2,
              "333" => stream3
-           } =
-             flow
-             |> Splitter.call(splitter, :orders, %{
-               "111" => fn el -> String.contains?(el, ",111,") end,
-               "222" => fn el -> String.contains?(el, ",222,") end,
-               "333" => fn el -> String.contains?(el, ",333,") end
-             })
+           } = Splitter.call(flow, splitter)
 
     orders111 = Enum.to_list(stream1)
     orders222 = Enum.to_list(stream2)
@@ -90,12 +108,5 @@ defmodule Strom.SplitterTest do
     parcels = Enum.to_list(parcels)
     assert parcels -- original_parcels == []
     assert original_parcels -- parcels == []
-  end
-
-  test "stop" do
-    splitter = Splitter.start([])
-    assert Process.alive?(splitter.pid)
-    :ok = Splitter.stop(splitter)
-    refute Process.alive?(splitter.pid)
   end
 end

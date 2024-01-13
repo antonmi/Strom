@@ -1,26 +1,34 @@
 defmodule Strom.Examples.SimpleNumbersTest do
   use ExUnit.Case
 
-  alias Strom.{Mixer, Splitter, Transformer}
+  alias Strom.{Composite, Mixer, Splitter, Transformer}
 
   test "simple numbers" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10]}
 
-    mixer = Mixer.start()
-    splitter = Splitter.start()
+    mixer =
+      [:numbers1, :numbers2]
+      |> Mixer.new(:number)
+      |> Mixer.start()
 
-    partitions = %{
-      odd: fn el -> rem(el, 2) == 1 end,
-      even: fn el -> rem(el, 2) == 0 end
-    }
+    splitter =
+      :number
+      |> Splitter.new(%{
+        odd: fn el -> rem(el, 2) == 1 end,
+        even: fn el -> rem(el, 2) == 0 end
+      })
+      |> Splitter.start()
 
-    transformer = Transformer.start()
+    transformer =
+      :number
+      |> Transformer.new(&(&1 + 1))
+      |> Transformer.start()
 
     %{odd: odd, even: even} =
       flow
-      |> Mixer.call(mixer, [:numbers1, :numbers2], :number)
-      |> Transformer.call(transformer, :number, &(&1 + 1))
-      |> Splitter.call(splitter, :number, partitions)
+      |> Mixer.call(mixer)
+      |> Transformer.call(transformer)
+      |> Splitter.call(splitter)
 
     assert Enum.sort(Enum.to_list(odd)) == [3, 5, 7, 9, 11]
     assert Enum.sort(Enum.to_list(even)) == [2, 4, 6, 8, 10]
@@ -28,7 +36,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
 
   describe "round robin mixer" do
     defmodule RoundRobin do
-      use Strom.DSL
+      import Strom.DSL
 
       def add_label(event, label) do
         {[{event, label}], label}
@@ -47,7 +55,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
         end
       end
 
-      def topology(_opts) do
+      def components() do
         [
           transform(:first, &__MODULE__.add_label/2, :first),
           transform(:second, &__MODULE__.add_label/2, :second),
@@ -58,11 +66,11 @@ defmodule Strom.Examples.SimpleNumbersTest do
     end
 
     test "test the order of numbers" do
-      RoundRobin.start()
+      round_robin = Composite.start(RoundRobin.components())
 
       %{mixed: mixed} =
         %{first: [1, 2, 3], second: [10, 20, 30]}
-        |> RoundRobin.call()
+        |> Composite.call(round_robin)
 
       case Enum.to_list(mixed) do
         [1 | rest] ->
@@ -71,12 +79,14 @@ defmodule Strom.Examples.SimpleNumbersTest do
         [10 | rest] ->
           assert rest == [1, 20, 2, 30, 3]
       end
+
+      Composite.stop(round_robin)
     end
   end
 
   describe "round robin mixer with many streams" do
     defmodule RoundRobinMany do
-      use Strom.DSL
+      import Strom.DSL
 
       def add_label(event, label) do
         {[{event, label}], label}
@@ -96,7 +106,7 @@ defmodule Strom.Examples.SimpleNumbersTest do
         end
       end
 
-      def topology(names) do
+      def components(names) do
         Enum.map(names, fn name ->
           transform(name, &__MODULE__.add_label/2, name)
         end) ++
@@ -108,11 +118,11 @@ defmodule Strom.Examples.SimpleNumbersTest do
     end
 
     test "test the order of numbers" do
-      RoundRobinMany.start([:first, :second, :third])
+      round_robin_many = Composite.start(RoundRobinMany.components([:first, :second, :third]))
 
       %{mixed: mixed} =
         %{first: [1, 2, 3], second: [10, 20, 30], third: [100, 200, 300]}
-        |> RoundRobinMany.call()
+        |> Composite.call(round_robin_many)
 
       mixed = Enum.to_list(mixed)
       assert length(mixed) == 9
@@ -126,6 +136,8 @@ defmodule Strom.Examples.SimpleNumbersTest do
       assert Enum.member?(last, 3)
       assert Enum.member?(last, 30)
       assert Enum.member?(last, 300)
+
+      Composite.stop(round_robin_many)
     end
   end
 end

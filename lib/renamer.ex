@@ -1,11 +1,15 @@
 defmodule Strom.Renamer do
-  defstruct []
+  defstruct names: %{}
 
-  def start() do
-    %__MODULE__{}
+  def new(names) when is_map(names) and map_size(names) > 0 do
+    %__MODULE__{names: names}
   end
 
-  def call(flow, names) when is_map(names) do
+  def start(%__MODULE__{names: names} = renamer) when is_map(names) and map_size(names) > 0 do
+    renamer
+  end
+
+  def call(flow, %__MODULE__{names: names}) do
     Enum.reduce(names, flow, fn {name, new_name}, acc ->
       acc
       |> Map.put(new_name, Map.fetch!(acc, name))
