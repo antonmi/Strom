@@ -8,42 +8,35 @@ defmodule Strom.Transformer do
             buffer: @buffer,
             function: nil,
             acc: nil,
-            opts: nil,
-            inputs: [],
+            opts: [],
+            names: [],
             sup_pid: nil,
             flow_pid: nil,
             tasks: %{},
             data: %{}
 
-  def new(inputs, function, acc \\ nil, opts \\ []) do
+  def new(names, function, acc \\ nil) do
     %__MODULE__{
       function: function,
       acc: acc,
-      opts: opts,
-      inputs: inputs
+      names: names
     }
   end
 
-  def start(args \\ [])
-
-  def start(%__MODULE__{opts: opts, sup_pid: sup_pid} = transformer) do
+  def start(%__MODULE__{sup_pid: sup_pid} = transformer, opts \\ []) do
     transformer = %{
       transformer
       | buffer: Keyword.get(opts, :buffer, @buffer),
-        opts: Keyword.get(opts, :opts, nil)
+        opts: if(length(opts) > 0, do: opts, else: Keyword.get(opts, :opts, []))
     }
 
-    {:ok, pid} = DynamicSupervisor.start_child(sup_pid, {__MODULE__, transformer})
-    __state__(pid)
-  end
+    {:ok, pid} =
+      if sup_pid do
+        DynamicSupervisor.start_child(sup_pid, {__MODULE__, transformer})
+      else
+        start_link(transformer)
+      end
 
-  def start(opts) when is_list(opts) do
-    state = %__MODULE__{
-      buffer: Keyword.get(opts, :buffer, @buffer),
-      opts: Keyword.get(opts, :opts, nil)
-    }
-
-    {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
   end
 
@@ -56,7 +49,7 @@ defmodule Strom.Transformer do
     {:ok, %{call | pid: self()}}
   end
 
-  def call(flow, %__MODULE__{} = transformer, names, {function, acc})
+  def call(flow, %__MODULE__{names: names, function: function, acc: acc} = transformer)
       when is_map(flow) and is_function(function, 3) do
     names = if is_list(names), do: names, else: [names]
 
@@ -102,16 +95,18 @@ defmodule Strom.Transformer do
     |> Map.merge(sub_flow)
   end
 
-  def call(flow, %__MODULE__{} = transformer, names, {function, acc})
+  def call(flow, %__MODULE__{function: function} = transformer)
       when is_map(flow) and is_function(function, 2) do
-    fun = fn el, acc, nil -> function.(el, acc) end
-    call(flow, transformer, names, {fun, acc})
+    fun = fn el, acc, [] -> function.(el, acc) end
+    transformer = %{transformer | function: fun}
+    call(flow, transformer)
   end
 
-  def call(flow, %__MODULE__{} = transformer, names, function)
+  def call(flow, %__MODULE__{function: function} = transformer)
       when is_map(flow) and is_function(function, 1) do
-    fun = fn el, nil, nil -> {[function.(el)], nil} end
-    call(flow, transformer, names, {fun, nil})
+    fun = fn el, nil, [] -> {[function.(el)], nil} end
+    transformer = %{transformer | function: fun}
+    call(flow, transformer)
   end
 
   def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}) do

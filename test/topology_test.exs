@@ -39,9 +39,9 @@ defmodule Strom.TopologyTest do
     [source1, source2, mixer, transformer, splitter, sink1] = topology.components
     assert Process.alive?(source1.pid)
     assert Process.alive?(source2.pid)
-    assert Process.alive?(mixer.gen_mix.pid)
+    assert Process.alive?(mixer.pid)
     assert Process.alive?(transformer.pid)
-    assert Process.alive?(splitter.gen_mix.pid)
+    assert Process.alive?(splitter.pid)
     assert Process.alive?(sink1.pid)
   end
 
@@ -49,9 +49,9 @@ defmodule Strom.TopologyTest do
     [source1, source2, mixer, transformer, splitter, sink1] = topology.components
     refute Process.alive?(source1.pid)
     refute Process.alive?(source2.pid)
-    refute Process.alive?(mixer.gen_mix.pid)
+    refute Process.alive?(mixer.pid)
     refute Process.alive?(transformer.pid)
-    refute Process.alive?(splitter.gen_mix.pid)
+    refute Process.alive?(splitter.pid)
     refute Process.alive?(sink1.pid)
   end
 
@@ -102,13 +102,21 @@ defmodule Strom.TopologyTest do
     test "compose" do
       topology = Topology.start(MyTopology.components())
       another_topology = Topology.start(AnotherTopology.components())
-      transformer = Transformer.start()
-      renamer = Renamer.start(%{even: :numbers})
+
+      transformer =
+        :even
+        |> Transformer.new(&(&1 * 3))
+        |> Transformer.start()
+
+      renamer =
+        %{even: :numbers}
+        |> Renamer.new()
+        |> Renamer.start()
 
       flow =
         %{}
         |> Topology.call(topology)
-        |> Transformer.call(transformer, :even, &(&1 * 3))
+        |> Transformer.call(transformer)
         |> Renamer.call(renamer)
         |> Topology.call(another_topology)
 

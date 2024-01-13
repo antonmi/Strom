@@ -1,42 +1,53 @@
 defmodule Strom.Mixer do
   alias Strom.GenMix
 
-  defstruct [:gen_mix, :inputs, :output, :opts, :flow_pid, :sup_pid]
+  defstruct pid: nil,
+            inputs: [],
+            output: nil,
+            opts: [],
+            flow_pid: nil,
+            sup_pid: nil
 
-  def new(inputs, output, opts \\ []) do
-    unless is_list(inputs) do
-      raise "Mixer sources must be a list, given: #{inspect(inputs)}"
-    end
-
-    %__MODULE__{inputs: inputs, output: output, opts: opts}
+  def new(inputs, output)
+      when is_list(inputs) or (is_map(inputs) and map_size(inputs) > 0) do
+    %__MODULE__{inputs: inputs, output: output}
   end
 
-  def start(args \\ [])
-
-  def start(%__MODULE__{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid} = mixer) do
-    gen_mix = %GenMix{opts: opts, flow_pid: flow_pid, sup_pid: sup_pid}
-    GenMix.start(gen_mix)
-  end
-
-  def start(opts) when is_list(opts) do
-    GenMix.start(opts)
-  end
-
-  def call(flow, %__MODULE__{gen_mix: mix}, to_mix, name) when is_map(flow) and is_list(to_mix) do
+  def start(
+        %__MODULE__{
+          inputs: inputs,
+          output: output,
+          flow_pid: flow_pid,
+          sup_pid: sup_pid
+        } = mixer,
+        opts \\ []
+      ) do
     inputs =
-      Enum.reduce(to_mix, %{}, fn name, acc ->
-        Map.put(acc, name, fn _el -> true end)
-      end)
+      if is_list(inputs) do
+        Enum.reduce(inputs, %{}, fn name, acc ->
+          Map.put(acc, name, fn _el -> true end)
+        end)
+      else
+        inputs
+      end
 
-    outputs = %{name => fn _el -> true end}
+    outputs = %{output => fn _el -> true end}
 
-    GenMix.call(flow, mix, inputs, outputs)
+    gen_mix = %GenMix{
+      inputs: inputs,
+      outputs: outputs,
+      opts: opts,
+      flow_pid: flow_pid,
+      sup_pid: sup_pid
+    }
+
+    {:ok, pid} = GenMix.start(gen_mix)
+    %{mixer | pid: pid, opts: opts}
   end
 
-  def call(flow, %__MODULE__{gen_mix: mix}, to_mix, name) when is_map(flow) and is_map(to_mix) do
-    outputs = %{name => fn _el -> true end}
-    GenMix.call(flow, mix, to_mix, outputs)
+  def call(flow, %__MODULE__{pid: pid}) do
+    GenMix.call(flow, pid)
   end
 
-  def stop(%__MODULE__{gen_mix: mix}), do: GenMix.stop(mix)
+  def stop(%__MODULE__{pid: pid, sup_pid: sup_pid}), do: GenMix.stop(pid, sup_pid)
 end

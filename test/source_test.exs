@@ -5,8 +5,11 @@ defmodule Strom.SourceTest do
   alias Strom.Source.ReadLines
 
   setup do
-    path = "test/data/orders.csv"
-    source = Source.start(%ReadLines{path: path})
+    source =
+      :my_stream
+      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.start()
+
     %{source: source}
   end
 
@@ -22,18 +25,21 @@ defmodule Strom.SourceTest do
   end
 
   test "stream lines", %{source: source} do
-    %{my_stream: stream} = Source.call(%{}, source, :my_stream)
+    %{my_stream: stream} = Source.call(%{}, source)
     lines = Enum.to_list(stream)
     assert Enum.join(lines, "\n") == File.read!("test/data/orders.csv")
   end
 
   test "several sources", %{source: source} do
-    another_source = Source.start(%ReadLines{path: "test/data/orders.csv"})
+    another_source =
+      :another_stream
+      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.start()
 
     %{my_stream: stream, another_stream: another_stream} =
       %{}
-      |> Source.call(source, :my_stream)
-      |> Source.call(another_source, :another_stream)
+      |> Source.call(source)
+      |> Source.call(another_source)
 
     list = Enum.to_list(stream)
     another_list = Enum.to_list(another_stream)
@@ -43,34 +49,14 @@ defmodule Strom.SourceTest do
   end
 
   test "several sources for one stream", %{source: source} do
-    %{my_stream: stream} =
-      Source.call(%{my_stream: [1, 2, 3]}, source, :my_stream)
+    source =
+      :my_stream
+      |> Source.new([4, 5, 6])
+      |> Source.start()
 
-    lines = Enum.to_list(stream)
-    assert Enum.member?(lines, 1)
-    assert Enum.member?(lines, 2)
-    assert Enum.member?(lines, 3)
-  end
+    %{my_stream: stream} = Source.call(%{my_stream: [1, 2, 3]}, source)
 
-  test "apply source to several streams", %{source: source} do
-    %{stream1: stream1, stream2: stream2} = Source.call(%{}, source, [:stream1, :stream2])
-
-    lines1 = Enum.to_list(stream1)
-    lines2 = Enum.to_list(stream2)
-
-    assert Enum.join(lines1 ++ lines2, "\n") == File.read!("test/data/orders.csv")
-  end
-
-  test "stop", %{source: source} do
-    assert Source.stop(source) == :ok
-    refute Process.alive?(source.pid)
-  end
-
-  describe "events source" do
-    test "events" do
-      source = Source.start([1, 2, 3])
-      %{events: events} = Source.call(%{events: [0]}, source, :events)
-      assert Enum.to_list(events) == [0, 1, 2, 3]
-    end
+    numbers = Enum.to_list(stream)
+    assert Enum.sort(numbers) == [1, 2, 3, 4, 5, 6]
   end
 end

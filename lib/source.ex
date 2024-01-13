@@ -7,17 +7,17 @@ defmodule Strom.Source do
   use GenServer
 
   defstruct origin: nil,
-            names: [],
+            name: nil,
             pid: nil,
             flow_pid: nil,
             sup_pid: nil
 
-  def new(names, origin) do
+  def new(name, origin) do
     unless is_struct(origin) or is_list(origin) do
       raise "Source origin must be a struct or just simple list, given: #{inspect(origin)}"
     end
 
-    %__MODULE__{origin: origin, names: names}
+    %__MODULE__{origin: origin, name: name}
   end
 
   def start(%__MODULE__{origin: list} = source) when is_list(list) do
@@ -27,19 +27,14 @@ defmodule Strom.Source do
   def start(%__MODULE__{origin: origin} = source) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
     source = %{source | origin: origin}
-    {:ok, pid} = DynamicSupervisor.start_child(source.sup_pid, {__MODULE__, source})
-    __state__(pid)
-  end
 
-  def start(list) when is_list(list) do
-    start(%Strom.Source.Events{events: list})
-  end
+    {:ok, pid} =
+      if source.sup_pid do
+        DynamicSupervisor.start_child(source.sup_pid, {__MODULE__, source})
+      else
+        start_link(source)
+      end
 
-  def start(origin) when is_struct(origin) do
-    origin = apply(origin.__struct__, :start, [origin])
-    state = %__MODULE__{origin: origin}
-
-    {:ok, pid} = GenServer.start_link(__MODULE__, state)
     __state__(pid)
   end
 
@@ -64,25 +59,16 @@ defmodule Strom.Source do
     end
   end
 
-  def call(flow, %__MODULE__{} = source, names) when is_map(flow) and is_list(names) do
-    sub_flow =
-      Enum.reduce(names, %{}, fn name, acc ->
-        stream =
-          Stream.resource(
-            fn -> source end,
-            fn source -> call(source) end,
-            fn source -> source end
-          )
+  def call(flow, %__MODULE__{name: name} = source) when is_map(flow) do
+    stream =
+      Stream.resource(
+        fn -> source end,
+        fn source -> call(source) end,
+        fn source -> source end
+      )
 
-        prev_stream = Map.get(flow, name, [])
-        Map.put(acc, name, Stream.concat(prev_stream, stream))
-      end)
-
-    Map.merge(flow, sub_flow)
-  end
-
-  def call(flow, source, name) when is_map(flow) do
-    call(flow, source, [name])
+    prev_stream = Map.get(flow, name, [])
+    Map.put(flow, name, Stream.concat(prev_stream, stream))
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

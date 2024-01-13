@@ -1,55 +1,55 @@
 defmodule Strom.DSL do
-  defmacro source(names, origin) do
+  defmacro source(name, origin) do
     quote do
       unless is_struct(unquote(origin)) or is_list(unquote(origin)) do
         raise "Source origin must be a struct or just simple list, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.Source{origin: unquote(origin), names: unquote(names)}
+      %Strom.Source{origin: unquote(origin), name: unquote(name)}
     end
   end
 
-  defmacro sink(names, origin, sync \\ false) do
+  defmacro sink(name, origin, sync \\ false) do
     quote do
       unless is_struct(unquote(origin)) do
         raise "Sink origin must be a struct, given: #{inspect(unquote(origin))}"
       end
 
-      %Strom.Sink{origin: unquote(origin), names: unquote(names), sync: unquote(sync)}
+      %Strom.Sink{origin: unquote(origin), name: unquote(name), sync: unquote(sync)}
     end
   end
 
   defmacro mix(inputs, output, opts \\ []) do
     quote do
-      unless is_list(unquote(inputs)) do
-        raise "Mixer sources must be a list, given: #{inspect(unquote(inputs))}"
+      unless is_list(unquote(inputs)) or is_map(unquote(inputs)) do
+        raise "Mixer sources must be a list or map, given: #{inspect(unquote(inputs))}"
       end
 
       %Strom.Mixer{inputs: unquote(inputs), output: unquote(output), opts: unquote(opts)}
     end
   end
 
-  defmacro split(input, partitions, opts \\ []) do
+  defmacro split(input, outputs, opts \\ []) do
     quote do
-      unless is_map(unquote(partitions)) and map_size(unquote(partitions)) > 0 do
-        raise "Branches in splitter must be a map, given: #{inspect(unquote(partitions))}"
+      unless is_map(unquote(outputs)) and map_size(unquote(outputs)) > 0 do
+        raise "Branches in splitter must be a map, given: #{inspect(unquote(outputs))}"
       end
 
       %Strom.Splitter{
         input: unquote(input),
-        partitions: unquote(partitions),
+        outputs: unquote(outputs),
         opts: unquote(opts)
       }
     end
   end
 
-  defmacro transform(inputs, function, acc \\ nil, opts \\ []) do
+  defmacro transform(names, function, acc \\ nil, opts \\ []) do
     quote do
       %Strom.Transformer{
         function: unquote(function),
         acc: unquote(acc),
         opts: unquote(opts),
-        inputs: unquote(inputs)
+        names: unquote(names)
       }
     end
   end

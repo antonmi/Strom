@@ -28,24 +28,23 @@ defmodule Strom.Topology do
     components
     |> Enum.map(fn component ->
       case component do
-        %Strom.Source{origin: origin, names: names} ->
-          %{Strom.Source.start(origin) | names: names}
+        %Strom.Source{} = source ->
+          Strom.Source.start(source)
 
-        %Strom.Sink{origin: origin, names: names} ->
-          %{Strom.Sink.start(origin) | names: names}
+        %Strom.Sink{} = sink ->
+          Strom.Sink.start(sink)
 
         %Strom.Mixer{opts: opts} = mixer ->
-          %{mixer | gen_mix: Strom.Mixer.start(opts)}
+          Strom.Mixer.start(mixer, opts)
 
-        %Strom.Splitter{opts: opts} = split ->
-          %{split | gen_mix: Strom.Splitter.start(opts)}
+        %Strom.Splitter{opts: opts} = splitter ->
+          Strom.Splitter.start(splitter, opts)
 
-        %Strom.Transformer{opts: opts, function: function, acc: acc, inputs: inputs}
-        when is_list(opts) ->
-          %{Strom.Transformer.start(opts) | function: function, acc: acc, inputs: inputs}
+        %Strom.Transformer{opts: opts} = transformer when is_list(opts) ->
+          Strom.Transformer.start(transformer, opts)
 
-        %Strom.Renamer{names: names} ->
-          Strom.Renamer.start(names)
+        %Strom.Renamer{} = renamer ->
+          Strom.Renamer.start(renamer)
       end
     end)
   end
@@ -63,24 +62,20 @@ defmodule Strom.Topology do
     flow =
       Enum.reduce(topology.components, init_flow, fn component, flow ->
         case component do
-          %Strom.Source{names: names} = source ->
-            Strom.Source.call(flow, source, names)
+          %Strom.Source{} = source ->
+            Strom.Source.call(flow, source)
 
-          %Strom.Sink{names: names, sync: sync} = sink ->
-            Strom.Sink.call(flow, sink, names, sync)
+          %Strom.Sink{} = sink ->
+            Strom.Sink.call(flow, sink)
 
-          %Strom.Mixer{inputs: inputs, output: output} = mixer ->
-            Strom.Mixer.call(flow, mixer, inputs, output)
+          %Strom.Mixer{} = mixer ->
+            Strom.Mixer.call(flow, mixer)
 
-          %Strom.Splitter{input: input, partitions: partitions} = splitter ->
-            Strom.Splitter.call(flow, splitter, input, partitions)
+          %Strom.Splitter{} = splitter ->
+            Strom.Splitter.call(flow, splitter)
 
-          %Strom.Transformer{function: function, acc: acc, inputs: inputs} = transformer ->
-            if is_function(function, 1) do
-              Strom.Transformer.call(flow, transformer, inputs, function)
-            else
-              Strom.Transformer.call(flow, transformer, inputs, {function, acc})
-            end
+          %Strom.Transformer{} = transformer ->
+            Strom.Transformer.call(flow, transformer)
 
           %Strom.Renamer{} = renamer ->
             Strom.Renamer.call(flow, renamer)
