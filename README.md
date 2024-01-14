@@ -1,6 +1,6 @@
 # Strom
 
-## Composable primitives for processing streams of data.
+## Composable components for stream processing.
 
 Strom provides a set of abstractions for creating, routing and modifying streams of data.
 

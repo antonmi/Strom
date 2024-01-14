@@ -1,13 +1,13 @@
 defmodule Strom.Renamer do
   @moduledoc """
-    Renames streams in flow.
+  Renames streams in flow.
 
-    ## Example
-    iex> alias Strom.Renamer
-    iex> flow = %{s1: [1], s2: [2]}
-    iex> renamer = %{s1: :foo1, s2: :foo2} |> Renamer.new() |> Renamer.start()
-    iex> Renamer.call(flow, renamer)
-    %{foo1: [1], foo2: [2]}
+      ## Example
+      iex> alias Strom.Renamer
+      iex> flow = %{s1: [1], s2: [2]}
+      iex> renamer = %{s1: :foo1, s2: :foo2} |> Renamer.new() |> Renamer.start()
+      iex> Renamer.call(flow, renamer)
+      %{foo1: [1], foo2: [2]}
   """
   defstruct names: %{}
 

@@ -1,18 +1,18 @@
 defmodule Strom.Sink do
   @moduledoc """
-    Runs a given steam and `call` origin on each even in stream.
-    By default it runs the stream asynchronously (in `Task.async`).
-    One can pass `true` a the third argument to the `Sink.new/3` function to run a stream synchronously.
+  Runs a given steam and `call` origin on each even in stream.
+  By default it runs the stream asynchronously (in `Task.async`).
+  One can pass `true` a the third argument to the `Sink.new/3` function to run a stream synchronously.
 
-    ## Example
-    iex> alias Strom.{Sink, Sink.WriteLines}
-    iex> sink = :strings |> Sink.new(WriteLines.new("test/data/sink.txt"), true) |> Sink.start()
-    iex> %{} = Sink.call(%{strings: ["a", "b", "c"]}, sink)
-    iex> File.read!("test/data/sink.txt")
-    "a\\nb\\nc\\n"
+      ## Example
+      iex> alias Strom.{Sink, Sink.WriteLines}
+      iex> sink = :strings |> Sink.new(WriteLines.new("test/data/sink.txt"), true) |> Sink.start()
+      iex> %{} = Sink.call(%{strings: ["a", "b", "c"]}, sink)
+      iex> File.read!("test/data/sink.txt")
+      "a\\nb\\nc\\n"
 
-    Sink defines a `@behaviour`. One can easily implement their own sinks.
-    See `Strom.Sink.Writeline`, `Strom.Sink.IOPuts`, `Strom.Sink.Null`
+  Sink defines a `@behaviour`. One can easily implement their own sinks.
+  See `Strom.Sink.Writeline`, `Strom.Sink.IOPuts`, `Strom.Sink.Null`
   """
   @callback start(map) :: map
   @callback call(map, term) :: {:ok, {term, map}} | {:error, {term, map}}

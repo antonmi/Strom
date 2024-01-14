@@ -1,4 +1,8 @@
 defmodule Strom.Topology do
+  @moduledoc """
+  Runs set of components. Restarts all of them in case of crash.
+  """
+
   defstruct pid: nil,
             module: nil,
             opts: [],

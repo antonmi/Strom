@@ -1,23 +1,23 @@
 defmodule Strom.Mixer do
   @moduledoc """
-    Mix several streams into one. Use Strom.GenMix under the hood
+  Mix several streams into one. Use Strom.GenMix under the hood
 
-    ## Example
-    iex> alias Strom.Mixer
-    iex> mixer = [:s1, :s2] |> Mixer.new(:stream) |> Mixer.start()
-    iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
-    iex> %{stream: stream} = Mixer.call(flow, mixer)
-    iex> stream |> Enum.to_list() |> Enum.sort()
-    [1, 2, 3, 4, 5, 6]
+      ## Example
+      iex> alias Strom.Mixer
+      iex> mixer = [:s1, :s2] |> Mixer.new(:stream) |> Mixer.start()
+      iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
+      iex> %{stream: stream} = Mixer.call(flow, mixer)
+      iex> stream |> Enum.to_list() |> Enum.sort()
+      [1, 2, 3, 4, 5, 6]
 
-    ## Can also accept a map with functions as values. Works like "filter".
-    iex> alias Strom.Mixer
-    iex> inputs = %{s1: &(rem(&1, 2) == 0), s2: &(rem(&1, 2) == 1)}
-    iex> mixer = inputs |> Mixer.new(:stream) |> Mixer.start()
-    iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
-    iex> %{stream: stream} = Mixer.call(flow, mixer)
-    iex> stream |> Enum.to_list() |> Enum.sort()
-    [2, 5]
+      ## Can also accept a map with functions as values. Works like "filter".
+      iex> alias Strom.Mixer
+      iex> inputs = %{s1: &(rem(&1, 2) == 0), s2: &(rem(&1, 2) == 1)}
+      iex> mixer = inputs |> Mixer.new(:stream) |> Mixer.start()
+      iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
+      iex> %{stream: stream} = Mixer.call(flow, mixer)
+      iex> stream |> Enum.to_list() |> Enum.sort()
+      [2, 5]
   """
   alias Strom.GenMix
 

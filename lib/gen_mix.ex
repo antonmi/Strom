@@ -1,6 +1,6 @@
 defmodule Strom.GenMix do
   @moduledoc """
-    Generic functionality used by `Strom.Mixer` and `Strom.Splitter'
+  Generic functionality used by `Strom.Mixer` and `Strom.Splitter`.
   """
 
   use GenServer

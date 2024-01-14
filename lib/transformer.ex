@@ -1,32 +1,32 @@
 defmodule Strom.Transformer do
   @moduledoc """
-    Transforms a stream or several streams.
-    It works as Stream.map/2 or Stream.transform/3.
+  Transforms a stream or several streams.
+  It works as Stream.map/2 or Stream.transform/3.
 
-    ## `map` example:
-    iex> alias Strom.Transformer
-    iex> transformer = :numbers |> Transformer.new(&(&1*2)) |> Transformer.start()
-    iex> flow = %{numbers: [1, 2, 3]}
-    iex> %{numbers: stream} = Transformer.call(flow, transformer)
-    iex> Enum.to_list(stream)
-    [2, 4, 6]
+      ## `map` example:
+      iex> alias Strom.Transformer
+      iex> transformer = :numbers |> Transformer.new(&(&1*2)) |> Transformer.start()
+      iex> flow = %{numbers: [1, 2, 3]}
+      iex> %{numbers: stream} = Transformer.call(flow, transformer)
+      iex> Enum.to_list(stream)
+      [2, 4, 6]
 
-    ## `transform` example:
-    iex> alias Strom.Transformer
-    iex> fun = fn el, acc -> {[el, acc], acc + 10} end
-    iex> transformer = :numbers |> Transformer.new(fun, 10) |> Transformer.start()
-    iex> flow = %{numbers: [1, 2, 3]}
-    iex> %{numbers: stream} = Transformer.call(flow, transformer)
-    iex> Enum.to_list(stream)
-    [1, 10, 2, 20, 3, 30]
+      ## `transform` example:
+      iex> alias Strom.Transformer
+      iex> fun = fn el, acc -> {[el, acc], acc + 10} end
+      iex> transformer = :numbers |> Transformer.new(fun, 10) |> Transformer.start()
+      iex> flow = %{numbers: [1, 2, 3]}
+      iex> %{numbers: stream} = Transformer.call(flow, transformer)
+      iex> Enum.to_list(stream)
+      [1, 10, 2, 20, 3, 30]
 
-    ## it can be applied to several streams:
-    iex> alias Strom.Transformer
-    iex> transformer = [:s1, :s2] |> Transformer.new(&(&1*2)) |> Transformer.start()
-    iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
-    iex> %{s1: s1, s2: s2} = Transformer.call(flow, transformer)
-    iex> {Enum.to_list(s1), Enum.to_list(s2)}
-    {[2, 4, 6], [8, 10, 12]}
+      ## it can be applied to several streams:
+      iex> alias Strom.Transformer
+      iex> transformer = [:s1, :s2] |> Transformer.new(&(&1*2)) |> Transformer.start()
+      iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
+      iex> %{s1: s1, s2: s2} = Transformer.call(flow, transformer)
+      iex> {Enum.to_list(s1), Enum.to_list(s2)}
+      {[2, 4, 6], [8, 10, 12]}
   """
 
   use GenServer

@@ -1,31 +1,31 @@
 defmodule Strom.Source do
   @moduledoc """
-    Produces stream of events.
+  Produces stream of events.
 
-    ## Example with Enumerable
-    iex> alias Strom.Source
-    iex> source = :numbers |> Source.new([1, 2, 3]) |> Source.start()
-    iex> %{numbers: stream} = Source.call(%{}, source)
-    iex> Enum.to_list(stream)
-    [1, 2, 3]
+      ## Example with Enumerable
+      iex> alias Strom.Source
+      iex> source = :numbers |> Source.new([1, 2, 3]) |> Source.start()
+      iex> %{numbers: stream} = Source.call(%{}, source)
+      iex> Enum.to_list(stream)
+      [1, 2, 3]
 
-    ## Example with file
-    iex> alias Strom.{Source, Source.ReadLines}
-    iex> source = :numbers |> Source.new(ReadLines.new("test/data/numbers1.txt")) |> Source.start()
-    iex> %{numbers: stream} = Source.call(%{}, source)
-    iex> Enum.to_list(stream)
-    ["1", "2", "3", "4", "5"]
+      ## Example with file
+      iex> alias Strom.{Source, Source.ReadLines}
+      iex> source = :numbers |> Source.new(ReadLines.new("test/data/numbers1.txt")) |> Source.start()
+      iex> %{numbers: stream} = Source.call(%{}, source)
+      iex> Enum.to_list(stream)
+      ["1", "2", "3", "4", "5"]
 
-    ## If two sources are applied to one stream, the streams will be concatenated (Stream.concat/2)
-    iex> alias Strom.{Source, Source.ReadLines}
-    iex> source1 = :numbers |> Source.new([1, 2, 3]) |> Source.start()
-    iex> source2 = :numbers |> Source.new(ReadLines.new("test/data/numbers1.txt")) |> Source.start()
-    iex> %{numbers: stream} = %{} |> Source.call(source1) |> Source.call(source2)
-    iex> Enum.to_list(stream)
-    [1, 2, 3, "1", "2", "3", "4", "5"]
+      ## If two sources are applied to one stream, the streams will be concatenated (Stream.concat/2)
+      iex> alias Strom.{Source, Source.ReadLines}
+      iex> source1 = :numbers |> Source.new([1, 2, 3]) |> Source.start()
+      iex> source2 = :numbers |> Source.new(ReadLines.new("test/data/numbers1.txt")) |> Source.start()
+      iex> %{numbers: stream} = %{} |> Source.call(source1) |> Source.call(source2)
+      iex> Enum.to_list(stream)
+      [1, 2, 3, "1", "2", "3", "4", "5"]
 
-    Source defines a `@behaviour`. One can easily implement their own sources.
-    See `Strom.Source.ReadLines`, `Strom.Source.Events`, `Strom.Source.IOGets`
+  Source defines a `@behaviour`. One can easily implement their own sources.
+  See `Strom.Source.ReadLines`, `Strom.Source.Events`, `Strom.Source.IOGets`
   """
 
   @callback start(map) :: map

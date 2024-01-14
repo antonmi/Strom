@@ -1,21 +1,21 @@
 defmodule Strom.Splitter do
   @moduledoc """
-    Split a stream into several streams by applying given functions on events
+  Split a stream into several streams by applying given functions on events
 
-    ## Example
-    iex> alias Strom.Splitter
-    iex> outputs = %{s1: &(rem(&1, 2) == 0), s2: &(rem(&1, 2) == 1)}
-    iex> splitter = :stream |> Splitter.new(outputs) |> Splitter.start()
-    iex> %{s1: s1, s2: s2} = Splitter.call(%{stream: [1, 2, 3]}, splitter)
-    iex> {Enum.to_list(s1), Enum.to_list(s2)}
-    {[2], [1, 3]}
+      ## Example
+      iex> alias Strom.Splitter
+      iex> outputs = %{s1: &(rem(&1, 2) == 0), s2: &(rem(&1, 2) == 1)}
+      iex> splitter = :stream |> Splitter.new(outputs) |> Splitter.start()
+      iex> %{s1: s1, s2: s2} = Splitter.call(%{stream: [1, 2, 3]}, splitter)
+      iex> {Enum.to_list(s1), Enum.to_list(s2)}
+      {[2], [1, 3]}
 
-    ## Can also just duplicate a stream
-    iex> alias Strom.Splitter
-    iex> splitter = :stream |> Splitter.new([:s1, :s2]) |> Splitter.start()
-    iex> %{s1: s1, s2: s2} = Splitter.call(%{stream: [1, 2, 3]}, splitter)
-    iex> {Enum.to_list(s1), Enum.to_list(s2)}
-    {[1, 2, 3], [1, 2, 3]}
+      ## Can also just duplicate a stream
+      iex> alias Strom.Splitter
+      iex> splitter = :stream |> Splitter.new([:s1, :s2]) |> Splitter.start()
+      iex> %{s1: s1, s2: s2} = Splitter.call(%{stream: [1, 2, 3]}, splitter)
+      iex> {Enum.to_list(s1), Enum.to_list(s2)}
+      {[1, 2, 3], [1, 2, 3]}
   """
   alias Strom.GenMix
 
