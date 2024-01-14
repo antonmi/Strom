@@ -13,7 +13,7 @@ defmodule Strom.TopologyTest do
         Mixer.new([:s1, :s2], :s),
         Transformer.new(:s, &(&1 + 1)),
         Splitter.new(:s, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)}),
-        Sink.new(:odd, %Null{})
+        Sink.new(:odd, Null.new())
       ]
     end
   end

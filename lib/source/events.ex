@@ -3,6 +3,8 @@ defmodule Strom.Source.Events do
 
   defstruct infinite: false, events: []
 
+  def new(events) when is_list(events), do: %__MODULE__{events: events}
+
   @impl true
   def start(%__MODULE__{} = state), do: state
 

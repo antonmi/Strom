@@ -19,7 +19,7 @@ defmodule Strom.Source do
   end
 
   def start(%__MODULE__{origin: list} = source) when is_list(list) do
-    start(%{source | origin: %Strom.Source.Events{events: list}})
+    start(%{source | origin: Strom.Source.Events.new(list)})
   end
 
   def start(%__MODULE__{origin: origin} = source) when is_struct(origin) do

@@ -92,7 +92,7 @@ alias Strom.Source.ReadLines
 
 source = 
   :lines
-  |> Source.new(%ReadLines{path: "input.txt"})
+  |> Source.new(ReadLines.new("input.txt"))
   |> Source.start() 
   
 %{lines: stream} = Source.call(%{}, source)
@@ -143,7 +143,7 @@ alias Strom.Sink.WriteLines
 
 sink_short = 
   :short
-  |> Sink.new(%WriteLines{path: "short.txt"})
+  |> Sink.new(WriteLines.new("short.txt"))
   |> Sink.start()
 
 sink_long = 

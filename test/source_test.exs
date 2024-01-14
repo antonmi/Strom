@@ -7,7 +7,7 @@ defmodule Strom.SourceTest do
   setup do
     source =
       :my_stream
-      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.new(ReadLines.new("test/data/orders.csv"))
       |> Source.start()
 
     %{source: source}
@@ -33,7 +33,7 @@ defmodule Strom.SourceTest do
   test "several sources", %{source: source} do
     another_source =
       :another_stream
-      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.new(ReadLines.new("test/data/orders.csv"))
       |> Source.start()
 
     %{my_stream: stream, another_stream: another_stream} =

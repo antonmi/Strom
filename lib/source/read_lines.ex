@@ -3,6 +3,8 @@ defmodule Strom.Source.ReadLines do
 
   defstruct path: nil, file: nil, infinite: false
 
+  def new(path) when is_binary(path), do: %__MODULE__{path: path}
+
   @impl true
   def start(%__MODULE__{} = read_lines), do: %{read_lines | file: File.open!(read_lines.path)}
 

@@ -8,14 +8,14 @@ defmodule Strom.SinkTest do
 
   def source do
     :my_stream
-    |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+    |> Source.new(ReadLines.new("test/data/orders.csv"))
     |> Source.start()
   end
 
   setup do
     sink =
       :my_stream
-      |> Sink.new(%WriteLines{path: "test/data/output.csv"}, true)
+      |> Sink.new(WriteLines.new("test/data/output.csv"), true)
       |> Sink.start()
 
     %{sink: sink}

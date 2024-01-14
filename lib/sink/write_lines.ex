@@ -1,9 +1,13 @@
 defmodule Strom.Sink.WriteLines do
   @behaviour Strom.Sink
 
-  defstruct path: nil, file: nil
-
   @line_sep "\n"
+
+  defstruct path: nil, file: nil, line_sep: @line_sep
+
+  def new(path, line_sep \\ @line_sep) when is_binary(path) and is_binary(line_sep) do
+    %__MODULE__{path: path, line_sep: line_sep}
+  end
 
   @impl true
   def start(%__MODULE__{} = write_lines) do
@@ -13,7 +17,7 @@ defmodule Strom.Sink.WriteLines do
 
   @impl true
   def call(%__MODULE__{} = write_lines, data) do
-    :ok = IO.write(write_lines.file, data <> @line_sep)
+    :ok = IO.write(write_lines.file, data <> write_lines.line_sep)
 
     {:ok, {[], write_lines}}
   end

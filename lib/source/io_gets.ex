@@ -3,6 +3,8 @@ defmodule Strom.Source.IOGets do
 
   defstruct infinite: true
 
+  def new, do: %__MODULE__{}
+
   @impl true
   def start(%__MODULE__{} = io_gets), do: io_gets
 

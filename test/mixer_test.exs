@@ -44,17 +44,17 @@ defmodule Strom.MixerTest do
     setup do
       source1 =
         :source1
-        |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+        |> Source.new(ReadLines.new("test/data/orders.csv"))
         |> Source.start()
 
       source2 =
         :source2
-        |> Source.new(%ReadLines{path: "test/data/parcels.csv"})
+        |> Source.new(ReadLines.new("test/data/parcels.csv"))
         |> Source.start()
 
       source3 =
         :source3
-        |> Source.new(%ReadLines{path: "test/data/parcels.csv"})
+        |> Source.new(ReadLines.new("test/data/parcels.csv"))
         |> Source.start()
 
       flow =
@@ -107,12 +107,12 @@ defmodule Strom.MixerTest do
     test "stream one file into two streams" do
       source1 =
         :s1
-        |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+        |> Source.new(ReadLines.new("test/data/orders.csv"))
         |> Source.start()
 
       source2 =
         :s2
-        |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+        |> Source.new(ReadLines.new("test/data/orders.csv"))
         |> Source.start()
 
       mixer =
@@ -135,7 +135,7 @@ defmodule Strom.MixerTest do
     test "mixer as simple filter" do
       source1 =
         :stream
-        |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+        |> Source.new(ReadLines.new("test/data/orders.csv"))
         |> Source.start()
 
       mixer =

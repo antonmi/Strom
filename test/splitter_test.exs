@@ -22,12 +22,12 @@ defmodule Strom.SplitterTest do
   setup do
     source1 =
       :orders
-      |> Source.new(%ReadLines{path: "test/data/orders.csv"})
+      |> Source.new(ReadLines.new("test/data/orders.csv"))
       |> Source.start()
 
     source2 =
       :parcels
-      |> Source.new(%ReadLines{path: "test/data/parcels.csv"})
+      |> Source.new(ReadLines.new("test/data/parcels.csv"))
       |> Source.start()
 
     flow =

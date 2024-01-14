@@ -78,22 +78,22 @@ defmodule Strom.GenMixTest do
     #      :observer.start()
     #    source1 =
     #      :source1
-    #      |> Strom.Source.new(%Strom.Source.ReadLines{path: "test_data/orders.csv"})
+    #      |> Strom.Source.new(Strom.Source.ReadLines.new("test_data/orders.csv"))
     #      |> Strom.Source.start()
     #
     #    source2 =
     #      :source2
-    #      |> Strom.Source.new(%Strom.Source.ReadLines{path: "test_data/parcels.csv"})
+    #      |> Strom.Source.new(Strom.Source.ReadLines.new("test_data/parcels.csv"))
     #      |> Strom.Source.start()
     #
     #    sink1 =
     #      :odd
-    #      |> Strom.Sink.new(%Strom.Sink.WriteLines{path: "test_data/odd.csv"})
+    #      |> Strom.Sink.new(Strom.Sink.WriteLines.new("test_data/odd.csv"))
     #      |> Strom.Sink.start()
     #
     #    sink2 =
     #      :even
-    #      |> Strom.Sink.new(%Strom.Sink.WriteLines{path: "test_data/even.csv"}, true)
+    #      |> Strom.Sink.new(Strom.Sink.WriteLines.new("test_data/even.csv"), true)
     #      |> Strom.Sink.start()
     #
     #    flow =

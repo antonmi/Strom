@@ -5,7 +5,6 @@ defmodule Strom.CompositeTest do
 
   defmodule MyComposite do
     import Strom.DSL
-    alias Strom.Sink.Null
 
     def components do
       odd_even = %{
@@ -19,7 +18,7 @@ defmodule Strom.CompositeTest do
         mix([:s1, :s2], :s),
         transform(:s, &(&1 + 1)),
         split(:s, odd_even),
-        sink(:odd, %Null{})
+        sink(:odd, Null.new())
       ]
     end
   end
@@ -30,7 +29,7 @@ defmodule Strom.CompositeTest do
     def components do
       [
         split(:numbers, %{more: &(&1 >= 10), less: &(&1 < 10)}),
-        sink(:less, %Null{})
+        sink(:less, Null.new())
       ]
     end
   end
@@ -68,7 +67,7 @@ defmodule Strom.CompositeTest do
         Mixer.new([:s1, :s2], :s),
         Transformer.new(:s, &(&1 + 1)),
         Splitter.new(:s, odd_even),
-        Sink.new(:odd, %Null{})
+        Sink.new(:odd, Null.new())
       ]
 
       composite = Composite.start(components)

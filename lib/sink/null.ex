@@ -3,6 +3,8 @@ defmodule Strom.Sink.Null do
 
   defstruct []
 
+  def new, do: %__MODULE__{}
+
   @impl true
   def start(%__MODULE__{} = null), do: null
 

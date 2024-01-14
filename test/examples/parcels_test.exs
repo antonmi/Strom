@@ -63,8 +63,8 @@ defmodule Strom.Examples.ParcelsTest do
         split(:stream, partitions),
         transform(:orders, &__MODULE__.order_to_string/1),
         transform(:parcels, &__MODULE__.parcel_to_string/1),
-        sink(:orders, %WriteLines{path: "test/examples/parcels/orders.csv"}),
-        sink(:parcels, %WriteLines{path: "test/examples/parcels/parcels.csv"}, true)
+        sink(:orders, WriteLines.new("test/examples/parcels/orders.csv")),
+        sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), true)
       ]
     end
   end
@@ -186,9 +186,9 @@ defmodule Strom.Examples.ParcelsTest do
 
     def components() do
       [
-        source(:orders, %ReadLines{path: "test/examples/parcels/orders.csv"}),
+        source(:orders, ReadLines.new("test/examples/parcels/orders.csv")),
         transform([:orders], &__MODULE__.build_order/1),
-        source(:parcels, %ReadLines{path: "test/examples/parcels/parcels.csv"}),
+        source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv")),
         transform([:parcels], &__MODULE__.build_parcel/1),
         mix([:orders, :parcels], :mixed),
         transform([:mixed], &ParcelsFlow.force_order/2, %{}),
@@ -198,14 +198,8 @@ defmodule Strom.Examples.ParcelsTest do
           all_parcels_shipped: &(&1[:type] == "ALL_PARCELS_SHIPPED")
         }),
         transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
-        sink(:threshold_exceeded, %WriteLines{
-          path: "test/examples/parcels/threshold_exceeded.csv"
-        }),
-        sink(
-          :all_parcels_shipped,
-          %WriteLines{path: "test/examples/parcels/all_parcels_shipped.csv"},
-          true
-        )
+        sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv")),
+        sink(:all_parcels_shipped, WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"), true)
       ]
     end
   end

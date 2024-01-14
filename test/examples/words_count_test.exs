@@ -54,7 +54,7 @@ defmodule Strom.Examples.WordsCountTest do
         end)
 
       [
-        source(:file, %ReadLines{path: file_name}),
+        source(:file, ReadLines.new(file_name)),
         split(:file, partitions)
       ] ++
         dones ++
