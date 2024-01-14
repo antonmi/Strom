@@ -1,4 +1,7 @@
 defmodule Strom.DSL do
+  @moduledoc """
+    DSL for building components
+  """
   alias Strom.{Transformer, Mixer, Renamer, Sink, Source, Splitter}
 
   defmacro source(name, origin) do

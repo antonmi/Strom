@@ -1,5 +1,5 @@
 defmodule Strom.TopologyTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Strom.{Mixer, Sink, Source, Splitter, Transformer}
   alias Strom.Sink.Null
 

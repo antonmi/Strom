@@ -1,5 +1,6 @@
 defmodule Strom.SourceTest do
   use ExUnit.Case, async: true
+  doctest Strom.Source
 
   alias Strom.Source
   alias Strom.Source.ReadLines

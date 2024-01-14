@@ -68,7 +68,10 @@ defmodule Strom.Examples.WordsCountTest do
   end
 
   test "count" do
-    words_count = Composite.start(WordsCount.components({"test/data/orders.csv", 1}))
+    words_count =
+      WordsCount.components({"test/data/orders.csv", 1})
+      |> Composite.new()
+      |> Composite.start()
 
     %{mixed: counts} = Composite.call(%{}, words_count)
     [counts] = Enum.to_list(counts)

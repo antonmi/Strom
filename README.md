@@ -1,6 +1,6 @@
 # Strom
 
-## Flow-based Programming Framework
+## Composable primitives for processing streams of data.
 
 Strom provides a set of abstractions for creating, routing and modifying streams of data.
 
@@ -25,7 +25,7 @@ flow = %{stream1: Stream.cycle([1, 2, 3]), stream2: ["a", "b", "c"]}
 Flow can be empty - `%{}`.
 
 
-### Operators (functions)
+### Components
 There are several operators (functions) that can be applied to flows.
 Each operator accept flow as input and return a modified flow.
 

@@ -1,4 +1,8 @@
 defmodule Strom.GenMix do
+  @moduledoc """
+    Generic functionality used by `Strom.Mixer` and `Strom.Splitter'
+  """
+
   use GenServer
 
   @buffer 1000
@@ -13,8 +17,6 @@ defmodule Strom.GenMix do
             consumers: %{}
 
   alias Strom.GenMix.Consumer
-
-  def start(opts \\ [])
 
   def start(%__MODULE__{opts: opts} = gen_mix) when is_list(opts) do
     gen_mix = %{

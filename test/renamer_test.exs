@@ -1,5 +1,6 @@
 defmodule Strom.RenamerTest do
   use ExUnit.Case, async: true
+  doctest Strom.Renamer
 
   alias Strom.Renamer
 
