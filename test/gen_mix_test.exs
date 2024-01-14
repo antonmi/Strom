@@ -1,5 +1,5 @@
 defmodule Strom.GenMixTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Strom.GenMix
 

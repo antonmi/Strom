@@ -1,5 +1,6 @@
 defmodule Strom.MixerTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
+  doctest Strom.Mixer
 
   alias Strom.Source
   alias Strom.Source.ReadLines

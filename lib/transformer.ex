@@ -1,18 +1,57 @@
 defmodule Strom.Transformer do
+  @moduledoc """
+    Transforms a stream or several streams.
+    It works as Stream.map/2 or Stream.transform/3.
+
+    ## `map` example:
+    iex> alias Strom.Transformer
+    iex> transformer = :numbers |> Transformer.new(&(&1*2)) |> Transformer.start()
+    iex> flow = %{numbers: [1, 2, 3]}
+    iex> %{numbers: stream} = Transformer.call(flow, transformer)
+    iex> Enum.to_list(stream)
+    [2, 4, 6]
+
+    ## `transform` example:
+    iex> alias Strom.Transformer
+    iex> fun = fn el, acc -> {[el, acc], acc + 10} end
+    iex> transformer = :numbers |> Transformer.new(fun, 10) |> Transformer.start()
+    iex> flow = %{numbers: [1, 2, 3]}
+    iex> %{numbers: stream} = Transformer.call(flow, transformer)
+    iex> Enum.to_list(stream)
+    [1, 10, 2, 20, 3, 30]
+
+    ## it can be applied to several streams:
+    iex> alias Strom.Transformer
+    iex> transformer = [:s1, :s2] |> Transformer.new(&(&1*2)) |> Transformer.start()
+    iex> flow = %{s1: [1, 2, 3], s2: [4, 5, 6]}
+    iex> %{s1: s1, s2: s2} = Transformer.call(flow, transformer)
+    iex> {Enum.to_list(s1), Enum.to_list(s2)}
+    {[2, 4, 6], [8, 10, 12]}
+  """
+
   use GenServer
 
   @buffer 1000
 
   defstruct pid: nil,
             running: false,
+            opts: [],
             buffer: @buffer,
             function: nil,
             acc: nil,
-            opts: [],
             names: [],
             tasks: %{},
             data: %{}
 
+  @type t() :: %__MODULE__{}
+  @type event() :: any()
+  @type acc() :: any()
+
+  @type func() ::
+          (event() -> event())
+          | (event(), acc() -> {[event()], acc()})
+
+  @spec new(Strom.stream_name(), func(), acc()) :: __MODULE__.t()
   def new(names, function, acc \\ nil) do
     %__MODULE__{
       function: function,
@@ -21,11 +60,12 @@ defmodule Strom.Transformer do
     }
   end
 
+  @spec start(__MODULE__.t(), buffer: integer(), opts: list()) :: __MODULE__.t()
   def start(%__MODULE__{} = transformer, opts \\ []) do
     transformer = %{
       transformer
-      | buffer: Keyword.get(opts, :buffer, @buffer),
-        opts: if(length(transformer.opts) > 0, do: opts, else: Keyword.get(opts, :opts, []))
+      | opts: opts,
+        buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
     {:ok, pid} = start_link(transformer)
@@ -41,8 +81,9 @@ defmodule Strom.Transformer do
     {:ok, %{call | pid: self()}}
   end
 
+  @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{names: names, function: function, acc: acc} = transformer)
-      when is_map(flow) and is_function(function, 3) do
+      when is_map(flow) and is_function(function, 2) do
     names = if is_list(names), do: names, else: [names]
 
     input_streams =
@@ -88,40 +129,34 @@ defmodule Strom.Transformer do
   end
 
   def call(flow, %__MODULE__{function: function} = transformer)
-      when is_map(flow) and is_function(function, 2) do
-    fun = fn el, acc, [] -> function.(el, acc) end
-    transformer = %{transformer | function: fun}
-    call(flow, transformer)
-  end
-
-  def call(flow, %__MODULE__{function: function} = transformer)
       when is_map(flow) and is_function(function, 1) do
-    fun = fn el, nil, [] -> {[function.(el)], nil} end
+    fun = fn el, nil -> {[function.(el)], nil} end
     transformer = %{transformer | function: fun}
     call(flow, transformer)
   end
 
+  @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}) do
     GenServer.call(pid, :stop)
   end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp run_inputs(streams, pid, buffer, opts) do
+  defp run_inputs(streams, pid, buffer) do
     Enum.reduce(streams, %{}, fn {{name, fun, acc}, stream}, streams_acc ->
-      task = async_run_stream({name, fun, acc, opts}, stream, buffer, pid)
+      task = async_run_stream({name, fun, acc}, stream, buffer, pid)
       Map.put(streams_acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun, acc, opts}, stream, buffer, pid) do
+  defp async_run_stream({name, fun, acc}, stream, buffer, pid) do
     Task.async(fn ->
       stream
       |> Stream.chunk_every(buffer)
       |> Stream.transform(acc, fn chunk, acc ->
         {chunk, new_acc} =
           Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-            {new_events, acc} = fun.(el, acc, opts)
+            {new_events, acc} = fun.(el, acc)
             {events ++ new_events, acc}
           end)
 
@@ -149,8 +184,8 @@ defmodule Strom.Transformer do
   end
 
   @impl true
-  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{opts: opts} = transformer) do
-    tasks = run_inputs(streams_to_call, transformer.pid, transformer.buffer, opts)
+  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
+    tasks = run_inputs(streams_to_call, transformer.pid, transformer.buffer)
 
     {:reply, :ok, %{transformer | running: true, tasks: tasks}}
   end

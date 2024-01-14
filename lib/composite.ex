@@ -1,4 +1,30 @@
 defmodule Strom.Composite do
+  @moduledoc """
+    Runs a set of components and is a component itself, meaning that a composite has the same interface - it accepts flow as input and returns a modified flow.
+
+    ## Example
+    iex> alias Strom.{Composite, Transformer, Splitter, Source, Sink}
+    iex> transformer = Transformer.new(:s, &(&1 + 1))
+    iex> splitter = Splitter.new(:s, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)})
+    iex> composite = [transformer, splitter] |> Composite.new() |> Composite.start()
+    iex> source = :s |> Source.new([1, 2, 3]) |> Source.start()
+    iex> %{odd: odd, even: even} = %{} |> Source.call(source) |> Composite.call(composite)
+    iex> {Enum.to_list(odd), Enum.to_list(even)}
+    {[3], [2, 4]}
+
+    ## Composites can be created from other composites
+    iex> alias Strom.{Composite, Transformer, Splitter, Source, Sink}
+    iex> transformer = Transformer.new(:s, &(&1 + 1))
+    iex> splitter = Splitter.new(:s, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)})
+    iex> c1 = Composite.new([transformer])
+    iex> c2 = Composite.new([splitter])
+    iex> source = Source.new(:s, [1, 2, 3])
+    iex> composite = [source, c1, c2] |> Composite.new() |> Composite.start()
+    iex> %{odd: odd, even: even} = %{} |> Composite.call(composite)
+    iex> {Enum.to_list(odd), Enum.to_list(even)}
+    {[3], [2, 4]}
+  """
+
   defstruct pid: nil,
             components: []
 
@@ -6,10 +32,25 @@ defmodule Strom.Composite do
 
   @type t :: %__MODULE__{}
 
-  def start(components) when is_list(components) do
-    state = %__MODULE__{components: components}
+  @spec new([struct()]) :: __MODULE__.t()
+  def new(components) when is_list(components) do
+    components =
+      Enum.reduce(components, [], fn component, acc ->
+        case component do
+          %__MODULE__{components: components} ->
+            acc ++ components
 
-    {:ok, pid} = GenServer.start_link(__MODULE__, state)
+          component ->
+            acc ++ [component]
+        end
+      end)
+
+    %__MODULE__{components: components}
+  end
+
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
+  def start(%__MODULE__{} = composite) do
+    {:ok, pid} = GenServer.start_link(__MODULE__, composite)
     __state__(pid)
   end
 
@@ -48,8 +89,10 @@ defmodule Strom.Composite do
     end)
   end
 
+  @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{pid: pid}), do: GenServer.call(pid, {:call, flow}, :infinity)
 
+  @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)

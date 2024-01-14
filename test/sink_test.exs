@@ -1,5 +1,6 @@
 defmodule Strom.SinkTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
+  doctest Strom.Sink
 
   alias Strom.Source
   alias Strom.Source.ReadLines

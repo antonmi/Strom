@@ -1,4 +1,8 @@
 defmodule Strom.GenMix.Consumer do
+  @moduledoc """
+    Consumer is used by the generic GenMix component.
+  """
+
   use GenServer
 
   defstruct pid: nil,

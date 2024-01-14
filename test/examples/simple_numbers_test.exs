@@ -66,7 +66,10 @@ defmodule Strom.Examples.SimpleNumbersTest do
     end
 
     test "test the order of numbers" do
-      round_robin = Composite.start(RoundRobin.components())
+      round_robin =
+        RoundRobin.components()
+        |> Composite.new()
+        |> Composite.start()
 
       %{mixed: mixed} =
         %{first: [1, 2, 3], second: [10, 20, 30]}
@@ -118,7 +121,10 @@ defmodule Strom.Examples.SimpleNumbersTest do
     end
 
     test "test the order of numbers" do
-      round_robin_many = Composite.start(RoundRobinMany.components([:first, :second, :third]))
+      round_robin_many =
+        RoundRobinMany.components([:first, :second, :third])
+        |> Composite.new()
+        |> Composite.start()
 
       %{mixed: mixed} =
         %{first: [1, 2, 3], second: [10, 20, 30], third: [100, 200, 300]}

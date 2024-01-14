@@ -199,7 +199,11 @@ defmodule Strom.Examples.ParcelsTest do
         }),
         transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
         sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv")),
-        sink(:all_parcels_shipped, WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"), true)
+        sink(
+          :all_parcels_shipped,
+          WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"),
+          true
+        )
       ]
     end
   end
@@ -207,13 +211,21 @@ defmodule Strom.Examples.ParcelsTest do
   @parcels_count 1_000
 
   test "generate_data" do
-    gen_data = Composite.start(GenData.components())
+    gen_data =
+      GenData.components()
+      |> Composite.new()
+      |> Composite.start()
+
     Composite.call(%{stream: List.duplicate(:tick, @parcels_count)}, gen_data)
     Composite.stop(gen_data)
   end
 
   test "solve" do
-    parcels_flow = Composite.start(ParcelsFlow.components())
+    parcels_flow =
+      ParcelsFlow.components()
+      |> Composite.new()
+      |> Composite.start()
+
     Composite.call(%{}, parcels_flow)
 
     shipped_length =

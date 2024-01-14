@@ -41,7 +41,11 @@ defmodule Strom.Integration.TelegramTest do
   end
 
   test "run flow" do
-    telegram = Composite.start(Telegram.components())
+    telegram =
+      Telegram.components()
+      |> Composite.new()
+      |> Composite.start()
+
     Composite.call(%{}, telegram)
     Composite.stop(telegram)
   end

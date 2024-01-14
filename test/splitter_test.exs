@@ -1,5 +1,6 @@
 defmodule Strom.SplitterTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
+  doctest Strom.Splitter
 
   alias Strom.Source
   alias Strom.Source.ReadLines

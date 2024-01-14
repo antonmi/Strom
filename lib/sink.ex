@@ -1,4 +1,19 @@
 defmodule Strom.Sink do
+  @moduledoc """
+    Runs a given steam and `call` origin on each even in stream.
+    By default it runs the stream asynchronously (in `Task.async`).
+    One can pass `true` a the third argument to the `Sink.new/3` function to run a stream synchronously.
+
+    ## Example
+    iex> alias Strom.{Sink, Sink.WriteLines}
+    iex> sink = :strings |> Sink.new(WriteLines.new("test/data/sink.txt"), true) |> Sink.start()
+    iex> %{} = Sink.call(%{strings: ["a", "b", "c"]}, sink)
+    iex> File.read!("test/data/sink.txt")
+    "a\\nb\\nc\\n"
+
+    Sink defines a `@behaviour`. One can easily implement their own sinks.
+    See `Strom.Sink.Writeline`, `Strom.Sink.IOPuts`, `Strom.Sink.Null`
+  """
   @callback start(map) :: map
   @callback call(map, term) :: {:ok, {term, map}} | {:error, {term, map}}
   @callback stop(map) :: map
@@ -10,14 +25,15 @@ defmodule Strom.Sink do
             sync: false,
             pid: nil
 
-  def new(name, origin, sync \\ false) do
-    unless is_struct(origin) do
-      raise "Sink origin must be a struct, given: #{inspect(origin)}"
-    end
+  @type t() :: %__MODULE__{}
+  @type event() :: any()
 
+  @spec new(Strom.stream_name(), struct(), boolean()) :: __MODULE__.t()
+  def new(name, origin, sync \\ false) when is_struct(origin) do
     %__MODULE__{origin: origin, name: name, sync: sync}
   end
 
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{origin: origin} = sink) when is_struct(origin) do
     origin = apply(origin.__struct__, :start, [origin])
     sink = %{sink | origin: origin}
@@ -33,8 +49,10 @@ defmodule Strom.Sink do
   @impl true
   def init(%__MODULE__{} = sink), do: {:ok, %{sink | pid: self()}}
 
+  @spec call(__MODULE__.t(), any()) :: event()
   def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data})
 
+  @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{name: name, sync: sync} = sink) when is_map(flow) do
     stream = Map.fetch!(flow, name)
 
@@ -53,6 +71,7 @@ defmodule Strom.Sink do
     Map.delete(flow, name)
   end
 
+  @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{origin: origin, pid: pid}) do
     apply(origin.__struct__, :stop, [origin])
     GenServer.call(pid, :stop)
