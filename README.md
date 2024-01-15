@@ -139,7 +139,7 @@ sum_pairs = Strom.Transformer.new(:numbers, function, nil)
 The splitter will split the `:numbers` stream into two streams: `:odd` and `:even`
 
 ```elixir
-splitter = Strom.Splitter.new(:numbers, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 1)})
+splitter = Strom.Splitter.new(:numbers, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)})
 ```
 
 Ok, it's almost done. One thing that you may have noticed - the sources produces `:numbers1` and `:number2` streams.
@@ -175,11 +175,10 @@ Add see smth like that in console:
 ```shell
 iex(18)> Strom.Composite.call(%{}, final_composite)
 %{}
-even: 11
+even: 22
 odd: 11
-even: 33
+even: 44
 odd: 33
-even: 55
 odd: 55
 ```
 
