@@ -10,7 +10,7 @@
 
 ```mermaid
 graph TD;
-    A(<img src="https://github.com/antonmi/Strom/blob/update_readme/images/transformer.png" width="60"/>)-->B;
+    A(<img src='https://github.com/antonmi/Strom/blob/update_readme/images/transformer.png' width='60'/>)-->B;
     A-->C;
     B-->D;
     C-->D;
