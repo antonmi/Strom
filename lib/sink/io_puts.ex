@@ -3,7 +3,7 @@ defmodule Strom.Sink.IOPuts do
 
   defstruct line_sep: "", prefix: ""
 
-  def new, do: %__MODULE__{}
+  def new(prefix \\ "", line_sep \\ ""), do: %__MODULE__{line_sep: line_sep, prefix: prefix}
 
   @impl true
   def start(%__MODULE__{} = io_puts), do: io_puts
