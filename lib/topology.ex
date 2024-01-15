@@ -1,6 +1,31 @@
 defmodule Strom.Topology do
   @moduledoc """
   Runs set of components. Restarts all of them in case of crash.
+  Provides `start`, `stop`, `call` function on the module level.
+  Starts topology as a process with the topology module name.
+  So only one topology with the given name can exist.
+
+      ## Example:
+      iex>  defmodule OddEvenTopology do
+      ...>    use Strom.Topology
+      ...>    alias Strom.Sink.Null
+      ...>
+      ...>    def topology(_opts) do
+      ...>      [
+      ...>        Source.new(:s1, [1, 2, 3]),
+      ...>        Source.new(:s2, [4, 5, 6]),
+      ...>        Mixer.new([:s1, :s2], :s),
+      ...>        Transformer.new(:s, &(&1 + 1)),
+      ...>        Splitter.new(:s, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)}),
+      ...>        Sink.new(:odd, Null.new(), true)
+      ...>      ]
+      ...>    end
+      ...>  end
+      iex> OddEvenTopology.start()
+      iex> %{even: even} = OddEvenTopology.call(%{})
+      iex> OddEvenTopology.stop()
+      iex> Enum.sort(Enum.to_list(even))
+      [2, 4, 6]
   """
 
   defstruct pid: nil,
@@ -97,26 +122,17 @@ defmodule Strom.Topology do
   defmacro __using__(_opts) do
     quote do
       import Strom.DSL
+      alias Strom.{Composite, Mixer, Sink, Source, Splitter, Transformer, Topology}
 
-      def start(opts \\ []) do
-        Strom.Topology.start(__MODULE__, opts)
-      end
+      def start(opts \\ []), do: Topology.start(__MODULE__, opts)
 
-      def call(flow) when is_map(flow) do
-        Strom.Topology.call(flow, __MODULE__)
-      end
+      def call(flow) when is_map(flow), do: Topology.call(flow, __MODULE__)
 
-      def stop do
-        Strom.Topology.stop(__MODULE__)
-      end
+      def stop, do: Topology.stop(__MODULE__)
 
-      def info do
-        Strom.Topology.info(__MODULE__)
-      end
+      def info, do: Topology.info(__MODULE__)
 
-      def components do
-        Strom.Topology.components(__MODULE__)
-      end
+      def components, do: Topology.components(__MODULE__)
     end
   end
 end

@@ -1,6 +1,7 @@
 defmodule Strom.TopologyTest do
   use ExUnit.Case, async: true
-  alias Strom.{Mixer, Sink, Source, Splitter, Transformer}
+  doctest Strom.Topology
+
   alias Strom.Sink.Null
 
   defmodule MyTopology do
@@ -65,16 +66,19 @@ defmodule Strom.TopologyTest do
     end
 
     test "kill component" do
-      [source1 | _] = MyTopology.components()
+      topology = MyTopology.info()
+      [source1 | _] = topology.components
       %{even: even} = MyTopology.call(%{})
       assert Enum.sort(Enum.to_list(even)) == [2, 4, 6]
 
       Process.exit(source1.pid, :kill)
       Process.sleep(1)
-      [source1 | _] = MyTopology.components()
+
+      check_dead(topology)
+
       topology = MyTopology.info()
       assert Process.alive?(topology.pid)
-      assert Process.alive?(source1.pid)
+      check_alive(topology)
 
       %{even: even} = MyTopology.call(%{})
       assert Enum.sort(Enum.to_list(even)) == [2, 4, 6]
