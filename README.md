@@ -1,6 +1,6 @@
 # Strom
 
-## Composable components for stream processing.
+## Composable components for stream processing
 
 ### Strom provides a set of abstractions for creating, routing and modifying streams of data.
 
