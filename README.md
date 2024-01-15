@@ -2,7 +2,20 @@
 
 ## Composable components for stream processing.
 
-Strom provides a set of abstractions for creating, routing and modifying streams of data.
+### Strom provides a set of abstractions for creating, routing and modifying streams of data.
+
+<img src="images/components.png" alt="Implicit components" width="800"/>
+
+<img src="images/transformer.png" width="60"/>
+
+```mermaid
+graph TD;
+    A(<img src="images/transformer.png" width="800"/>)-->B;
+    A-->C;
+    B-->D;
+    C-->D;
+```
+
 
 ### Data
 The data abstractions are:
@@ -70,7 +83,7 @@ So, it's the map operation. Think about &Stream.map/2, which is used under the h
 
 ### Symbolic representation
 
-<img src="images/components.png" alt="Implicit components" width="500"/>
+
 
 ### Implementation details and interface
 
