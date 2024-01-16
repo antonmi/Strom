@@ -1,5 +1,7 @@
 # Strom
 
+[![Hex.pm](https://img.shields.io/hexpm/v/strom.svg?style=flat-square)](https://hex.pm/packages/strom)
+
 ## Composable components for stream processing
 
 ### Strom provides a set of abstractions for creating, routing and modifying streams of data.
