@@ -53,6 +53,8 @@ Hello, world!
 ```
 
 #### The "flow" data-structure
+One can see an empty map as the first argument in Strom.Composite.call(%{}, greeter).
+
 Strom components operates with "flow" - a named set of streams. It's a map with streams as values and their names as keys:
 
 For example:
