@@ -77,7 +77,7 @@ A transformer modifies a stream (or streams).
 ## A more sophisticated example
 
 ### The problem
-There are two streams of data. One have to sum pairs of numbers from each stream respectively, 
+There are two streams of integer numbers. One have to sum pairs of numbers from each stream respectively, 
 then produce two steams: one with the odd numbers, another with the even ones.
 
 ### Solution
