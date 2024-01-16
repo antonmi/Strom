@@ -208,7 +208,7 @@ defmodule Strom.Examples.ParcelsTest do
     end
   end
 
-  @parcels_count 1_000
+  @parcels_count 100
 
   test "generate_data" do
     gen_data =

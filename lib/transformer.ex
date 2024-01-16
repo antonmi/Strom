@@ -174,7 +174,8 @@ defmodule Strom.Transformer do
 
   defp flush do
     receive do
-      _ -> flush()
+      :continue ->
+        flush()
     after
       0 -> :ok
     end

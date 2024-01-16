@@ -72,7 +72,8 @@ defmodule Strom.GenMix do
 
   defp flush do
     receive do
-      _ -> flush()
+      :continue ->
+        flush()
     after
       0 -> :ok
     end
