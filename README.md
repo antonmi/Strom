@@ -57,7 +57,7 @@ Hello, world!
 #### The "flow" data-structure
 One can see an empty map as the first argument in Strom.Composite.call(%{}, greeter).
 
-Strom components operates with "flow" - a named set of streams. It's a map with streams as values and their names as keys:
+Strom components operate with "flow" - a named set of streams. It's a map with streams as values and their names as keys:
 
 For example:
 ```elixir
@@ -66,9 +66,9 @@ flow = %{
   stream2: ["a", "b", "c"]
 }
 ```
-Flow can be empty - `%{}`.
+A flow can be empty - `%{}`.
 
-A source adds a new stream to flow. A sink runs the stream of given name and removes it from flow.
+A source adds a new stream to flow. A sink runs the stream of the given name and removes it from the flow.
 
 A mixer mixes several streams into one. A splitter does the opposite.
 
@@ -77,11 +77,11 @@ A transformer modifies a stream (or streams).
 ## A more sophisticated example
 
 ### The problem
-There are two streams of integer numbers. One have to sum pairs of numbers from each stream respectively, 
-then produce two steams: one with the odd numbers, another with the even ones.
+There are two streams of integer numbers. One has to sum pairs of numbers from each stream respectively, 
+then produce two steams: one with the odd numbers, another -  with the even ones.
 
 ### Solution
-The flow chart for possible solution:
+The flow chart for a possible solution:
 ```mermaid
 graph LR;
     source1(("numbers1")) --> round_robin(["round-robin mixer"])
@@ -93,8 +93,8 @@ graph LR;
 ```
 
 #### Components
-The origins for sources here will be just simple lists of numbers.
-See [sources](https://github.com/antonmi/Strom/blob/main/lib/source/) for other examples of sources. It's easy to implement your own source.
+The sources' origins here will be just simple lists of numbers.
+See [sources](https://github.com/antonmi/Strom/blob/main/lib/source/) for other examples of sources. It's easy to implement a custom source.
 ```elixir
 source1 = Strom.Source.new(:numbers1, [1, 2, 3, 4, 5])
 source2 = Strom.Source.new(:numbers2, [10, 20, 30, 40, 50])
@@ -119,7 +119,7 @@ graph LR;
 ```
 
 The round-robin mixer first adds labels to each event in order to now from which stream comes a number. Then it mixes streams. 
-The last transformer will wait until it has numbers from both streams and then emit a pair of events.
+The last transformer will wait until it has numbers from both streams and then emits a pair of events.
 
 ```elixir
 defmodule RoundRobinMixer do
@@ -155,7 +155,7 @@ end
 round_robin = Strom.Composite.new(RoundRobinMixer.components())
 ```
 
-The "sum pairs" transformer is simple. It will save first number in accumulator and waits the second one to produce the sum.
+The "sum pairs" transformer is simple. It will save the first number in the accumulator and waits for the second one to produce the sum.
 ```elixir
 function = fn number, acc ->
   if acc do
@@ -168,22 +168,22 @@ end
 sum_pairs = Strom.Transformer.new(:numbers, function, nil)
 ```
 
-The splitter will split the `:numbers` stream into two streams: `:odd` and `:even`
+The splitter will split the `:numbers` stream into two streams: `:odd` and `:even`.
 
 ```elixir
 splitter = Strom.Splitter.new(:numbers, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)})
 ```
 
-Ok, it's almost done. One thing that you may have noticed - the sources produces `:numbers1` and `:number2` streams.
-However the round-robin composite operates with the `:first` and `:second` streams. One should simple rename the streams in flow.
+Ok, it's almost done. One thing that you may have noticed - the sources produce `:numbers1` and `:number2` streams.
+However, the round-robin composite operates with the `:first` and `:second` streams. One should simply rename the streams in flow.
 
-For consistency there is the `Renamer` component:
+There is the `Renamer` component:
 
 ```elixir
 renamer = Strom.Renamer.new(%{numbers1: :first, numbers2: :second})
 ```
 
-Ok. Now we are ready to combine all the components. There will be another composite.
+Ok. Now, we are ready to combine all the components. There will be another composite.
 ```elixir
 final_composite = [
   source1,
@@ -203,7 +203,7 @@ final_composite = Strom.Composite.start(final_composite)
 Strom.Composite.call(%{}, final_composite)
 ```
 
-Add see smth like that in console:
+Add see something like that in console:
 ```shell
 iex(18)> Strom.Composite.call(%{}, final_composite)
 %{}
