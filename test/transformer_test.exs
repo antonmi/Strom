@@ -47,8 +47,8 @@ defmodule Strom.TransformerTest do
 
     transformer =
       [:numbers1, :numbers2]
-      |> Transformer.new(fun, 100)
-      |> Transformer.start(buffer: 2)
+      |> Transformer.new(fun, 100, buffer: 2)
+      |> Transformer.start()
 
     assert transformer.buffer == 2
 

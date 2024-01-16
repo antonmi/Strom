@@ -16,31 +16,42 @@ In the "mermaid" notation, I suggest the following shapes:
 See the example below. 
 ```mermaid
 graph LR;
-    source1(("source1")) --> mixer{{"mixer"}}
-    source2(("source2")) --> mixer{{"mixer"}}
+    source(("source")) --> mixer{{"mixer"}}
     mixer{{"mixer"}} --> transformer["transformer"]
     transformer["transformer"] --> composite(["composite"])
     composite(["composite"]) --> splitter{{"splitter"}}
-    splitter{{"splitter"}} --> sink1(("sink1")) 
-    splitter{{"splitter"}} --> sink2(("sink2")) 
+    splitter{{"splitter"}} --> sink(("sink")) 
 ```
 
-## Example
-### The problem
-There are two streams of data. One have to sum pairs of numbers from each stream respectively, 
-then produce two steams: one with the odd numbers, another with the even ones.
-
-### Solution
-The flow chart for possible solution:
+## Hello, World!
 ```mermaid
 graph LR;
-    source1(("numbers1")) --> round_robin(["round-robin mixer"])
-    source2(("numbers1")) --> round_robin(["round-robin mixer"])
-    round_robin(["round-robin-mixer"]) --> sum["sum pairs"]
-    sum["sum pairs"] --> spitter{{"split odd-even"}}
-    spitter{{"split odd-even"}} --> sink_odd(("puts odd"))
-    spitter{{"split odd-even"}} --> sink_even(("puts even"))
+    source(("IO.gets")) --> transformer["greeting"]
+    transformer["greeting"] --> sink(("IO.puts")) 
 ```
+
+```elixir
+io_gets = Strom.Source.IOGets.new()
+source = :stream |> Strom.Source.new(io_gets)
+
+function = fn string -> "Hello, #{string}!" end
+transformer = :stream |> Strom.Transformer.new(function, nil, buffer: 1)
+
+io_puts = Strom.Sink.IOPuts.new()
+sink = :stream |> Strom.Sink.new(io_puts, true)
+
+greeter = Strom.Composite.new([source, transformer, sink])
+greeter = Strom.Composite.start(greeter)
+
+Strom.Composite.call(%{}, greeter)
+```
+Add see:
+```shell
+iex(13)> Strom.Composite.call(%{}, greeter)
+IOGets> world
+Hello, world!
+```
+
 #### The "flow" data-structure
 Strom components operates with "flow" - a named set of streams. It's a map with streams as values and their names as keys:
 
@@ -59,6 +70,23 @@ A mixer mixes several streams into one. A splitter does the opposite.
 
 A transformer modifies a stream (or streams).
 
+## A more sophisticated example
+
+### The problem
+There are two streams of data. One have to sum pairs of numbers from each stream respectively, 
+then produce two steams: one with the odd numbers, another with the even ones.
+
+### Solution
+The flow chart for possible solution:
+```mermaid
+graph LR;
+    source1(("numbers1")) --> round_robin(["round-robin mixer"])
+    source2(("numbers1")) --> round_robin(["round-robin mixer"])
+    round_robin(["round-robin-mixer"]) --> sum["sum pairs"]
+    sum["sum pairs"] --> spitter{{"split odd-even"}}
+    spitter{{"split odd-even"}} --> sink_odd(("puts odd"))
+    spitter{{"split odd-even"}} --> sink_even(("puts even"))
+```
 
 #### Components
 The origins for sources here will be just simple lists of numbers.

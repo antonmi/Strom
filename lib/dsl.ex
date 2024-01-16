@@ -18,19 +18,19 @@ defmodule Strom.DSL do
 
   defmacro mix(inputs, output, opts \\ []) do
     quote do
-      %{Mixer.new(unquote(inputs), unquote(output)) | opts: unquote(opts)}
+      Mixer.new(unquote(inputs), unquote(output), unquote(opts))
     end
   end
 
   defmacro split(input, outputs, opts \\ []) do
     quote do
-      %{Splitter.new(unquote(input), unquote(outputs)) | opts: unquote(opts)}
+      Splitter.new(unquote(input), unquote(outputs), unquote(opts))
     end
   end
 
   defmacro transform(names, function, acc \\ nil, opts \\ []) do
     quote do
-      %{Transformer.new(unquote(names), unquote(function), unquote(acc)) | opts: unquote(opts)}
+      Transformer.new(unquote(names), unquote(function), unquote(acc), unquote(opts))
     end
   end
 

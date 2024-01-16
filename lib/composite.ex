@@ -74,14 +74,14 @@ defmodule Strom.Composite do
         %Strom.Sink{} = sink ->
           Strom.Sink.start(sink)
 
-        %Strom.Mixer{opts: opts} = mixer ->
-          Strom.Mixer.start(mixer, opts)
+        %Strom.Mixer{} = mixer ->
+          Strom.Mixer.start(mixer)
 
-        %Strom.Splitter{opts: opts} = splitter ->
-          Strom.Splitter.start(splitter, opts)
+        %Strom.Splitter{} = splitter ->
+          Strom.Splitter.start(splitter)
 
-        %Strom.Transformer{opts: opts} = transformer when is_list(opts) ->
-          Strom.Transformer.start(transformer, opts)
+        %Strom.Transformer{} = transformer ->
+          Strom.Transformer.start(transformer)
 
         %Strom.Renamer{} = renamer ->
           Strom.Renamer.start(renamer)

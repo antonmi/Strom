@@ -9,8 +9,8 @@ defmodule Strom.MixerTest do
   setup do
     mixer =
       [:stream1, :stream2]
-      |> Mixer.new(:stream)
-      |> Mixer.start(buffer: 1)
+      |> Mixer.new(:stream, buffer: 1)
+      |> Mixer.start()
 
     %{mixer: mixer}
   end

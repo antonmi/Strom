@@ -31,15 +31,16 @@ defmodule Strom.Mixer do
 
   @spec new(
           [Strom.stream_name()] | %{Strom.stream_name() => (event() -> as_boolean(any))},
-          Strom.stream_name()
+          Strom.stream_name(),
+          list()
         ) :: __MODULE__.t()
-  def new(inputs, output)
-      when is_list(inputs) or (is_map(inputs) and map_size(inputs) > 0) do
+  def new(inputs, output, opts \\ [])
+      when is_list(inputs) or (is_map(inputs) and map_size(inputs) > 0 and is_list(opts)) do
     %__MODULE__{inputs: inputs, output: output}
   end
 
-  @spec start(__MODULE__.t(), buffer: integer()) :: __MODULE__.t()
-  def start(%__MODULE__{inputs: inputs, output: output} = mixer, opts \\ []) do
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
+  def start(%__MODULE__{inputs: inputs, output: output, opts: opts} = mixer) do
     inputs =
       if is_list(inputs) do
         Enum.reduce(inputs, %{}, fn name, acc ->
@@ -58,7 +59,7 @@ defmodule Strom.Mixer do
     }
 
     {:ok, pid} = GenMix.start(gen_mix)
-    %{mixer | pid: pid, opts: opts}
+    %{mixer | pid: pid}
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()

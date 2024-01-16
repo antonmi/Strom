@@ -51,22 +51,19 @@ defmodule Strom.Transformer do
           (event() -> event())
           | (event(), acc() -> {[event()], acc()})
 
-  @spec new(Strom.stream_name(), func(), acc()) :: __MODULE__.t()
-  def new(names, function, acc \\ nil) do
+  @spec new(Strom.stream_name(), func(), acc(), list()) :: __MODULE__.t()
+  def new(names, function, acc \\ nil, opts \\ []) when is_function(function) and is_list(opts) do
     %__MODULE__{
       function: function,
       acc: acc,
-      names: names
+      names: names,
+      opts: opts
     }
   end
 
-  @spec start(__MODULE__.t(), buffer: integer(), opts: list()) :: __MODULE__.t()
-  def start(%__MODULE__{} = transformer, opts \\ []) do
-    transformer = %{
-      transformer
-      | opts: opts,
-        buffer: Keyword.get(opts, :buffer, @buffer)
-    }
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
+  def start(%__MODULE__{opts: opts} = transformer) do
+    transformer = %{transformer | buffer: Keyword.get(opts, :buffer, @buffer)}
 
     {:ok, pid} = start_link(transformer)
     __state__(pid)

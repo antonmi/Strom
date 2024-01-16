@@ -1,7 +1,7 @@
 defmodule Strom.Source.IOGets do
   @behaviour Strom.Source
 
-  defstruct infinite: true
+  defstruct infinite: false
 
   def new, do: %__MODULE__{}
 

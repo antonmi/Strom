@@ -29,18 +29,16 @@ defmodule Strom.Splitter do
 
   @spec new(
           Strom.stream_name(),
-          [Strom.stream_name()] | %{Strom.stream_name() => (event() -> as_boolean(any))}
+          [Strom.stream_name()] | %{Strom.stream_name() => (event() -> as_boolean(any))},
+          list()
         ) :: __MODULE__.t()
-  def new(input, outputs) when is_list(outputs) or (is_map(outputs) and map_size(outputs)) > 0 do
+  def new(input, outputs, opts \\ [])
+      when is_list(outputs) or ((is_map(outputs) and map_size(outputs)) > 0 and is_list(opts)) do
     %Strom.Splitter{input: input, outputs: outputs}
   end
 
-  @spec start(__MODULE__.t(), buffer: integer()) :: __MODULE__.t()
-  def start(
-        %__MODULE__{input: input, outputs: outputs} =
-          splitter,
-        opts \\ []
-      ) do
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
+  def start(%__MODULE__{input: input, outputs: outputs, opts: opts} = splitter) do
     inputs = %{input => fn _el -> true end}
 
     outputs =
