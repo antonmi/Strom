@@ -5,14 +5,14 @@ defmodule Strom.GenMix do
 
   use GenServer
 
-  @buffer 1
+  @chunk 1
 
   defstruct pid: nil,
             inputs: [],
             outputs: [],
             opts: [],
             running: false,
-            buffer: @buffer,
+            chunk: @chunk,
             producers: %{},
             consumers: %{}
 
@@ -21,7 +21,7 @@ defmodule Strom.GenMix do
   def start(%__MODULE__{opts: opts} = gen_mix) when is_list(opts) do
     gen_mix = %{
       gen_mix
-      | buffer: Keyword.get(opts, :buffer, @buffer)
+      | chunk: Keyword.get(opts, :chunk, @chunk)
     }
 
     start_link(gen_mix)
@@ -44,17 +44,17 @@ defmodule Strom.GenMix do
     GenServer.call(pid, :stop)
   end
 
-  defp run_inputs(streams, pid, buffer) do
+  defp run_inputs(streams, pid, chunk) do
     Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
-      task = async_run_stream({name, fun}, stream, buffer, pid)
+      task = async_run_stream({name, fun}, stream, chunk, pid)
       Map.put(acc, {name, fun}, task)
     end)
   end
 
-  defp async_run_stream({name, fun}, stream, buffer, pid) do
+  defp async_run_stream({name, fun}, stream, chunk, pid) do
     Task.async(fn ->
       stream
-      |> Stream.chunk_every(buffer)
+      |> Stream.chunk_every(chunk)
       |> Stream.each(fn chunk ->
         {chunk, _} = Enum.split_with(chunk, fun)
         GenServer.cast(pid, {:new_data, {name, fun}, chunk})
@@ -97,7 +97,7 @@ defmodule Strom.GenMix do
         {Map.put(flow, name, stream), mix}
       end)
 
-    producers = run_inputs(input_streams, mix.pid, mix.buffer)
+    producers = run_inputs(input_streams, mix.pid, mix.chunk)
 
     flow =
       flow

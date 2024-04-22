@@ -31,12 +31,12 @@ defmodule Strom.Transformer do
 
   use GenServer
 
-  @buffer 1
+  @chunk 1
 
   defstruct pid: nil,
             running: false,
             opts: [],
-            buffer: @buffer,
+            chunk: @chunk,
             function: nil,
             acc: nil,
             names: [],
@@ -63,7 +63,7 @@ defmodule Strom.Transformer do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{opts: opts} = transformer) do
-    transformer = %{transformer | buffer: Keyword.get(opts, :buffer, @buffer)}
+    transformer = %{transformer | chunk: Keyword.get(opts, :chunk, @chunk)}
 
     {:ok, pid} = start_link(transformer)
     __state__(pid)
@@ -139,17 +139,17 @@ defmodule Strom.Transformer do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp run_inputs(streams, pid, buffer) do
+  defp run_inputs(streams, pid, chunk) do
     Enum.reduce(streams, %{}, fn {{name, fun, acc}, stream}, streams_acc ->
-      task = async_run_stream({name, fun, acc}, stream, buffer, pid)
+      task = async_run_stream({name, fun, acc}, stream, chunk, pid)
       Map.put(streams_acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun, acc}, stream, buffer, pid) do
+  defp async_run_stream({name, fun, acc}, stream, chunk, pid) do
     Task.async(fn ->
       stream
-      |> Stream.chunk_every(buffer)
+      |> Stream.chunk_every(chunk)
       |> Stream.transform(acc, fn chunk, acc ->
         {chunk, new_acc} =
           Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
@@ -183,7 +183,7 @@ defmodule Strom.Transformer do
 
   @impl true
   def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
-    tasks = run_inputs(streams_to_call, transformer.pid, transformer.buffer)
+    tasks = run_inputs(streams_to_call, transformer.pid, transformer.chunk)
 
     {:reply, :ok, %{transformer | running: true, tasks: tasks}}
   end
