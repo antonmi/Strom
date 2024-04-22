@@ -75,17 +75,13 @@ defmodule Strom.Examples.SimpleNumbersTest do
         %{first: [1, 2, 3], second: [10, 20, 30]}
         |> Composite.call(round_robin)
 
-      mixed
-      |> Enum.chunk_every(2)
-      |> Enum.each(fn [first, second] ->
-        case first > second do
-          true ->
-            assert div(first, second) == 10
+      case Enum.to_list(mixed) do
+        [1 | rest] ->
+          assert rest == [10, 2, 20, 3, 30]
 
-          false ->
-            assert div(second, first) == 10
-        end
-      end)
+        [10 | rest] ->
+          assert rest == [1, 20, 2, 30, 3]
+      end
 
       Composite.stop(round_robin)
     end
