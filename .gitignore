@@ -25,5 +25,6 @@ strom-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+/test/examples/parcels/*.csv
+
 .DS_Store
-test_data

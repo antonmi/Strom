@@ -37,7 +37,7 @@ io_gets = Strom.Source.IOGets.new()
 source = :stream |> Strom.Source.new(io_gets)
 
 function = fn string -> "Hello, #{string}!" end
-transformer = :stream |> Strom.Transformer.new(function, nil, buffer: 1)
+transformer = :stream |> Strom.Transformer.new(function)
 
 io_puts = Strom.Sink.IOPuts.new()
 sink = :stream |> Strom.Sink.new(io_puts, true)

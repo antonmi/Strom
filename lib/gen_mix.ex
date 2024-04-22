@@ -5,7 +5,7 @@ defmodule Strom.GenMix do
 
   use GenServer
 
-  @buffer 1000
+  @buffer 1
 
   defstruct pid: nil,
             inputs: [],

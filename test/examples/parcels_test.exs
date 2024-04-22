@@ -187,9 +187,9 @@ defmodule Strom.Examples.ParcelsTest do
     def components() do
       [
         source(:orders, ReadLines.new("test/examples/parcels/orders.csv")),
-        transform([:orders], &__MODULE__.build_order/1),
+        transform([:orders], &__MODULE__.build_order/1, nil, buffer: 1000),
         source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv")),
-        transform([:parcels], &__MODULE__.build_parcel/1),
+        transform([:parcels], &__MODULE__.build_parcel/1, nil, buffer: 1000),
         mix([:orders, :parcels], :mixed),
         transform([:mixed], &ParcelsFlow.force_order/2, %{}),
         transform([:mixed], &ParcelsFlow.decide/2, %{}),
