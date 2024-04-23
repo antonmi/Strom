@@ -161,7 +161,7 @@ defmodule Strom.Composite do
   end
 
   @impl true
-  def handle_info(:continue, composite) do
+  def handle_info(:continue_client, composite) do
     {:noreply, composite}
   end
 

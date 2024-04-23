@@ -32,16 +32,18 @@ defmodule Strom.Transformer do
   use GenServer
 
   @chunk 1
+  @buffer 1000
 
   defstruct pid: nil,
-            running: false,
             opts: [],
             chunk: @chunk,
+            buffer: @buffer,
             function: nil,
             acc: nil,
             names: [],
             tasks: %{},
-            data: %{}
+            data: %{},
+            waiting_clients: %{}
 
   @type t() :: %__MODULE__{}
   @type event() :: any()
@@ -63,7 +65,11 @@ defmodule Strom.Transformer do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{opts: opts} = transformer) do
-    transformer = %{transformer | chunk: Keyword.get(opts, :chunk, @chunk)}
+    transformer = %{
+      transformer
+      | chunk: Keyword.get(opts, :chunk, @chunk),
+        buffer: Keyword.get(opts, :buffer, @buffer)
+    }
 
     {:ok, pid} = start_link(transformer)
     __state__(pid)
@@ -100,18 +106,17 @@ defmodule Strom.Transformer do
             end,
             fn nil ->
               case GenServer.call(transformer.pid, {:get_data, name}, :infinity) do
-                {:ok, data} ->
-                  if length(data) == 0 do
-                    receive do
-                      :continue ->
-                        flush()
-                    end
-                  end
-
+                {:data, data} ->
                   {data, nil}
 
-                {:error, :done} ->
+                :done ->
                   {:halt, nil}
+
+                :pause ->
+                  receive do
+                    :continue_client ->
+                      {[], nil}
+                  end
               end
             end,
             fn nil -> nil end
@@ -160,8 +165,8 @@ defmodule Strom.Transformer do
         GenServer.cast(pid, {:new_data, name, chunk})
 
         receive do
-          :continue ->
-            flush()
+          :continue_task ->
+            flush(:continue_task)
         end
 
         {[], new_acc}
@@ -172,10 +177,10 @@ defmodule Strom.Transformer do
     end)
   end
 
-  defp flush do
+  defp flush(message) do
     receive do
-      :continue ->
-        flush()
+      ^message ->
+        flush(message)
     after
       0 -> :ok
     end
@@ -185,44 +190,79 @@ defmodule Strom.Transformer do
   def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
     tasks = run_inputs(streams_to_call, transformer.pid, transformer.chunk)
 
-    {:reply, :ok, %{transformer | running: true, tasks: tasks}}
+    {:reply, :ok, %{transformer | tasks: tasks}}
   end
 
   def handle_call({:get_data, name}, {pid, _ref}, transformer) do
-    send(pid, :continue)
+    if task = transformer.tasks[name] do
+      send(task.pid, :continue_task)
+    end
 
     data = Map.get(transformer.data, name, [])
+    #    IO.inspect(length(data), label: inspect({:get_data, name}))
+    #    IO.inspect(transformer.tasks, label: inspect({:get_data, name}))
 
-    if length(data) == 0 and !transformer.running do
-      {:reply, {:error, :done}, transformer}
-    else
-      transformer = %{transformer | data: Map.put(transformer.data, name, [])}
-      {:reply, {:ok, data}, transformer}
+    cond do
+      length(data) == 0 and is_nil(transformer.tasks[name]) ->
+        {:reply, :done, transformer}
+
+      length(data) == 0 ->
+        waiting_clients = Map.put(transformer.waiting_clients, name, pid)
+        {:reply, :pause, %{transformer | waiting_clients: waiting_clients}}
+
+      true ->
+        transformer = %{transformer | data: Map.put(transformer.data, name, [])}
+        {:reply, {:data, data}, transformer}
     end
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = transformer) do
-    {:stop, :normal, :ok, %{transformer | running: false}}
+    {:stop, :normal, :ok, transformer}
   end
 
   def handle_call(:__state__, _from, transformer), do: {:reply, transformer, transformer}
 
   @impl true
   def handle_cast({:new_data, name, chunk}, %__MODULE__{} = transformer) do
-    task = Map.fetch!(transformer.tasks, name)
-    send(task.pid, :continue)
-
     prev_data = Map.get(transformer.data, name, [])
-    new_data = Map.put(transformer.data, name, prev_data ++ chunk)
-    transformer = %{transformer | data: new_data}
+    all_data = prev_data ++ chunk
+    #    IO.inspect(length(all_data), label: inspect({:new_data, name}))
+
+    waiting_clients =
+      case transformer.waiting_clients[name] do
+        nil ->
+          transformer.waiting_clients
+
+        client_pid when is_pid(client_pid) ->
+          send(client_pid, :continue_client)
+          Map.delete(transformer.waiting_clients, name)
+      end
+
+    if length(all_data) <= transformer.buffer do
+      task = Map.fetch!(transformer.tasks, name)
+      send(task.pid, :continue_task)
+    end
+
+    new_data = Map.put(transformer.data, name, all_data)
+    transformer = %{transformer | data: new_data, waiting_clients: waiting_clients}
 
     {:noreply, transformer}
   end
 
   def handle_cast({:done, name}, %__MODULE__{} = transformer) do
     transformer = %{transformer | tasks: Map.delete(transformer.tasks, name)}
-    running = map_size(transformer.tasks) > 0
-    {:noreply, %{transformer | running: running}}
+    # IO.inspect({:done, name})
+    waiting_clients =
+      case transformer.waiting_clients[name] do
+        nil ->
+          transformer.waiting_clients
+
+        client_pid when is_pid(client_pid) ->
+          send(client_pid, :continue_client)
+          Map.delete(transformer.waiting_clients, name)
+      end
+
+    {:noreply, %{transformer | waiting_clients: waiting_clients}}
   end
 
   @impl true

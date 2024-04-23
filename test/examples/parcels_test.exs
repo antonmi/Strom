@@ -61,8 +61,8 @@ defmodule Strom.Examples.ParcelsTest do
       [
         transform(:stream, &BuildEvent.call/2, acc),
         split(:stream, partitions),
-        transform(:orders, &__MODULE__.order_to_string/1),
-        transform(:parcels, &__MODULE__.parcel_to_string/1),
+        transform(:orders, &__MODULE__.order_to_string/1, nil, chunk: 100),
+        transform(:parcels, &__MODULE__.parcel_to_string/1, nil, chunk: 100),
         sink(:orders, WriteLines.new("test/examples/parcels/orders.csv")),
         sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), true)
       ]
@@ -187,12 +187,12 @@ defmodule Strom.Examples.ParcelsTest do
     def components() do
       [
         source(:orders, ReadLines.new("test/examples/parcels/orders.csv")),
-        transform([:orders], &__MODULE__.build_order/1, nil, chunk: 1000),
+        transform([:orders], &__MODULE__.build_order/1, nil, chunk: 100),
         source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv")),
-        transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: 1000),
+        transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: 100),
         mix([:orders, :parcels], :mixed),
-        transform([:mixed], &ParcelsFlow.force_order/2, %{}),
-        transform([:mixed], &ParcelsFlow.decide/2, %{}),
+        transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: 100),
+        transform([:mixed], &ParcelsFlow.decide/2, %{}, chunk: 100),
         split(:mixed, %{
           threshold_exceeded: &(&1[:type] == "THRESHOLD_EXCEEDED"),
           all_parcels_shipped: &(&1[:type] == "ALL_PARCELS_SHIPPED")
