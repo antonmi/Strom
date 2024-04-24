@@ -43,7 +43,8 @@ defmodule Strom.Transformer do
             names: [],
             tasks: %{},
             data: %{},
-            waiting_clients: %{}
+            waiting_clients: %{},
+            input_streams: %{}
 
   @type t() :: %__MODULE__{}
   @type event() :: any()
@@ -80,18 +81,25 @@ defmodule Strom.Transformer do
   end
 
   @impl true
-  def init(%__MODULE__{} = call) do
-    {:ok, %{call | pid: self()}}
+  def init(%__MODULE__{} = transformer) do
+    function =
+      if is_function(transformer.function, 1) do
+        fn el, nil -> {[transformer.function.(el)], nil} end
+      else
+        transformer.function
+      end
+
+    {:ok, %{transformer | pid: self(), function: function}}
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{names: names, function: function, acc: acc} = transformer)
+  def call(flow, %__MODULE__{names: names, function: function} = transformer)
       when is_map(flow) and is_function(function, 2) do
     names = if is_list(names), do: names, else: [names]
 
     input_streams =
       Enum.reduce(names, %{}, fn name, streams ->
-        Map.put(streams, {name, function, acc}, Map.fetch!(flow, name))
+        Map.put(streams, name, Map.fetch!(flow, name))
       end)
 
     :ok = GenServer.call(transformer.pid, {:run_inputs, input_streams})
@@ -130,13 +138,6 @@ defmodule Strom.Transformer do
     |> Map.merge(sub_flow)
   end
 
-  def call(flow, %__MODULE__{function: function} = transformer)
-      when is_map(flow) and is_function(function, 1) do
-    fun = fn el, nil -> {[function.(el)], nil} end
-    transformer = %{transformer | function: fun}
-    call(flow, transformer)
-  end
-
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}) do
     GenServer.call(pid, :stop)
@@ -144,25 +145,25 @@ defmodule Strom.Transformer do
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
-  defp run_inputs(streams, pid, chunk) do
-    Enum.reduce(streams, %{}, fn {{name, fun, acc}, stream}, streams_acc ->
-      task = async_run_stream({name, fun, acc}, stream, chunk, pid)
+  defp run_inputs(streams, transformer) do
+    Enum.reduce(streams, %{}, fn {name, stream}, streams_acc ->
+      task = async_run_stream({name, stream}, transformer)
       Map.put(streams_acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun, acc}, stream, chunk, pid) do
-    Task.async(fn ->
+  defp async_run_stream({name, stream}, transformer) do
+    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
       stream
-      |> Stream.chunk_every(chunk)
-      |> Stream.transform(acc, fn chunk, acc ->
+      |> Stream.chunk_every(transformer.chunk)
+      |> Stream.transform(transformer.acc, fn chunk, acc ->
         {chunk, new_acc} =
           Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-            {new_events, acc} = fun.(el, acc)
+            {new_events, acc} = transformer.function.(el, acc)
             {events ++ new_events, acc}
           end)
 
-        GenServer.cast(pid, {:new_data, name, chunk})
+        GenServer.cast(transformer.pid, {:new_data, name, chunk})
 
         receive do
           :continue_task ->
@@ -173,7 +174,7 @@ defmodule Strom.Transformer do
       end)
       |> Stream.run()
 
-      GenServer.cast(pid, {:done, name})
+      #      GenServer.cast(transformer.pid, {:done, name})
     end)
   end
 
@@ -188,9 +189,9 @@ defmodule Strom.Transformer do
 
   @impl true
   def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
-    tasks = run_inputs(streams_to_call, transformer.pid, transformer.chunk)
+    tasks = run_inputs(streams_to_call, transformer)
 
-    {:reply, :ok, %{transformer | tasks: tasks}}
+    {:reply, :ok, %{transformer | tasks: tasks, input_streams: streams_to_call}}
   end
 
   def handle_call({:get_data, name}, {pid, _ref}, transformer) do
@@ -199,8 +200,6 @@ defmodule Strom.Transformer do
     end
 
     data = Map.get(transformer.data, name, [])
-    #    IO.inspect(length(data), label: inspect({:get_data, name}))
-    #    IO.inspect(transformer.tasks, label: inspect({:get_data, name}))
 
     cond do
       length(data) == 0 and is_nil(transformer.tasks[name]) ->
@@ -226,17 +225,8 @@ defmodule Strom.Transformer do
   def handle_cast({:new_data, name, chunk}, %__MODULE__{} = transformer) do
     prev_data = Map.get(transformer.data, name, [])
     all_data = prev_data ++ chunk
-    #    IO.inspect(length(all_data), label: inspect({:new_data, name}))
 
-    waiting_clients =
-      case transformer.waiting_clients[name] do
-        nil ->
-          transformer.waiting_clients
-
-        client_pid when is_pid(client_pid) ->
-          send(client_pid, :continue_client)
-          Map.delete(transformer.waiting_clients, name)
-      end
+    waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
 
     if length(all_data) <= transformer.buffer do
       task = Map.fetch!(transformer.tasks, name)
@@ -249,30 +239,39 @@ defmodule Strom.Transformer do
     {:noreply, transformer}
   end
 
-  def handle_cast({:done, name}, %__MODULE__{} = transformer) do
-    transformer = %{transformer | tasks: Map.delete(transformer.tasks, name)}
-    # IO.inspect({:done, name})
-    waiting_clients =
-      case transformer.waiting_clients[name] do
-        nil ->
-          transformer.waiting_clients
-
-        client_pid when is_pid(client_pid) ->
-          send(client_pid, :continue_client)
-          Map.delete(transformer.waiting_clients, name)
-      end
-
-    {:noreply, %{transformer | waiting_clients: waiting_clients}}
-  end
-
   @impl true
   def handle_info({_task_ref, :ok}, transformer) do
     # do nothing for now
     {:noreply, transformer}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, transformer) do
-    # do nothing for now
-    {:noreply, transformer}
+  def handle_info({:DOWN, _task_ref, :process, task_pid, :normal}, transformer) do
+    {name, _task} = Enum.find(transformer.tasks, fn {_name, task} -> task.pid == task_pid end)
+    tasks = Map.delete(transformer.tasks, name)
+
+    waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
+
+    {:noreply, %{transformer | waiting_clients: waiting_clients, tasks: tasks}}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, transformer) do
+    {name, _task} = Enum.find(transformer.tasks, fn {_name, task} -> task.pid == task_pid end)
+    stream = Map.fetch!(transformer.input_streams, name)
+
+    new_task = async_run_stream({name, stream}, transformer)
+    tasks = Map.put(transformer.tasks, name, new_task)
+
+    {:noreply, %{transformer | tasks: tasks}}
+  end
+
+  defp continue_waiting_client(waiting_clients, name) do
+    case waiting_clients[name] do
+      nil ->
+        waiting_clients
+
+      client_pid when is_pid(client_pid) ->
+        send(client_pid, :continue_client)
+        Map.delete(waiting_clients, name)
+    end
   end
 end

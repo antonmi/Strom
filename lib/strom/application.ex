@@ -6,7 +6,8 @@ defmodule Strom.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {DynamicSupervisor, strategy: :one_for_one, name: Strom.DynamicSupervisor}
+      {DynamicSupervisor, strategy: :one_for_one, name: Strom.DynamicSupervisor},
+      {Task.Supervisor, strategy: :one_for_one, name: Strom.TaskSupervisor}
     ]
 
     opts = [strategy: :one_for_one, name: Strom.Supervisor]
