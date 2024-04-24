@@ -173,7 +173,7 @@ defmodule Strom.GenMix do
       send(client_pid, :continue_client)
     end)
 
-    if total_count <= mix.buffer do
+    if total_count < mix.buffer do
       task = Map.fetch!(mix.tasks, name)
       send(task.pid, :continue_task)
     end

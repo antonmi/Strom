@@ -33,6 +33,9 @@ defmodule Strom.Source.ReadLines do
       :eof ->
         {:error, :eof}
 
+      {:error, :terminated} ->
+        {:error, :eof}
+
       {:error, reason} ->
         raise reason
     end

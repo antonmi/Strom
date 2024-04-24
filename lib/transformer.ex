@@ -226,7 +226,7 @@ defmodule Strom.Transformer do
 
     waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
 
-    if length(all_data) <= transformer.buffer do
+    if length(all_data) < transformer.buffer do
       task = Map.fetch!(transformer.tasks, name)
       send(task.pid, :continue_task)
     end

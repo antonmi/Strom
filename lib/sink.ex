@@ -23,7 +23,9 @@ defmodule Strom.Sink do
   defstruct origin: nil,
             name: nil,
             sync: false,
-            pid: nil
+            pid: nil,
+            stream: nil,
+            task: nil
 
   @type t() :: %__MODULE__{}
   @type event() :: any()
@@ -53,22 +55,31 @@ defmodule Strom.Sink do
   def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data})
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{name: name, sync: sync} = sink) when is_map(flow) do
+  def call(flow, %__MODULE__{name: name} = sink) when is_map(flow) do
     stream = Map.fetch!(flow, name)
-
-    stream =
-      Stream.transform(stream, sink, fn el, sink ->
-        call(sink, el)
-        {[], sink}
-      end)
-
-    if sync do
-      Stream.run(stream)
-    else
-      Task.async(fn -> Stream.run(stream) end)
-    end
+    :ok = GenServer.call(sink.pid, {:run_stream, stream})
 
     Map.delete(flow, name)
+  end
+
+  defp async_run_sink(sink, stream) do
+    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
+      Stream.transform(stream, sink, fn el, sink ->
+        call_sink(sink, el)
+        {[], sink}
+      end)
+      |> Stream.run()
+    end)
+  end
+
+  defp call_sink(%__MODULE__{origin: origin} = sink, data) do
+    case apply(origin.__struct__, :call, [origin, data]) do
+      {:ok, {[], origin}} ->
+        {[], %{sink | origin: origin}}
+
+      {:error, {:halt, origin}} ->
+        {:halt, %{sink | origin: origin}}
+    end
   end
 
   @spec stop(__MODULE__.t()) :: :ok
@@ -80,17 +91,18 @@ defmodule Strom.Sink do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   @impl true
-  def handle_call({:call, data}, _from, %__MODULE__{origin: origin} = sink) do
-    {[], sink} =
-      case apply(origin.__struct__, :call, [origin, data]) do
-        {:ok, {[], origin}} ->
-          {[], %{sink | origin: origin}}
+  def handle_call({:run_stream, stream}, _from, %__MODULE__{} = sink) do
+    task = async_run_sink(sink, stream)
 
-        {:error, {:halt, origin}} ->
-          {:halt, %{sink | origin: origin}}
-      end
+    if sink.sync do
+      Task.await(task)
+    end
 
-    {:reply, {[], sink}, sink}
+    {:reply, :ok, %{sink | task: task, stream: stream}}
+  end
+
+  def handle_call({:call, data}, _from, %__MODULE__{} = sink) do
+    {:reply, call_sink(sink, data), sink}
   end
 
   def handle_call(:stop, _from, %__MODULE__{origin: origin} = sink) do
@@ -100,4 +112,20 @@ defmodule Strom.Sink do
   end
 
   def handle_call(:__state__, _from, sink), do: {:reply, sink, sink}
+
+  @impl true
+  def handle_info({_task_ref, :ok}, sink) do
+    # do nothing for now
+    {:noreply, sink}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, source) do
+    {:noreply, %{source | task: nil}}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, _not_normal}, sink) do
+    task = async_run_sink(sink, sink.stream)
+
+    {:noreply, %{sink | task: task}}
+  end
 end

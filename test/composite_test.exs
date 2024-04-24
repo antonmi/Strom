@@ -69,7 +69,7 @@ defmodule Strom.CompositeTest do
         Mixer.new([:s1, :s2], :s),
         Transformer.new(:s, &(&1 + 1)),
         Splitter.new(:s, odd_even),
-        Sink.new(:odd, Null.new())
+        Sink.new(:odd, Null.new(), true)
       ]
 
       composite =
