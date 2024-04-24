@@ -161,10 +161,6 @@ defmodule Strom.Composite do
   end
 
   @impl true
-  def handle_info(:continue, composite) do
-    {:noreply, composite}
-  end
-
   def handle_info({_task_ref, :ok}, composite) do
     # do nothing for now
     {:noreply, composite}

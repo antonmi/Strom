@@ -26,6 +26,20 @@ defmodule Strom.TransformerTest do
     assert Enum.sort(Enum.to_list(flow[:numbers])) == [1, 4, 9, 16, 25]
   end
 
+  test "with chunk and buffer" do
+    chunk = Enum.random(1..5)
+    buffer = Enum.random(1..5)
+
+    transformer =
+      :numbers
+      |> Transformer.new(&(&1 * &1), nil, chunk: chunk, buffer: buffer)
+      |> Transformer.start()
+
+    flow = %{numbers: [1, 2, 3, 4, 5]}
+    flow = Transformer.call(flow, transformer)
+    assert Enum.sort(Enum.to_list(flow[:numbers])) == [1, 4, 9, 16, 25]
+  end
+
   test "call with several streams" do
     transformer =
       [:numbers1, :numbers2]

@@ -14,7 +14,7 @@ defmodule Strom.TopologyTest do
         Mixer.new([:s1, :s2], :s),
         Transformer.new(:s, &(&1 + 1)),
         Splitter.new(:s, %{odd: &(rem(&1, 2) == 1), even: &(rem(&1, 2) == 0)}),
-        Sink.new(:odd, Null.new())
+        Sink.new(:odd, Null.new(), true)
       ]
     end
   end
@@ -72,7 +72,7 @@ defmodule Strom.TopologyTest do
       assert Enum.sort(Enum.to_list(even)) == [2, 4, 6]
 
       Process.exit(source1.pid, :kill)
-      Process.sleep(1)
+      Process.sleep(2)
 
       check_dead(topology)
 
