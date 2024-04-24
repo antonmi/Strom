@@ -78,6 +78,7 @@ defmodule Strom.Examples.ParcelsTest do
     @seconds_in_week 3600 * 24 * 7
 
     def build_order(event) do
+      #      if Enum.random(1..100) == 3, do: raise "error"
       list = String.split(event, ",")
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
 
@@ -90,6 +91,7 @@ defmodule Strom.Examples.ParcelsTest do
     end
 
     def build_parcel(event) do
+      #      if Enum.random(1..100) == 3, do: raise "error"
       list = String.split(event, ",")
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
 

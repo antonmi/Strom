@@ -38,13 +38,13 @@ defmodule Strom.Transformer do
             opts: [],
             chunk: @chunk,
             buffer: @buffer,
+            input_streams: %{},
             function: nil,
             acc: nil,
             names: [],
             tasks: %{},
             data: %{},
-            waiting_clients: %{},
-            input_streams: %{}
+            waiting_clients: %{}
 
   @type t() :: %__MODULE__{}
   @type event() :: any()
@@ -173,8 +173,6 @@ defmodule Strom.Transformer do
         {[], new_acc}
       end)
       |> Stream.run()
-
-      #      GenServer.cast(transformer.pid, {:done, name})
     end)
   end
 

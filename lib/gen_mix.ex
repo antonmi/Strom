@@ -14,6 +14,7 @@ defmodule Strom.GenMix do
             opts: [],
             chunk: @chunk,
             buffer: @buffer,
+            input_streams: %{},
             tasks: %{},
             data: %{},
             waiting_clients: %{}
@@ -53,7 +54,7 @@ defmodule Strom.GenMix do
   end
 
   defp async_run_stream({name, fun}, stream, mix) do
-    Task.async(fn ->
+    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
       stream
       |> Stream.chunk_every(mix.chunk)
       |> Stream.each(fn chunk ->
@@ -73,8 +74,6 @@ defmodule Strom.GenMix do
         end
       end)
       |> Stream.run()
-
-      GenServer.cast(mix.pid, {:done, name})
     end)
   end
 
@@ -131,7 +130,7 @@ defmodule Strom.GenMix do
       |> Map.drop(Map.keys(mix.inputs))
       |> Map.merge(sub_flow)
 
-    {:reply, flow, %{mix | tasks: tasks}}
+    {:reply, flow, %{mix | tasks: tasks, input_streams: input_streams}}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = mix) do
@@ -184,7 +183,14 @@ defmodule Strom.GenMix do
     {:noreply, mix}
   end
 
-  def handle_cast({:done, name}, %__MODULE__{} = mix) do
+  @impl true
+  def handle_info({_task_ref, :ok}, mix) do
+    # do nothing for now
+    {:noreply, mix}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, task_pid, :normal}, mix) do
+    {name, _task} = Enum.find(mix.tasks, fn {_name, task} -> task.pid == task_pid end)
     mix = %{mix | tasks: Map.delete(mix.tasks, name)}
 
     Enum.each(mix.waiting_clients, fn {_name, client_pid} ->
@@ -194,14 +200,12 @@ defmodule Strom.GenMix do
     {:noreply, %{mix | waiting_clients: %{}}}
   end
 
-  @impl true
-  def handle_info({_task_ref, :ok}, mix) do
-    # do nothing for now
-    {:noreply, mix}
-  end
+  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, mix) do
+    {name, _task} = Enum.find(mix.tasks, fn {_name, task} -> task.pid == task_pid end)
+    {{^name, function}, stream} = Enum.find(mix.input_streams, fn {{n, _}, _} -> n == name end)
+    new_task = async_run_stream({name, function}, stream, mix)
+    tasks = Map.put(mix.tasks, name, new_task)
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mix) do
-    # do nothing for now
-    {:noreply, mix}
+    {:noreply, %{mix | tasks: tasks}}
   end
 end
