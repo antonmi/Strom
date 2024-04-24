@@ -8,7 +8,7 @@ defmodule Strom.SourceTest do
   setup do
     source =
       :my_stream
-      |> Source.new(ReadLines.new("test/data/orders.csv"))
+      |> Source.new(ReadLines.new("test/data/orders.csv"), buffer: 10)
       |> Source.start()
 
     %{source: source}
@@ -19,6 +19,7 @@ defmodule Strom.SourceTest do
     assert source.origin.path == "test/data/orders.csv"
     Source.stop(source)
     refute Process.alive?(source.pid)
+    assert source.buffer == 10
   end
 
   test "call", %{source: source} do

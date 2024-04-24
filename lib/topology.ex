@@ -23,7 +23,6 @@ defmodule Strom.Topology do
       ...>  end
       iex> OddEvenTopology.start()
       iex> %{even: even} = OddEvenTopology.call(%{})
-      iex> OddEvenTopology.stop()
       iex> Enum.sort(Enum.to_list(even))
       [2, 4, 6]
   """
