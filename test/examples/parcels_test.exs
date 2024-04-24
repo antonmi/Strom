@@ -24,7 +24,7 @@ defmodule Strom.Examples.ParcelsTest do
 
         {parcels, _} =
           Enum.reduce(1..to_ship, {[], order[:occurred_at]}, fn _i, {acc, occurred_at} ->
-            occurred_at = DateTime.add(occurred_at, :rand.uniform(2 * 24 * 3600), :second)
+            occurred_at = DateTime.add(occurred_at, :rand.uniform(3 * 24 * 3600), :second)
 
             parcel = %{
               type: "PARCEL_SHIPPED",

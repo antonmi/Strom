@@ -26,5 +26,7 @@ strom-*.tar
 /tmp/
 
 /test/examples/parcels/*.csv
+/test/data/*.csv
+/test_data
 
 .DS_Store
