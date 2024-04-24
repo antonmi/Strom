@@ -1,6 +1,5 @@
 defmodule Strom.Examples.ParcelsTest do
   use ExUnit.Case
-  @moduletag timeout: :infinity
 
   alias Strom.Composite
 

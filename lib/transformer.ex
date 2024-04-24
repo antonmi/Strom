@@ -173,6 +173,8 @@ defmodule Strom.Transformer do
         {[], new_acc}
       end)
       |> Stream.run()
+
+      {:task_done, name}
     end)
   end
 
@@ -238,18 +240,17 @@ defmodule Strom.Transformer do
   end
 
   @impl true
-  def handle_info({_task_ref, :ok}, transformer) do
-    # do nothing for now
-    {:noreply, transformer}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, task_pid, :normal}, transformer) do
-    {name, _task} = Enum.find(transformer.tasks, fn {_name, task} -> task.pid == task_pid end)
+  def handle_info({_task_ref, {:task_done, name}}, transformer) do
     tasks = Map.delete(transformer.tasks, name)
 
     waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
 
     {:noreply, %{transformer | waiting_clients: waiting_clients, tasks: tasks}}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, transformer) do
+    # do nothing for now
+    {:noreply, transformer}
   end
 
   def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, transformer) do

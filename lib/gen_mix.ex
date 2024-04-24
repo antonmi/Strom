@@ -74,6 +74,8 @@ defmodule Strom.GenMix do
         end
       end)
       |> Stream.run()
+
+      {:task_done, name}
     end)
   end
 
@@ -184,13 +186,7 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_info({_task_ref, :ok}, mix) do
-    # do nothing for now
-    {:noreply, mix}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, task_pid, :normal}, mix) do
-    {name, _task} = Enum.find(mix.tasks, fn {_name, task} -> task.pid == task_pid end)
+  def handle_info({_task_ref, {:task_done, name}}, mix) do
     mix = %{mix | tasks: Map.delete(mix.tasks, name)}
 
     Enum.each(mix.waiting_clients, fn {_name, client_pid} ->
@@ -198,6 +194,11 @@ defmodule Strom.GenMix do
     end)
 
     {:noreply, %{mix | waiting_clients: %{}}}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mix) do
+    # do nothing
+    {:noreply, mix}
   end
 
   def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, mix) do

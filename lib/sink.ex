@@ -69,6 +69,8 @@ defmodule Strom.Sink do
         {[], sink}
       end)
       |> Stream.run()
+
+      :task_done
     end)
   end
 
@@ -114,13 +116,14 @@ defmodule Strom.Sink do
   def handle_call(:__state__, _from, sink), do: {:reply, sink, sink}
 
   @impl true
-  def handle_info({_task_ref, :ok}, sink) do
+  def handle_info({_task_ref, :task_done}, sink) do
     # do nothing for now
-    {:noreply, sink}
+    {:noreply, %{sink | task: nil}}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, source) do
-    {:noreply, %{source | task: nil}}
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, sink) do
+    # do nothing for now
+    {:noreply, sink}
   end
 
   def handle_info({:DOWN, _task_ref, :process, _task_pid, _not_normal}, sink) do

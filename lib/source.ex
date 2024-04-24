@@ -138,7 +138,7 @@ defmodule Strom.Source do
   defp loop_call(source) do
     case call_source(source) do
       {:halt, _source} ->
-        :ok
+        :task_done
 
       {events, source} ->
         GenServer.cast(source.pid, {:new_data, events})
@@ -223,17 +223,17 @@ defmodule Strom.Source do
   end
 
   @impl true
-  def handle_info({_task_ref, :ok}, source) do
-    # do nothing for now
-    {:noreply, source}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, source) do
+  def handle_info({_task_ref, :task_done}, source) do
     if source.waiting_client do
       send(source.waiting_client, :continue_client)
     end
 
     {:noreply, %{source | task: nil, waiting_client: nil}}
+  end
+
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, source) do
+    # do nothing for now
+    {:noreply, source}
   end
 
   def handle_info({:DOWN, _task_ref, :process, _task_pid, _not_normal}, source) do
