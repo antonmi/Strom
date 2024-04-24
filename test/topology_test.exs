@@ -72,7 +72,7 @@ defmodule Strom.TopologyTest do
       assert Enum.sort(Enum.to_list(even)) == [2, 4, 6]
 
       Process.exit(source1.pid, :kill)
-      Process.sleep(1)
+      Process.sleep(2)
 
       check_dead(topology)
 

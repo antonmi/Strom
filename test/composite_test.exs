@@ -31,7 +31,7 @@ defmodule Strom.CompositeTest do
     def components do
       [
         split(:numbers, %{more: &(&1 >= 10), less: &(&1 < 10)}),
-        sink(:less, Null.new())
+        sink(:less, Null.new(), true)
       ]
     end
   end

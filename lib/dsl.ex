@@ -4,9 +4,9 @@ defmodule Strom.DSL do
   """
   alias Strom.{Transformer, Mixer, Renamer, Sink, Source, Splitter}
 
-  defmacro source(name, origin) do
+  defmacro source(name, origin, opts \\ []) do
     quote do
-      Source.new(unquote(name), unquote(origin))
+      Source.new(unquote(name), unquote(origin), unquote(opts))
     end
   end
 

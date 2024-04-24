@@ -49,7 +49,7 @@ defmodule Strom.Source do
   @type t() :: %__MODULE__{}
   @type event() :: any()
 
-  @spec new(Strom.stream_name(), struct() | [event()]) :: __MODULE__.t()
+  @spec new(Strom.stream_name(), struct() | [event()], list()) :: __MODULE__.t()
   def new(name, origin, opts \\ [])
       when is_struct(origin) or (is_list(origin) and is_list(opts)) do
     %__MODULE__{origin: origin, name: name, opts: opts}
