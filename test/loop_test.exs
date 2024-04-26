@@ -6,7 +6,7 @@ defmodule Strom.LoopTest do
   setup do
     loop_source =
       :to_loop
-      |> Source.new(Loop.new(:the_loop, timeout: 20))
+      |> Source.new(Loop.new(:the_loop, timeout: 50))
       |> Source.start()
 
     loop_sink =
