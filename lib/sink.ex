@@ -57,7 +57,7 @@ defmodule Strom.Sink do
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{name: name} = sink) when is_map(flow) do
     stream = Map.fetch!(flow, name)
-    :ok = GenServer.call(sink.pid, {:run_stream, stream})
+    :ok = GenServer.call(sink.pid, {:run_stream, stream}, :infinity)
 
     Map.delete(flow, name)
   end
@@ -97,7 +97,7 @@ defmodule Strom.Sink do
     task = async_run_sink(sink, stream)
 
     if sink.sync do
-      Task.await(task)
+      Task.await(task, :infinity)
     end
 
     {:reply, :ok, %{sink | task: task, stream: stream}}
