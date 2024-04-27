@@ -199,7 +199,10 @@ defmodule Strom.Transformer do
       send(task.pid, :continue_task)
     end
 
-    data = Map.get(transformer.data, name, [])
+    {data, rest} =
+      transformer.data
+      |> Map.get(name, [])
+      |> Enum.split(transformer.chunk)
 
     cond do
       length(data) == 0 and is_nil(transformer.tasks[name]) ->
@@ -210,7 +213,7 @@ defmodule Strom.Transformer do
         {:reply, :pause, %{transformer | waiting_clients: waiting_clients}}
 
       true ->
-        transformer = %{transformer | data: Map.put(transformer.data, name, [])}
+        transformer = %{transformer | data: Map.put(transformer.data, name, rest)}
         {:reply, {:data, data}, transformer}
     end
   end

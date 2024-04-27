@@ -46,6 +46,8 @@ defmodule Strom.Examples.ParcelsTest do
       "#{parcel[:type]},#{DateTime.to_iso8601(parcel[:occurred_at])},#{parcel[:order_number]}"
     end
 
+    @chunk 1000
+
     def components() do
       partitions = %{
         orders: &(&1[:type] == "ORDER_CREATED"),
@@ -58,10 +60,10 @@ defmodule Strom.Examples.ParcelsTest do
       }
 
       [
-        transform(:stream, &BuildEvent.call/2, acc),
+        transform(:stream, &BuildEvent.call/2, acc, chunk: @chunk),
         split(:stream, partitions),
-        transform(:orders, &__MODULE__.order_to_string/1, nil, chunk: 100),
-        transform(:parcels, &__MODULE__.parcel_to_string/1, nil, chunk: 100),
+        transform(:orders, &__MODULE__.order_to_string/1, nil, chunk: @chunk),
+        transform(:parcels, &__MODULE__.parcel_to_string/1, nil, chunk: @chunk),
         sink(:orders, WriteLines.new("test/examples/parcels/orders.csv")),
         sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), true)
       ]
@@ -185,20 +187,26 @@ defmodule Strom.Examples.ParcelsTest do
       "#{event[:type]},#{event[:order_number]},#{event[:occurred_at]}"
     end
 
+    @chunk 1000
+
     def components() do
       [
-        source(:orders, ReadLines.new("test/examples/parcels/orders.csv")),
-        transform([:orders], &__MODULE__.build_order/1, nil, chunk: 100),
-        source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv")),
-        transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: 100),
-        mix([:orders, :parcels], :mixed),
-        transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: 100),
-        transform([:mixed], &ParcelsFlow.decide/2, %{}, chunk: 100),
-        split(:mixed, %{
-          threshold_exceeded: &(&1[:type] == "THRESHOLD_EXCEEDED"),
-          all_parcels_shipped: &(&1[:type] == "ALL_PARCELS_SHIPPED")
-        }),
-        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1),
+        source(:orders, ReadLines.new("test/examples/parcels/orders.csv"), chunk: @chunk),
+        transform([:orders], &__MODULE__.build_order/1, nil, chunk: @chunk),
+        source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv"), chunk: @chunk),
+        transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: @chunk),
+        mix([:orders, :parcels], :mixed, chunk: @chunk),
+        transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: @chunk),
+        transform([:mixed], &ParcelsFlow.decide/2, %{}, chunk: @chunk),
+        split(
+          :mixed,
+          %{
+            threshold_exceeded: &(&1[:type] == "THRESHOLD_EXCEEDED"),
+            all_parcels_shipped: &(&1[:type] == "ALL_PARCELS_SHIPPED")
+          },
+          chunk: @chunk
+        ),
+        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1, nil),
         sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv")),
         sink(
           :all_parcels_shipped,

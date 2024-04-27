@@ -140,8 +140,12 @@ defmodule Strom.GenMix do
   end
 
   def handle_call({:get_data, name}, {pid, _ref}, mix) do
-    data = Map.get(mix.data, name, [])
-    mix = %{mix | data: Map.put(mix.data, name, [])}
+    {data, rest} =
+      mix.data
+      |> Map.get(name, [])
+      |> Enum.split(mix.chunk)
+
+    mix = %{mix | data: Map.put(mix.data, name, rest)}
 
     total_count = Enum.reduce(mix.data, 0, fn {_name, data}, count -> count + length(data) end)
 

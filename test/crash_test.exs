@@ -9,7 +9,7 @@ defmodule Strom.CrashTest do
   setup do
     source =
       :stream
-      |> Source.new(ReadLines.new("test/data/numbers1.txt"), buffer: 1)
+      |> Source.new(ReadLines.new("test/data/numbers1.txt"), chunk: 1, buffer: 1)
       |> Source.start()
 
     %{source: source}
@@ -53,12 +53,7 @@ defmodule Strom.CrashTest do
           |> Transformer.call(transformer)
 
         results = Enum.to_list(stream)
-        # it's flaky
-        if length(results) == 3 do
-          assert results == ["1", "2", "5"]
-        else
-          assert results == ["1", "2"]
-        end
+        assert results == ["1", "2", "5"]
       end)
     end
   end
@@ -96,12 +91,7 @@ defmodule Strom.CrashTest do
           |> Enum.to_list()
           |> Enum.sort()
 
-        # it's flaky
-        if length(results) == 8 do
-          assert results == ["1", "2", "20", "3", "30", "40", "5", "50"]
-        else
-          assert results == ["1", "2", "3", "30", "40", "5", "50"]
-        end
+        assert results == ["1", "2", "20", "3", "30", "40", "5", "50"]
       end)
     end
   end
@@ -127,14 +117,8 @@ defmodule Strom.CrashTest do
         s1res = Enum.to_list(s1)
         s2res = Enum.to_list(s2)
 
-        # it's flaky
-        if length(s1res) == 3 do
-          assert s1res == ["2", "3", "5"]
-          assert s2res == ["2", "3", "5"]
-        else
-          assert s1res == ["3", "5"]
-          assert s2res == ["3", "5"]
-        end
+        assert s1res == ["2", "3", "5"]
+        assert s2res == ["2", "3", "5"]
       end)
     end
   end
@@ -255,15 +239,12 @@ defmodule Strom.CrashTest do
         |> Source.call(source)
         |> Sink.call(sink)
 
-        Process.sleep(10)
+        Process.sleep(50)
+        Sink.stop(sink)
 
         result = File.read!("test/data/output.csv")
 
-        if String.length(result) == 8 do
-          assert result == "1\n3\n4\n5\n"
-        else
-          assert result == "1\n4\n5\n"
-        end
+        assert result == "1\n3\n4\n5\n"
       end)
     end
   end

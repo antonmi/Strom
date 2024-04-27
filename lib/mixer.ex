@@ -36,7 +36,7 @@ defmodule Strom.Mixer do
         ) :: __MODULE__.t()
   def new(inputs, output, opts \\ [])
       when is_list(inputs) or (is_map(inputs) and map_size(inputs) > 0 and is_list(opts)) do
-    %__MODULE__{inputs: inputs, output: output}
+    %__MODULE__{inputs: inputs, output: output, opts: opts}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()

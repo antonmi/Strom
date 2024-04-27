@@ -36,6 +36,7 @@ defmodule Strom.Source do
   use GenServer
 
   @buffer 1000
+  @chunk 1
 
   defstruct origin: nil,
             name: nil,
@@ -44,6 +45,7 @@ defmodule Strom.Source do
             opts: [],
             task: nil,
             waiting_client: nil,
+            chunk: @chunk,
             buffer: @buffer
 
   @type t() :: %__MODULE__{}
@@ -60,7 +62,8 @@ defmodule Strom.Source do
     start(%{
       source
       | origin: Strom.Source.Events.new(list),
-        buffer: Keyword.get(opts, :buffer, @buffer)
+        buffer: Keyword.get(opts, :buffer, @buffer),
+        chunk: Keyword.get(opts, :chunk, @chunk)
     })
   end
 
@@ -193,7 +196,7 @@ defmodule Strom.Source do
       send(source.task.pid, :continue_task)
     end
 
-    data = source.data
+    {data, rest} = Enum.split(source.data, source.chunk)
 
     cond do
       length(data) == 0 and is_nil(source.task) ->
@@ -203,7 +206,7 @@ defmodule Strom.Source do
         {:reply, :pause, %{source | waiting_client: pid}}
 
       true ->
-        {:reply, {:data, data}, %{source | data: []}}
+        {:reply, {:data, data}, %{source | data: rest}}
     end
   end
 

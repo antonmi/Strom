@@ -34,7 +34,7 @@ defmodule Strom.Splitter do
         ) :: __MODULE__.t()
   def new(input, outputs, opts \\ [])
       when is_list(outputs) or ((is_map(outputs) and map_size(outputs)) > 0 and is_list(opts)) do
-    %Strom.Splitter{input: input, outputs: outputs}
+    %Strom.Splitter{input: input, outputs: outputs, opts: opts}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
