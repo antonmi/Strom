@@ -103,21 +103,6 @@ defmodule Strom.Topology do
     {:stop, :normal, :ok, topology}
   end
 
-  @impl true
-  def handle_info(:continue, topology) do
-    {:noreply, topology}
-  end
-
-  def handle_info({_task_ref, :ok}, topology) do
-    # do nothing for now
-    {:noreply, topology}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, topology) do
-    # do nothing for now
-    {:noreply, topology}
-  end
-
   defmacro __using__(_opts) do
     quote do
       import Strom.DSL
