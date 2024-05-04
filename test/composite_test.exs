@@ -146,6 +146,45 @@ defmodule Strom.CompositeTest do
       Transformer.stop(transformer)
     end
 
+    test "compose in another way" do
+      mega_composite =
+        [
+          MyComposite.components(),
+          Transformer.new(:even, &(&1 * 3)),
+          Renamer.new(%{even: :numbers}),
+          AnotherComposite.components()
+        ]
+        |> Composite.new()
+        |> Composite.start()
+
+      flow = Composite.call(%{}, mega_composite)
+
+      assert Enum.sort(Enum.to_list(flow[:more])) == [12, 18]
+      Composite.stop(mega_composite)
+    end
+
+    test "compose composites" do
+      composite = Composite.new(MyComposite.components())
+      another_composite = Composite.new(AnotherComposite.components())
+      transformer = Transformer.new(:even, &(&1 * 3))
+      renamer = Renamer.new(%{even: :numbers})
+
+      mega_composite =
+        [
+          composite,
+          transformer,
+          renamer,
+          another_composite
+        ]
+        |> Composite.new()
+        |> Composite.start()
+
+      flow = Composite.call(%{}, mega_composite)
+
+      assert Enum.sort(Enum.to_list(flow[:more])) == [12, 18]
+      Composite.stop(mega_composite)
+    end
+
     test "compose in new" do
       my_composite = Composite.new(MyComposite.components())
       another_composite = Composite.new(AnotherComposite.components())

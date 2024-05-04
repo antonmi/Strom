@@ -35,7 +35,9 @@ defmodule Strom.Composite do
   @spec new([struct()]) :: __MODULE__.t()
   def new(components) when is_list(components) do
     components =
-      Enum.reduce(components, [], fn component, acc ->
+      components
+      |> List.flatten()
+      |> Enum.reduce([], fn component, acc ->
         case component do
           %__MODULE__{components: components} ->
             acc ++ components
@@ -56,12 +58,7 @@ defmodule Strom.Composite do
 
   @impl true
   def init(%__MODULE__{components: components} = composite) do
-    components =
-      components
-      |> List.flatten()
-      |> build()
-
-    {:ok, %{composite | pid: self(), components: components}}
+    {:ok, %{composite | pid: self(), components: build(components)}}
   end
 
   def build(components) do
