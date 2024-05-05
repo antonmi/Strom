@@ -51,20 +51,16 @@ defmodule Strom.Source do
   @type t() :: %__MODULE__{}
   @type event() :: any()
 
-  @spec new(Strom.stream_name(), struct() | [event()], list()) :: __MODULE__.t()
+  @spec new(Strom.stream_name(), struct() | [event()] | Strom.stream(), list()) :: __MODULE__.t()
   def new(name, origin, opts \\ [])
-      when is_struct(origin) or (is_list(origin) and is_list(opts)) do
-    %__MODULE__{origin: origin, name: name, opts: opts}
+
+  def new(name, origin, opts) when is_list(origin) and is_list(opts) do
+    %__MODULE__{origin: Stream.concat([], origin), name: name, opts: opts}
   end
 
-  @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{origin: list, opts: opts} = source) when is_list(list) do
-    start(%{
-      source
-      | origin: Strom.Source.Events.new(list),
-        buffer: Keyword.get(opts, :buffer, @buffer),
-        chunk: Keyword.get(opts, :chunk, @chunk)
-    })
+  def new(name, origin, opts)
+      when (is_struct(origin) or is_function(origin, 2)) and is_list(opts) do
+    %__MODULE__{origin: origin, name: name, opts: opts}
   end
 
   def start(%__MODULE__{origin: origin, opts: opts} = source) when is_struct(origin) do
@@ -73,7 +69,20 @@ defmodule Strom.Source do
     source = %{
       source
       | origin: origin,
-        buffer: Keyword.get(opts, :buffer, @buffer)
+        buffer: Keyword.get(opts, :buffer, @buffer),
+        chunk: Keyword.get(opts, :chunk, @chunk)
+    }
+
+    {:ok, pid} = start_link(source)
+    __state__(pid)
+  end
+
+  def start(%__MODULE__{origin: origin, opts: opts} = source) when is_function(origin, 2) do
+    source = %{
+      source
+      | origin: origin,
+        buffer: Keyword.get(opts, :buffer, @buffer),
+        chunk: Keyword.get(opts, :chunk, @chunk)
     }
 
     {:ok, pid} = start_link(source)
@@ -93,7 +102,8 @@ defmodule Strom.Source do
   def infinite?(%__MODULE__{pid: pid}), do: GenServer.call(pid, :infinite)
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{name: name} = source) when is_map(flow) do
+  def call(flow, %__MODULE__{name: name, origin: origin} = source)
+      when is_map(flow) and is_struct(origin) do
     :ok = GenServer.call(source.pid, :run_input)
 
     stream =
@@ -123,10 +133,21 @@ defmodule Strom.Source do
     Map.put(flow, name, Stream.concat(prev_stream, stream))
   end
 
+  @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
+  def call(flow, %__MODULE__{name: name, origin: stream})
+      when is_map(flow) and is_function(stream, 2) do
+    prev_stream = Map.get(flow, name, [])
+    Map.put(flow, name, Stream.concat(prev_stream, stream))
+  end
+
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{origin: origin, pid: pid}) do
+  def stop(%__MODULE__{origin: origin, pid: pid}) when is_struct(origin) do
     apply(origin.__struct__, :stop, [origin])
 
+    GenServer.call(pid, :stop)
+  end
+
+  def stop(%__MODULE__{origin: origin, pid: pid}) when is_function(origin, 2) do
     GenServer.call(pid, :stop)
   end
 
@@ -183,9 +204,13 @@ defmodule Strom.Source do
     {:reply, call_source(source), source}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source) do
+  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source) when is_struct(origin) do
     origin = apply(origin.__struct__, :stop, [origin])
-    source = %{source | origin: origin}
+    {:stop, :normal, :ok, %{source | origin: origin}}
+  end
+
+  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source)
+      when is_function(origin, 2) do
     {:stop, :normal, :ok, source}
   end
 

@@ -61,4 +61,29 @@ defmodule Strom.SourceTest do
     numbers = Enum.to_list(stream)
     assert Enum.sort(numbers) == [1, 2, 3, 4, 5, 6]
   end
+
+  test "stream in the source" do
+    stream =
+      Stream.resource(
+        fn -> 5 end,
+        fn count ->
+          if count > 0 do
+            Process.sleep(1)
+            {[:tick], count - 1}
+          else
+            {:halt, 0}
+          end
+        end,
+        fn 0 -> 0 end
+      )
+
+    source =
+      :my_stream
+      |> Source.new(stream)
+      |> Source.start()
+
+    %{my_stream: my_stream} = Source.call(%{}, source)
+
+    assert Enum.to_list(my_stream) == [:tick, :tick, :tick, :tick, :tick]
+  end
 end
