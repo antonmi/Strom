@@ -14,6 +14,7 @@ defmodule Strom.GenMix do
             opts: [],
             chunk: @chunk,
             buffer: @buffer,
+            no_wait: false,
             input_streams: %{},
             tasks: %{},
             data: %{},
@@ -23,7 +24,8 @@ defmodule Strom.GenMix do
     gen_mix = %{
       gen_mix
       | chunk: Keyword.get(opts, :chunk, @chunk),
-        buffer: Keyword.get(opts, :buffer, @buffer)
+        buffer: Keyword.get(opts, :buffer, @buffer),
+        no_wait: Keyword.get(opts, :no_wait, false)
     }
 
     start_link(gen_mix)
@@ -149,12 +151,12 @@ defmodule Strom.GenMix do
 
     total_count = Enum.reduce(mix.data, 0, fn {_name, data}, count -> count + length(data) end)
 
-    if total_count <= mix.buffer do
+    if total_count <= mix.buffer and mix.no_wait != :first_stream_done do
       Enum.each(mix.tasks, fn {_, task} -> send(task.pid, :continue_task) end)
     end
 
     cond do
-      length(data) == 0 and map_size(mix.tasks) == 0 ->
+      length(data) == 0 and (map_size(mix.tasks) == 0 or mix.no_wait == :first_stream_done) ->
         {:reply, :done, mix}
 
       length(data) == 0 ->
@@ -179,8 +181,8 @@ defmodule Strom.GenMix do
       send(client_pid, :continue_client)
     end)
 
-    if total_count < mix.buffer do
-      task = Map.fetch!(mix.tasks, name)
+    if total_count < mix.buffer and mix.no_wait != :first_stream_done do
+      task = Map.get(mix.tasks, name)
       send(task.pid, :continue_task)
     end
 
@@ -196,6 +198,13 @@ defmodule Strom.GenMix do
     Enum.each(mix.waiting_clients, fn {_name, client_pid} ->
       send(client_pid, :continue_client)
     end)
+
+    mix =
+      if mix.no_wait do
+        %{mix | no_wait: :first_stream_done}
+      else
+        mix
+      end
 
     {:noreply, %{mix | waiting_clients: %{}}}
   end

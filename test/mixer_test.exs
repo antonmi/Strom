@@ -2,9 +2,8 @@ defmodule Strom.MixerTest do
   use ExUnit.Case, async: true
   doctest Strom.Mixer
 
-  alias Strom.Source
+  alias Strom.{Composite, Mixer, Source}
   alias Strom.Source.ReadLines
-  alias Strom.Mixer
 
   setup do
     mixer =
@@ -154,6 +153,28 @@ defmodule Strom.MixerTest do
       stream
       |> Enum.to_list()
       |> Enum.each(fn el -> assert String.contains?(el, "111,3") end)
+    end
+  end
+
+  describe "halt mix stream if one of the stream ends" do
+    setup do
+      source_finite = Source.new(:finite, [1, 2, 3, 4, 5])
+      source_infinite = Source.new(:infinite, Stream.cycle([9, 8, 7]))
+
+      mixer = Mixer.new([:finite, :infinite], :stream, no_wait: true)
+
+      composite =
+        [source_finite, source_infinite, mixer]
+        |> Composite.new()
+        |> Composite.start()
+
+      %{composite: composite}
+    end
+
+    test "halt when one stream halts", %{composite: composite} do
+      %{stream: stream} = Composite.call(%{}, composite)
+      results = Enum.to_list(stream)
+      Enum.each([1, 2, 3, 4, 5], fn num -> assert Enum.member?(results, num) end)
     end
   end
 end
