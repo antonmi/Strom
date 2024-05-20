@@ -154,9 +154,12 @@ defmodule Strom.Source do
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp async_run_input(source) do
-    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
-      loop_call(source)
-    end)
+    Task.Supervisor.async_nolink(
+      {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
+      fn ->
+        loop_call(source)
+      end
+    )
   end
 
   defp loop_call(source) do

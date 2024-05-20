@@ -153,29 +153,32 @@ defmodule Strom.Transformer do
   end
 
   defp async_run_stream({name, stream}, transformer) do
-    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
-      stream
-      |> Stream.chunk_every(transformer.chunk)
-      |> Stream.transform(transformer.acc, fn chunk, acc ->
-        {chunk, new_acc} =
-          Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-            {new_events, acc} = transformer.function.(el, acc)
-            {events ++ new_events, acc}
-          end)
+    Task.Supervisor.async_nolink(
+      {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
+      fn ->
+        stream
+        |> Stream.chunk_every(transformer.chunk)
+        |> Stream.transform(transformer.acc, fn chunk, acc ->
+          {chunk, new_acc} =
+            Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+              {new_events, acc} = transformer.function.(el, acc)
+              {events ++ new_events, acc}
+            end)
 
-        GenServer.cast(transformer.pid, {:new_data, name, chunk})
+          GenServer.cast(transformer.pid, {:new_data, name, chunk})
 
-        receive do
-          :continue_task ->
-            flush(:continue_task)
-        end
+          receive do
+            :continue_task ->
+              flush(:continue_task)
+          end
 
-        {[], new_acc}
-      end)
-      |> Stream.run()
+          {[], new_acc}
+        end)
+        |> Stream.run()
 
-      {:task_done, name}
-    end)
+        {:task_done, name}
+      end
+    )
   end
 
   defp flush(message) do

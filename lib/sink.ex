@@ -63,15 +63,18 @@ defmodule Strom.Sink do
   end
 
   defp async_run_sink(sink, stream) do
-    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
-      Stream.transform(stream, sink, fn el, sink ->
-        call_sink(sink, el)
-        {[], sink}
-      end)
-      |> Stream.run()
+    Task.Supervisor.async_nolink(
+      {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
+      fn ->
+        Stream.transform(stream, sink, fn el, sink ->
+          call_sink(sink, el)
+          {[], sink}
+        end)
+        |> Stream.run()
 
-      :task_done
-    end)
+        :task_done
+      end
+    )
   end
 
   defp call_sink(%__MODULE__{origin: origin} = sink, data) do
