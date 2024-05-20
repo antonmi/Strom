@@ -18,7 +18,8 @@ defmodule Strom.GenMix do
             input_streams: %{},
             tasks: %{},
             data: %{},
-            waiting_clients: %{}
+            waiting_clients: %{},
+            waiting_tasks: %{}
 
   def start(%__MODULE__{opts: opts} = gen_mix) when is_list(opts) do
     gen_mix = %{
@@ -56,29 +57,32 @@ defmodule Strom.GenMix do
   end
 
   defp async_run_stream({name, fun}, stream, mix) do
-    Task.Supervisor.async_nolink(Strom.TaskSupervisor, fn ->
-      stream
-      |> Stream.chunk_every(mix.chunk)
-      |> Stream.each(fn chunk ->
-        {chunk, _} = Enum.split_with(chunk, fun)
+    Task.Supervisor.async_nolink(
+      {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
+      fn ->
+        stream
+        |> Stream.chunk_every(mix.chunk)
+        |> Stream.each(fn chunk ->
+          {chunk, _} = Enum.split_with(chunk, fun)
 
-        new_data =
-          Enum.reduce(mix.outputs, %{}, fn {name, fun}, acc ->
-            {data, _} = Enum.split_with(chunk, fun)
-            Map.put(acc, name, data)
-          end)
+          new_data =
+            Enum.reduce(mix.outputs, %{}, fn {name, fun}, acc ->
+              {data, _} = Enum.split_with(chunk, fun)
+              Map.put(acc, name, data)
+            end)
 
-        GenServer.cast(mix.pid, {:new_data, name, new_data})
+          GenServer.cast(mix.pid, {:new_data, name, new_data, self()})
 
-        receive do
-          :continue_task ->
-            flush(:continue_task)
-        end
-      end)
-      |> Stream.run()
+          receive do
+            :continue_task ->
+              flush(:continue_task)
+          end
+        end)
+        |> Stream.run()
 
-      {:task_done, name}
-    end)
+        {:task_done, name}
+      end
+    )
   end
 
   defp flush(message) do
@@ -142,18 +146,19 @@ defmodule Strom.GenMix do
   end
 
   def handle_call({:get_data, name}, {pid, _ref}, mix) do
-    {data, rest} =
-      mix.data
-      |> Map.get(name, [])
-      |> Enum.split(mix.chunk)
-
-    mix = %{mix | data: Map.put(mix.data, name, rest)}
+    data = Map.get(mix.data, name, [])
 
     total_count = Enum.reduce(mix.data, 0, fn {_name, data}, count -> count + length(data) end)
 
-    if total_count <= mix.buffer and mix.no_wait != :first_stream_done do
-      Enum.each(mix.tasks, fn {_, task} -> send(task.pid, :continue_task) end)
-    end
+    waiting_tasks =
+      if total_count <= mix.buffer and mix.no_wait != :first_stream_done do
+        Enum.each(mix.waiting_tasks, fn {_name, task_pid} -> send(task_pid, :continue_task) end)
+        %{}
+      else
+        mix.waiting_tasks
+      end
+
+    mix = %{mix | data: Map.put(mix.data, name, []), waiting_tasks: waiting_tasks}
 
     cond do
       length(data) == 0 and (map_size(mix.tasks) == 0 or mix.no_wait == :first_stream_done) ->
@@ -169,7 +174,7 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_cast({:new_data, name, new_data}, %__MODULE__{} = mix) do
+  def handle_cast({:new_data, name, new_data, task_pid}, %__MODULE__{} = mix) do
     {all_mix_data, total_count} =
       Enum.reduce(new_data, {mix.data, 0}, fn {name, data}, {all_mix_data, count} ->
         prev_data = Map.get(all_mix_data, name, [])
@@ -181,12 +186,16 @@ defmodule Strom.GenMix do
       send(client_pid, :continue_client)
     end)
 
-    if total_count < mix.buffer and mix.no_wait != :first_stream_done do
-      task = Map.get(mix.tasks, name)
-      send(task.pid, :continue_task)
-    end
+    waiting_tasks =
+      if total_count < mix.buffer and mix.no_wait != :first_stream_done do
+        task = Map.get(mix.tasks, name)
+        send(task.pid, :continue_task)
+        mix.waiting_tasks
+      else
+        Map.put(mix.waiting_tasks, name, task_pid)
+      end
 
-    mix = %{mix | data: all_mix_data, waiting_clients: %{}}
+    mix = %{mix | data: all_mix_data, waiting_clients: %{}, waiting_tasks: waiting_tasks}
 
     {:noreply, mix}
   end
