@@ -130,6 +130,7 @@ defmodule Strom.Composite do
         %Strom.Renamer{} = renamer ->
           Strom.Renamer.call(flow, renamer)
       end
+      |> tap(fn _ -> collect_garbage(component) end)
     end)
   end
 
@@ -156,4 +157,7 @@ defmodule Strom.Composite do
       end
     end)
   end
+
+  defp collect_garbage(%Strom.Renamer{}), do: :nothing
+  defp collect_garbage(component), do: :erlang.garbage_collect(component.pid)
 end
