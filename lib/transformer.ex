@@ -72,7 +72,12 @@ defmodule Strom.Transformer do
         buffer: Keyword.get(opts, :buffer, @buffer)
     }
 
-    {:ok, pid} = start_link(transformer)
+    {:ok, pid} =
+      DynamicSupervisor.start_child(
+        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, transformer}},
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [transformer]}, restart: :temporary}
+      )
+
     __state__(pid)
   end
 
@@ -222,6 +227,10 @@ defmodule Strom.Transformer do
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = transformer) do
+    Enum.each(transformer.tasks, fn {_name, task_pid} ->
+      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task_pid)
+    end)
+
     {:stop, :normal, :ok, transformer}
   end
 

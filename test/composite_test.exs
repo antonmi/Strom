@@ -154,7 +154,7 @@ defmodule Strom.CompositeTest do
           Renamer.new(%{even: :numbers}),
           AnotherComposite.components()
         ]
-        |> Composite.new()
+        |> Composite.new(:comp2)
         |> Composite.start()
 
       flow = Composite.call(%{}, mega_composite)
@@ -224,10 +224,10 @@ defmodule Strom.CompositeTest do
     end
 
     test "compose explicitly" do
-      comp11 = Composite1.comps() |> Composite.new() |> Composite.start()
-      comp21 = Composite2.comps() |> Composite.new() |> Composite.start()
-      comp12 = Composite1.comps() |> Composite.new() |> Composite.start()
-      comp22 = Composite2.comps() |> Composite.new() |> Composite.start()
+      comp11 = Composite1.comps() |> Composite.new(:comp11) |> Composite.start()
+      comp21 = Composite2.comps() |> Composite.new(:comp21) |> Composite.start()
+      comp12 = Composite1.comps() |> Composite.new(:comp12) |> Composite.start()
+      comp22 = Composite2.comps() |> Composite.new(:comp22) |> Composite.start()
 
       flow =
         %{numbers: [1, 2, 3]}
@@ -247,7 +247,7 @@ defmodule Strom.CompositeTest do
     test "compose in new" do
       composite =
         [Composite1.comps(), Composite2.comps(), Composite1.comps(), Composite2.comps()]
-        |> Composite.new()
+        |> Composite.new(:comp)
         |> Composite.start()
 
       flow = Composite.call(%{numbers: [1, 2, 3]}, composite)

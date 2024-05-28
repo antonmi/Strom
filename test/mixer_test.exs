@@ -175,6 +175,7 @@ defmodule Strom.MixerTest do
       %{stream: stream} = Composite.call(%{}, composite)
       results = Enum.to_list(stream)
       Enum.each([1, 2, 3, 4, 5], fn num -> assert Enum.member?(results, num) end)
+      Composite.stop(composite)
     end
   end
 end
