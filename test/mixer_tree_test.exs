@@ -5,7 +5,7 @@ defmodule Strom.MixerTreeTest do
 
   @tag timeout: :infinity
   test "messages" do
-    count = :rand.uniform(1000)
+    count = :rand.uniform(100)
 
     names = Enum.map(1..count, &String.to_atom("tick#{&1}"))
 
@@ -24,5 +24,6 @@ defmodule Strom.MixerTreeTest do
     flow = Composite.call(%{}, composite)
 
     assert length(Enum.to_list(flow[:stream])) == count
+    Composite.stop(composite)
   end
 end

@@ -26,6 +26,7 @@ defmodule Strom.Composite do
   """
 
   defstruct pid: nil,
+            name: nil,
             components: []
 
   use GenServer
@@ -33,7 +34,7 @@ defmodule Strom.Composite do
   @type t :: %__MODULE__{}
 
   @spec new([struct()]) :: __MODULE__.t()
-  def new(components) when is_list(components) do
+  def new(components, name \\ nil) when is_list(components) do
     components =
       components
       |> List.flatten()
@@ -47,13 +48,25 @@ defmodule Strom.Composite do
         end
       end)
 
-    %__MODULE__{components: components}
+    name = if name, do: name, else: generate_name(components)
+
+    %__MODULE__{name: name, components: components}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{} = composite) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, composite)
+    {:ok, pid} =
+      DynamicSupervisor.start_child(
+        Strom.DynamicSupervisor,
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [composite]}, restart: :permanent}
+      )
+
+    Process.link(pid)
     __state__(pid)
+  end
+
+  def start_link(%__MODULE__{name: name} = composite) do
+    GenServer.start_link(__MODULE__, composite, name: name)
   end
 
   @impl true
@@ -83,14 +96,22 @@ defmodule Strom.Composite do
         %Strom.Renamer{} = renamer ->
           Strom.Renamer.start(renamer)
       end
+      |> tap(&monitor_component/1)
     end)
   end
 
-  @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{pid: pid}), do: GenServer.call(pid, {:call, flow}, :infinity)
+  @spec call(Strom.flow(), __MODULE__.t() | atom()) :: Strom.flow()
+  def call(flow, %__MODULE__{name: name}), do: GenServer.call(name, {:call, flow}, :infinity)
+
+  def call(flow, name) when is_atom(name), do: GenServer.call(name, {:call, flow}, :infinity)
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
+  def stop(%__MODULE__{name: name, components: components}) do
+    pid = Process.whereis(name)
+    Process.unlink(pid)
+    stop_components(components)
+    DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
+  end
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
@@ -103,10 +124,13 @@ defmodule Strom.Composite do
     {:reply, flow, composite}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{components: components} = composite) do
+  @impl true
+  def handle_info(
+        {:DOWN, _ref, :process, _pid, _reason},
+        %__MODULE__{components: components} = composite
+      ) do
     stop_components(components)
-
-    {:stop, :normal, :ok, composite}
+    {:noreply, %{composite | components: build(components)}}
   end
 
   def reduce_flow(components, init_flow) do
@@ -130,7 +154,7 @@ defmodule Strom.Composite do
         %Strom.Renamer{} = renamer ->
           Strom.Renamer.call(flow, renamer)
       end
-      |> tap(fn _ -> collect_garbage(component) end)
+      |> tap(fn _flow -> collect_garbage(component) end)
     end)
   end
 
@@ -158,6 +182,26 @@ defmodule Strom.Composite do
     end)
   end
 
+  defp generate_name(components) do
+    components
+    |> Enum.map(fn %{__struct__: struct} -> to_string(struct) end)
+    |> Enum.map(&String.at(&1, 13))
+    |> Enum.join("")
+    |> String.slice(0..15)
+    |> then(&(&1 <> "_" <> pid_postfix()))
+    |> String.to_atom()
+  end
+
+  defp monitor_component(%Strom.Renamer{}), do: :nothing
+
+  defp monitor_component(component) do
+    Process.monitor(component.pid)
+  end
+
   defp collect_garbage(%Strom.Renamer{}), do: :nothing
   defp collect_garbage(component), do: :erlang.garbage_collect(component.pid)
+
+  defp pid_postfix do
+    to_string(:erlang.pid_to_list(self()))
+  end
 end

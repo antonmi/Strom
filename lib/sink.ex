@@ -40,7 +40,12 @@ defmodule Strom.Sink do
     origin = apply(origin.__struct__, :start, [origin])
     sink = %{sink | origin: origin}
 
-    {:ok, pid} = start_link(sink)
+    {:ok, pid} =
+      DynamicSupervisor.start_child(
+        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, sink}},
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [sink]}, restart: :temporary}
+      )
+
     __state__(pid)
   end
 
@@ -88,10 +93,7 @@ defmodule Strom.Sink do
   end
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{origin: origin, pid: pid}) do
-    apply(origin.__struct__, :stop, [origin])
-    GenServer.call(pid, :stop)
-  end
+  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
@@ -110,8 +112,13 @@ defmodule Strom.Sink do
     {:reply, call_sink(sink, data), sink}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{origin: origin} = sink) do
+  def handle_call(:stop, _from, %__MODULE__{origin: origin, task: task} = sink) do
     origin = apply(origin.__struct__, :stop, [origin])
+
+    if task do
+      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task.pid)
+    end
+
     sink = %{sink | origin: origin}
     {:stop, :normal, :ok, sink}
   end

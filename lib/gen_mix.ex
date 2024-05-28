@@ -29,7 +29,10 @@ defmodule Strom.GenMix do
         no_wait: Keyword.get(opts, :no_wait, false)
     }
 
-    start_link(gen_mix)
+    DynamicSupervisor.start_child(
+      {:via, PartitionSupervisor, {Strom.ComponentSupervisor, gen_mix}},
+      %{id: __MODULE__, start: {__MODULE__, :start_link, [gen_mix]}, restart: :temporary}
+    )
   end
 
   def start_link(%__MODULE__{} = state) do
@@ -142,6 +145,10 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = mix) do
+    Enum.each(mix.tasks, fn {_name, task} ->
+      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task.pid)
+    end)
+
     {:stop, :normal, :ok, mix}
   end
 

@@ -125,8 +125,8 @@ defmodule Strom.Examples.WindowTest do
         )
 
       %{numbers: numbers} = Composite.call(%{numbers: numbers}, composite)
-
       assert Enum.to_list(numbers) == [7.0, 7.0, 7.0, 7.0]
+      Composite.stop(composite)
     end
   end
 end

@@ -73,7 +73,7 @@ defmodule Strom.Source do
         chunk: Keyword.get(opts, :chunk, @chunk)
     }
 
-    {:ok, pid} = start_link(source)
+    {:ok, pid} = start_child(source)
     __state__(pid)
   end
 
@@ -85,8 +85,15 @@ defmodule Strom.Source do
         chunk: Keyword.get(opts, :chunk, @chunk)
     }
 
-    {:ok, pid} = start_link(source)
+    {:ok, pid} = start_child(source)
     __state__(pid)
+  end
+
+  def start_child(source) do
+    DynamicSupervisor.start_child(
+      {:via, PartitionSupervisor, {Strom.ComponentSupervisor, source}},
+      %{id: __MODULE__, start: {__MODULE__, :start_link, [source]}, restart: :temporary}
+    )
   end
 
   def start_link(%__MODULE__{} = source) do
@@ -141,15 +148,7 @@ defmodule Strom.Source do
   end
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{origin: origin, pid: pid}) when is_struct(origin) do
-    apply(origin.__struct__, :stop, [origin])
-
-    GenServer.call(pid, :stop)
-  end
-
-  def stop(%__MODULE__{origin: origin, pid: pid}) when is_function(origin, 2) do
-    GenServer.call(pid, :stop)
-  end
+  def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
   def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
@@ -207,13 +206,23 @@ defmodule Strom.Source do
     {:reply, call_source(source), source}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source) when is_struct(origin) do
+  def handle_call(:stop, _from, %__MODULE__{origin: origin, task: task} = source)
+      when is_struct(origin) do
     origin = apply(origin.__struct__, :stop, [origin])
+
+    if task do
+      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task.pid)
+    end
+
     {:stop, :normal, :ok, %{source | origin: origin}}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{origin: origin} = source)
+  def handle_call(:stop, _from, %__MODULE__{origin: origin, task: task} = source)
       when is_function(origin, 2) do
+    if task do
+      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task.pid)
+    end
+
     {:stop, :normal, :ok, source}
   end
 
