@@ -1,7 +1,8 @@
 - tick source with timeout
-- loop for sink and source
 - :__all__ for calling components on all streams in flow
 - source and sink parameterization (opts)
-- https://complexevents.com/2020/06/15/whats-the-difference-between-esp-and-cep-2/
+- https://drops.dagstuhl.de/storage/00lipics/lipics-vol127-icdt2019/LIPIcs.ICDT.2019.5/LIPIcs.ICDT.2019.5.pdf
 - https://getindata.com/blog/lesson-learned-apache-flink-complex-event-processing/
 - https://www.researchgate.net/publication/343994577_Complex_Event_Processing_for_the_Internet_of_Things
+- https://www.dfki.de/fileadmin/user_upload/import/11130_PhD_Workshop.pdf
+- https://arxiv.org/pdf/1910.07867
