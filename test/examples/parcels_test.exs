@@ -230,8 +230,6 @@ defmodule Strom.Examples.ParcelsTest do
   end
 
   test "solve" do
-    :observer.start()
-
     parcels_flow =
       ParcelsFlow.components()
       |> Composite.new()
