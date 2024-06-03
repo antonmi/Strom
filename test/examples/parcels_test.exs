@@ -217,7 +217,7 @@ defmodule Strom.Examples.ParcelsTest do
     end
   end
 
-  @parcels_count 100
+  @orders_count 100
 
   test "generate_data" do
     gen_data =
@@ -225,11 +225,13 @@ defmodule Strom.Examples.ParcelsTest do
       |> Composite.new()
       |> Composite.start()
 
-    Composite.call(%{stream: List.duplicate(:tick, @parcels_count)}, gen_data)
+    Composite.call(%{stream: List.duplicate(:tick, @orders_count)}, gen_data)
     Composite.stop(gen_data)
   end
 
   test "solve" do
+    :observer.start()
+
     parcels_flow =
       ParcelsFlow.components()
       |> Composite.new()
@@ -251,7 +253,7 @@ defmodule Strom.Examples.ParcelsTest do
       |> length()
       |> then(&(&1 - 1))
 
-    assert shipped_length + threshold_length == @parcels_count
+    assert shipped_length + threshold_length == @orders_count
 
     Composite.stop(parcels_flow)
   end
