@@ -7,7 +7,8 @@
 ### Strom provides a set of abstractions for creating, routing and modifying streams of data.
 
 #### Something to read:
-[Composable components for complex event processing](https://medium.com/@anton-mishchuk/composable-components-for-complex-event-processing-61fea21dee5d) - the Meduim article with some theory. 
+[Composable components for complex event processing](https://medium.com/@anton-mishchuk/composable-components-for-complex-event-processing-61fea21dee5d) - the Meduim article with some theory.
+[Strom — composable components for stream processing](https://medium.com/@anton-mishchuk/strom-composable-components-for-stream-processing-cf9fe49b5f0c) - some details of implementation.
 
 ## Notation
 <img src="images/components.png" alt="Implicit components" width="800"/>
