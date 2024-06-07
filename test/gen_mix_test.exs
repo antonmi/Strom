@@ -35,7 +35,6 @@ defmodule Strom.GenMixTest do
   end
 
   test "massive call" do
-    #    :observer.start()
     flow = %{
       numbers1: Enum.to_list(1..100_000),
       numbers2: Enum.to_list(1..100_000),
@@ -72,64 +71,5 @@ defmodule Strom.GenMixTest do
 
     Task.await(task1, :infinity)
     Task.await(task2, :infinity)
-  end
-
-  test "huge files" do
-    #      :observer.start()
-    #    source1 =
-    #      :source1
-    #      |> Strom.Source.new(Strom.Source.ReadLines.new("test_data/orders.csv"))
-    #      |> Strom.Source.start()
-    #
-    #    source2 =
-    #      :source2
-    #      |> Strom.Source.new(Strom.Source.ReadLines.new("test_data/parcels.csv"))
-    #      |> Strom.Source.start()
-    #
-    #    sink1 =
-    #      :odd
-    #      |> Strom.Sink.new(Strom.Sink.WriteLines.new("test_data/odd.csv"))
-    #      |> Strom.Sink.start()
-    #
-    #    sink2 =
-    #      :even
-    #      |> Strom.Sink.new(Strom.Sink.WriteLines.new("test_data/even.csv"), true)
-    #      |> Strom.Sink.start()
-    #
-    #    flow =
-    #      %{}
-    #      |> Strom.Source.call(source1)
-    #      |> Strom.Source.call(source2)
-    #
-    #    inputs = %{
-    #      source1: fn el -> el end,
-    #      source2: fn el -> el end
-    #    }
-    #
-    #    outputs = %{
-    #      odd: fn el -> rem(el, 2) == 1 end,
-    #      even: fn el -> rem(el, 2) == 0 end
-    #    }
-    #
-    #    {:ok, mix1} = GenMix.start(%GenMix{inputs: inputs, outputs: inputs})
-    #    {:ok, mix2} = GenMix.start(%GenMix{inputs: inputs, outputs: outputs})
-    #
-    #    transformer1 =
-    #      [:source1, :source2]
-    #      |> Strom.Transformer.new(fn el -> String.length(el) end)
-    #      |> Strom.Transformer.start()
-    #
-    #    transformer2 =
-    #      [:odd, :even]
-    #      |> Strom.Transformer.new(fn el -> "#{el}" end)
-    #      |> Strom.Transformer.start()
-    #
-    #    flow
-    #    |> GenMix.call(mix1)
-    #    |> Strom.Transformer.call(transformer1)
-    #    |> GenMix.call(mix2)
-    #    |> Strom.Transformer.call(transformer2)
-    #    |> Strom.Sink.call(sink1)
-    #    |> Strom.Sink.call(sink2)
   end
 end

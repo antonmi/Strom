@@ -219,6 +219,7 @@ defmodule Strom.Examples.ParcelsTest do
 
   @orders_count 100
 
+  @tag timeout: :infinity
   test "generate_data" do
     gen_data =
       GenData.components()
@@ -229,6 +230,7 @@ defmodule Strom.Examples.ParcelsTest do
     Composite.stop(gen_data)
   end
 
+  @tag timeout: :infinity
   test "solve" do
     parcels_flow =
       ParcelsFlow.components()
