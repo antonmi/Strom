@@ -45,7 +45,7 @@ defmodule Strom.GenMix do
   end
 
   def call(flow, pid) do
-    GenServer.call(pid, {:call, flow})
+    GenServer.call(pid, {:call, flow}, :infinity)
   end
 
   def stop(pid) do

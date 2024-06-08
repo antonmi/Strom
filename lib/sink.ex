@@ -57,7 +57,7 @@ defmodule Strom.Sink do
   def init(%__MODULE__{} = sink), do: {:ok, %{sink | pid: self()}}
 
   @spec call(__MODULE__.t(), any()) :: event()
-  def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data})
+  def call(%__MODULE__{pid: pid}, data), do: GenServer.call(pid, {:call, data}, :infinity)
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{name: name} = sink) when is_map(flow) do
