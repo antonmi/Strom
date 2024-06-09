@@ -116,7 +116,7 @@ defmodule Strom.Composite do
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
-
+    collect_garbage(composite)
     {:reply, flow, composite}
   end
 
@@ -195,7 +195,12 @@ defmodule Strom.Composite do
   end
 
   defp collect_garbage(%Strom.Renamer{}), do: :nothing
-  defp collect_garbage(component), do: :erlang.garbage_collect(component.pid)
+
+  defp collect_garbage(component) do
+    spawn(fn ->
+      :erlang.garbage_collect(component.pid)
+    end)
+  end
 
   defp pid_postfix do
     to_string(:erlang.pid_to_list(self()))
