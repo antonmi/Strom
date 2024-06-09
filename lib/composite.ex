@@ -75,27 +75,9 @@ defmodule Strom.Composite do
   end
 
   def build(components) do
-    components
-    |> Enum.map(fn component ->
-      case component do
-        %Strom.Source{} = source ->
-          Strom.Source.start(source)
-
-        %Strom.Sink{} = sink ->
-          Strom.Sink.start(sink)
-
-        %Strom.Mixer{} = mixer ->
-          Strom.Mixer.start(mixer)
-
-        %Strom.Splitter{} = splitter ->
-          Strom.Splitter.start(splitter)
-
-        %Strom.Transformer{} = transformer ->
-          Strom.Transformer.start(transformer)
-
-        %Strom.Renamer{} = renamer ->
-          Strom.Renamer.start(renamer)
-      end
+    Enum.map(components, fn %{__struct__: module} = component ->
+      component
+      |> module.start()
       |> tap(&monitor_component/1)
     end)
   end
@@ -130,51 +112,16 @@ defmodule Strom.Composite do
   end
 
   def reduce_flow(components, init_flow) do
-    Enum.reduce(components, init_flow, fn component, flow ->
-      case component do
-        %Strom.Source{} = source ->
-          Strom.Source.call(flow, source)
-
-        %Strom.Sink{} = sink ->
-          Strom.Sink.call(flow, sink)
-
-        %Strom.Mixer{} = mixer ->
-          Strom.Mixer.call(flow, mixer)
-
-        %Strom.Splitter{} = splitter ->
-          Strom.Splitter.call(flow, splitter)
-
-        %Strom.Transformer{} = transformer ->
-          Strom.Transformer.call(flow, transformer)
-
-        %Strom.Renamer{} = renamer ->
-          Strom.Renamer.call(flow, renamer)
-      end
+    Enum.reduce(components, init_flow, fn %{__struct__: module} = component, flow ->
+      flow
+      |> module.call(component)
       |> tap(fn _flow -> collect_garbage(component) end)
     end)
   end
 
   def stop_components(components) do
-    Enum.each(components, fn component ->
-      case component do
-        %Strom.Source{} = source ->
-          Strom.Source.stop(source)
-
-        %Strom.Sink{} = sink ->
-          Strom.Sink.stop(sink)
-
-        %Strom.Mixer{} = mixer ->
-          Strom.Mixer.stop(mixer)
-
-        %Strom.Splitter{} = splitter ->
-          Strom.Splitter.stop(splitter)
-
-        %Strom.Transformer{} = transformer ->
-          Strom.Transformer.stop(transformer)
-
-        %Strom.Renamer{} = renamer ->
-          Strom.Renamer.stop(renamer)
-      end
+    Enum.each(components, fn %{__struct__: module} = component ->
+      module.stop(component)
     end)
   end
 
