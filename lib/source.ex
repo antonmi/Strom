@@ -74,7 +74,7 @@ defmodule Strom.Source do
     }
 
     {:ok, pid} = start_child(source)
-    __state__(pid)
+    :sys.get_state(pid)
   end
 
   def start(%__MODULE__{origin: origin, opts: opts} = source) when is_function(origin, 2) do
@@ -86,7 +86,7 @@ defmodule Strom.Source do
     }
 
     {:ok, pid} = start_child(source)
-    __state__(pid)
+    :sys.get_state(pid)
   end
 
   def start_child(source) do
@@ -149,8 +149,6 @@ defmodule Strom.Source do
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
-
-  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp async_run_input(source) do
     Task.Supervisor.async_nolink(
@@ -225,8 +223,6 @@ defmodule Strom.Source do
 
     {:stop, :normal, :ok, source}
   end
-
-  def handle_call(:__state__, _from, source), do: {:reply, source, source}
 
   def handle_call(:get_data, {pid, _ref}, source) do
     if source.task do

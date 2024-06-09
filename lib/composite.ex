@@ -62,7 +62,7 @@ defmodule Strom.Composite do
       )
 
     Process.link(pid)
-    __state__(pid)
+    :sys.get_state(pid)
   end
 
   def start_link(%__MODULE__{name: name} = composite) do
@@ -113,11 +113,7 @@ defmodule Strom.Composite do
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
   end
 
-  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
-
   @impl true
-  def handle_call(:__state__, _from, composite), do: {:reply, composite, composite}
-
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
 

@@ -78,7 +78,7 @@ defmodule Strom.Transformer do
         %{id: __MODULE__, start: {__MODULE__, :start_link, [transformer]}, restart: :temporary}
       )
 
-    __state__(pid)
+    :sys.get_state(pid)
   end
 
   def start_link(%__MODULE__{} = transformer) do
@@ -147,8 +147,6 @@ defmodule Strom.Transformer do
   def stop(%__MODULE__{pid: pid}) do
     GenServer.call(pid, :stop)
   end
-
-  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
 
   defp run_inputs(streams, transformer) do
     Enum.reduce(streams, %{}, fn {name, stream}, streams_acc ->
@@ -230,8 +228,6 @@ defmodule Strom.Transformer do
 
     {:stop, :normal, :ok, transformer}
   end
-
-  def handle_call(:__state__, _from, transformer), do: {:reply, transformer, transformer}
 
   @impl true
   def handle_cast({:new_data, name, chunk}, %__MODULE__{} = transformer) do

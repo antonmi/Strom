@@ -46,7 +46,7 @@ defmodule Strom.Sink do
         %{id: __MODULE__, start: {__MODULE__, :start_link, [sink]}, restart: :temporary}
       )
 
-    __state__(pid)
+    :sys.get_state(pid)
   end
 
   def start_link(%__MODULE__{} = sink) do
@@ -95,8 +95,6 @@ defmodule Strom.Sink do
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}), do: GenServer.call(pid, :stop)
 
-  def __state__(pid) when is_pid(pid), do: GenServer.call(pid, :__state__)
-
   @impl true
   def handle_call({:run_stream, stream}, _from, %__MODULE__{} = sink) do
     task = async_run_sink(sink, stream)
@@ -122,8 +120,6 @@ defmodule Strom.Sink do
     sink = %{sink | origin: origin}
     {:stop, :normal, :ok, sink}
   end
-
-  def handle_call(:__state__, _from, sink), do: {:reply, sink, sink}
 
   @impl true
   def handle_info({_task_ref, :task_done}, sink) do
