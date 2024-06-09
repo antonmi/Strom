@@ -66,7 +66,7 @@ defmodule Strom.Composite do
   end
 
   def start_link(%__MODULE__{name: name} = composite) do
-    GenServer.start_link(__MODULE__, composite, name: name)
+    GenServer.start_link(__MODULE__, composite, name: {:global, name})
   end
 
   @impl true
@@ -83,13 +83,15 @@ defmodule Strom.Composite do
   end
 
   @spec call(Strom.flow(), __MODULE__.t() | atom()) :: Strom.flow()
-  def call(flow, %__MODULE__{name: name}), do: GenServer.call(name, {:call, flow}, :infinity)
+  def call(flow, %__MODULE__{name: name}),
+    do: GenServer.call({:global, name}, {:call, flow}, :infinity)
 
-  def call(flow, name) when is_atom(name), do: GenServer.call(name, {:call, flow}, :infinity)
+  def call(flow, name) when is_atom(name),
+    do: GenServer.call({:global, name}, {:call, flow}, :infinity)
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{name: name, components: components}) do
-    pid = Process.whereis(name)
+    pid = :global.whereis_name(name)
     Process.unlink(pid)
     stop_components(components)
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
@@ -131,7 +133,7 @@ defmodule Strom.Composite do
     |> Enum.map(&String.at(&1, 13))
     |> Enum.join("")
     |> String.slice(0..15)
-    |> then(&(&1 <> "_" <> pid_postfix()))
+    |> then(&(&1 <> "_" <> timestamp_postfix()))
     |> String.to_atom()
   end
 
@@ -149,7 +151,9 @@ defmodule Strom.Composite do
     end)
   end
 
-  defp pid_postfix do
-    to_string(:erlang.pid_to_list(self()))
+  defp timestamp_postfix do
+    :erlang.system_time()
+    |> rem(round(1.0e9))
+    |> to_string()
   end
 end
