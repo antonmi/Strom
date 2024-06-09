@@ -4,7 +4,7 @@ defmodule Strom.MixProject do
   def project do
     [
       app: :strom,
-      version: "0.8.5",
+      version: "0.8.6",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       description: description(),
