@@ -197,9 +197,9 @@ defmodule Strom.Composite do
   defp collect_garbage(%Strom.Renamer{}), do: :nothing
 
   defp collect_garbage(component) do
-    spawn(fn ->
+#    spawn(fn ->
       :erlang.garbage_collect(component.pid)
-    end)
+#    end)
   end
 
   defp pid_postfix do
