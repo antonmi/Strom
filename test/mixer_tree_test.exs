@@ -14,7 +14,7 @@ defmodule Strom.MixerTreeTest do
         Source.new(name, [:tick])
       end)
 
-    mixer = MixerTree.new(names, :stream, parts: :rand.uniform(10))
+    mixer = MixerTree.new(names, :stream, parts: 5 + :rand.uniform(5))
 
     composite =
       [sources, mixer]
