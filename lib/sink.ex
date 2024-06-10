@@ -96,8 +96,9 @@ defmodule Strom.Sink do
     {:reply, :ok, %{sink | task: task, stream: stream}}
   end
 
-  def handle_call({:call, data}, _from, %__MODULE__{origin: origin}) do
-    sink = apply(origin.__struct__, :call, [origin, data])
+  def handle_call({:call, data}, _from, %__MODULE__{origin: origin} = sink) do
+    origin = apply(origin.__struct__, :call, [origin, data])
+    sink = %{sink | origin: origin}
     {:reply, {[], sink}, sink}
   end
 

@@ -28,6 +28,7 @@ defmodule Strom.Loop do
     end
   end
 
+  # call as a source
   def call(%__MODULE__{name: name} = loop) do
     Agent.get_and_update(name, fn data ->
       case data do
@@ -40,24 +41,25 @@ defmodule Strom.Loop do
         case loop.last_empty_call_at do
           nil ->
             Process.sleep(loop.sleep)
-            {:ok, {[], %{loop | last_empty_call_at: System.os_time(:millisecond)}}}
+            {[], %{loop | last_empty_call_at: System.os_time(:millisecond)}}
 
           last_empty_call_at ->
             if System.os_time(:millisecond) - last_empty_call_at > loop.timeout do
-              {:error, {:halt, loop}}
+              {:halt, loop}
             else
-              {:ok, {[], loop}}
+              {[], loop}
             end
         end
 
       datum ->
-        {:ok, {[datum], %{loop | last_empty_call_at: nil}}}
+        {[datum], %{loop | last_empty_call_at: nil}}
     end
   end
 
+  # call as a sink
   def call(%__MODULE__{name: name} = loop, data) do
     :ok = Agent.update(name, fn prev_data -> prev_data ++ [data] end)
-    {:ok, {[], loop}}
+    loop
   end
 
   def stop(%__MODULE__{name: name} = loop) do

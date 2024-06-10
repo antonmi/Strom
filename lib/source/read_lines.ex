@@ -12,10 +12,10 @@ defmodule Strom.Source.ReadLines do
   def call(%__MODULE__{} = read_lines) do
     case read_line(read_lines.file) do
       {:ok, data} ->
-        {:ok, {[String.trim(data)], read_lines}}
+        {[String.trim(data)], read_lines}
 
       {:error, :eof} ->
-        {:error, {:halt, read_lines}}
+        {:halt, read_lines}
     end
   end
 

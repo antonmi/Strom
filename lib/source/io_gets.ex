@@ -11,7 +11,7 @@ defmodule Strom.Source.IOGets do
   @impl true
   def call(%__MODULE__{} = io_gets) do
     data = IO.gets("IOGets> ")
-    {:ok, {[String.trim(data)], io_gets}}
+    {[String.trim(data)], io_gets}
   end
 
   @impl true
