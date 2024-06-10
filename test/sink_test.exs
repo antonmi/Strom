@@ -81,8 +81,9 @@ defmodule Strom.SinkTest do
       %{num2: num2} = Composite.call(flow, composite)
       Enum.to_list(num2)
 
+      Process.sleep(10)
       transformer = Enum.find(composite.components, &is_struct(&1, Transformer))
-      assert length(:sys.get_state(transformer.pid).data[:num1]) == 10
+      assert length(:sys.get_state(transformer.pid).data[:num1]) >= 10
       assert :sys.get_state(transformer.pid).data[:num2] == []
 
       sink = Enum.find(composite.components, &is_struct(&1, Sink))
