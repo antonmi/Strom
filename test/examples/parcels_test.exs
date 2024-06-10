@@ -227,6 +227,7 @@ defmodule Strom.Examples.ParcelsTest do
       |> Composite.start()
 
     Composite.call(%{stream: List.duplicate(:tick, @orders_count)}, gen_data)
+    Process.sleep(100)
     Composite.stop(gen_data)
   end
 
