@@ -141,11 +141,11 @@ defmodule Strom.CrashTest do
             if String.trim(data) == "4" do
               raise "error"
             else
-              {:ok, {[String.trim(data)], read_lines}}
+              {[String.trim(data)], read_lines}
             end
 
           {:error, :eof} ->
-            {:error, {:halt, read_lines}}
+            {:halt, read_lines}
         end
       end
 
@@ -215,7 +215,7 @@ defmodule Strom.CrashTest do
           :ok = IO.write(write_lines.file, data <> write_lines.line_sep)
         end
 
-        {:ok, {[], write_lines}}
+        {[], write_lines}
       end
 
       @impl true
