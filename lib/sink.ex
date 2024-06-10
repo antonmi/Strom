@@ -71,9 +71,9 @@ defmodule Strom.Sink do
     Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
-        Stream.transform(stream, sink, fn el, _sink ->
-          sink = apply(origin.__struct__, :call, [origin, el])
-          {[], sink}
+        Stream.transform(stream, sink, fn el, sink ->
+          origin = apply(origin.__struct__, :call, [sink.origin, el])
+          {[], %{sink | origin: origin}}
         end)
         |> Stream.run()
 

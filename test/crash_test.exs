@@ -215,7 +215,7 @@ defmodule Strom.CrashTest do
           :ok = IO.write(write_lines.file, data <> write_lines.line_sep)
         end
 
-        {[], write_lines}
+        write_lines
       end
 
       @impl true
@@ -242,9 +242,7 @@ defmodule Strom.CrashTest do
         Process.sleep(50)
         Sink.stop(sink)
 
-        result = File.read!("test/data/output.csv")
-
-        assert result == "1\n3\n4\n5\n"
+        assert File.read!("test/data/output.csv") == "1\n3\n4\n5\n"
       end)
     end
   end

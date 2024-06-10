@@ -122,7 +122,9 @@ defmodule Strom.Composite do
   end
 
   def stop_components(components) do
-    Enum.each(components, fn %{__struct__: module} = component ->
+    components
+    |> Enum.reverse()
+    |> Enum.each(fn %{__struct__: module} = component ->
       module.stop(component)
     end)
   end
