@@ -29,7 +29,7 @@ defmodule Strom.Source do
   """
 
   @callback start(map) :: map
-  @callback call(map) :: {:ok, {[term], map}} | {:error, {:halt, map}}
+  @callback call(map) :: {[term], map} | {:halt, map} | no_return()
   @callback stop(map) :: map
   @callback infinite?(map) :: true | false
 
@@ -159,12 +159,12 @@ defmodule Strom.Source do
     )
   end
 
-  defp loop_call(source) do
-    case call_source(source) do
-      {:halt, _source} ->
+  defp loop_call(%__MODULE__{origin: origin} = source) do
+    case apply(origin.__struct__, :call, [origin]) do
+      {:halt, _origin} ->
         :task_done
 
-      {events, source} ->
+      {events, origin} ->
         GenServer.cast(source.pid, {:new_data, events})
 
         receive do
@@ -172,23 +172,7 @@ defmodule Strom.Source do
             flush(:continue_task)
         end
 
-        loop_call(source)
-    end
-  end
-
-  defp call_source(%__MODULE__{origin: origin} = source) do
-    case apply(origin.__struct__, :call, [origin]) do
-      {:ok, {events, origin}} ->
-        source = %{source | origin: origin}
-        {events, source}
-
-      {:error, {:halt, origin}} ->
-        source = %{source | origin: origin}
-
-        case apply(origin.__struct__, :infinite?, [origin]) do
-          true -> {[], source}
-          false -> {:halt, source}
-        end
+        loop_call(%{source | origin: origin})
     end
   end
 
@@ -200,8 +184,10 @@ defmodule Strom.Source do
   end
 
   @impl true
-  def handle_call(:call, _from, %__MODULE__{} = source) do
-    {:reply, call_source(source), source}
+  def handle_call(:call, _from, %__MODULE__{origin: origin} = source) do
+    {events, origin} = apply(origin.__struct__, :call, [origin])
+    source = %{source | origin: origin}
+    {:reply, {events, source}, source}
   end
 
   def handle_call(:stop, _from, %__MODULE__{origin: origin, task: task} = source)

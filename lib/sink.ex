@@ -15,7 +15,7 @@ defmodule Strom.Sink do
   See `Strom.Sink.Writeline`, `Strom.Sink.IOPuts`, `Strom.Sink.Null`
   """
   @callback start(map) :: map
-  @callback call(map, term) :: {:ok, {term, map}} | {:error, {term, map}}
+  @callback call(map, term) :: map | no_return()
   @callback stop(map) :: map
 
   use GenServer
@@ -67,12 +67,12 @@ defmodule Strom.Sink do
     Map.delete(flow, name)
   end
 
-  defp async_run_sink(sink, stream) do
+  defp async_run_sink(%__MODULE__{origin: origin} = sink, stream) do
     Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
-        Stream.transform(stream, sink, fn el, sink ->
-          call_sink(sink, el)
+        Stream.transform(stream, sink, fn el, _sink ->
+          sink = apply(origin.__struct__, :call, [origin, el])
           {[], sink}
         end)
         |> Stream.run()
@@ -80,16 +80,6 @@ defmodule Strom.Sink do
         :task_done
       end
     )
-  end
-
-  defp call_sink(%__MODULE__{origin: origin} = sink, data) do
-    case apply(origin.__struct__, :call, [origin, data]) do
-      {:ok, {[], origin}} ->
-        {[], %{sink | origin: origin}}
-
-      {:error, {:halt, origin}} ->
-        {:halt, %{sink | origin: origin}}
-    end
   end
 
   @spec stop(__MODULE__.t()) :: :ok
@@ -106,8 +96,10 @@ defmodule Strom.Sink do
     {:reply, :ok, %{sink | task: task, stream: stream}}
   end
 
-  def handle_call({:call, data}, _from, %__MODULE__{} = sink) do
-    {:reply, call_sink(sink, data), sink}
+  def handle_call({:call, data}, _from, %__MODULE__{origin: origin} = sink) do
+    origin = apply(origin.__struct__, :call, [origin, data])
+    sink = %{sink | origin: origin}
+    {:reply, {[], sink}, sink}
   end
 
   def handle_call(:stop, _from, %__MODULE__{origin: origin, task: task} = sink) do
