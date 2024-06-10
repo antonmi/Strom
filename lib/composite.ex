@@ -152,7 +152,7 @@ defmodule Strom.Composite do
   end
 
   defp timestamp_postfix do
-    System.os_time()
+    :erlang.system_time()
     |> rem(round(1.0e9))
     |> to_string()
   end

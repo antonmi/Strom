@@ -32,6 +32,8 @@ defmodule Strom.GenMixTest do
     assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 7, 9]
     assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 8, 10]
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
+
+    GenMix.stop(pid)
   end
 
   test "massive call" do
@@ -71,5 +73,7 @@ defmodule Strom.GenMixTest do
 
     Task.await(task1, :infinity)
     Task.await(task2, :infinity)
+
+    GenMix.stop(pid)
   end
 end
