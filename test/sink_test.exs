@@ -5,7 +5,7 @@ defmodule Strom.SinkTest do
   alias Strom.Source
   alias Strom.Source.ReadLines
   alias Strom.Sink
-  alias Strom.Sink.WriteLines
+  alias Strom.Sink.{Heap, WriteLines}
 
   def source do
     :my_stream
@@ -37,6 +37,19 @@ defmodule Strom.SinkTest do
 
     Sink.stop(sink)
     assert File.read!("test/data/orders.csv") <> "\n" == File.read!("test/data/output.csv")
+  end
+
+  describe "heap sink" do
+    test "heap sink" do
+      source = Source.new(:numbers, [1, 2, 3]) |> Source.start()
+      sink = Sink.new(:numbers, %Heap{}, true) |> Sink.start()
+
+      %{}
+      |> Source.call(source)
+      |> Sink.call(sink)
+
+      assert Heap.data(sink.origin) == [1, 2, 3]
+    end
   end
 
   describe "custom sink" do

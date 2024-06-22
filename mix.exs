@@ -24,6 +24,7 @@ defmodule Strom.MixProject do
 
   defp deps do
     [
+      {:local_cluster, "~> 1.2", only: [:test]},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
