@@ -17,40 +17,39 @@ defmodule Strom.Plug do
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{} = socket) do
+  def start(%__MODULE__{} = plug) do
     {:ok, pid} =
       DynamicSupervisor.start_child(
-        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, socket}},
-        %{id: __MODULE__, start: {__MODULE__, :start_link, [socket]}, restart: :temporary}
+        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, plug}},
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [plug]}, restart: :temporary}
       )
 
     :sys.get_state(pid)
   end
 
-  def start_link(%__MODULE__{} = socket) do
-    GenServer.start_link(__MODULE__, socket)
+  def start_link(%__MODULE__{} = plug) do
+    GenServer.start_link(__MODULE__, plug)
   end
 
   @impl true
-  def init(%__MODULE__{name: name} = socket) do
+  def init(%__MODULE__{name: name} = plug) do
     self_pid = self()
-    global_name = {:strom, name, :socket}
+    global_name = {:strom, name, :plug}
 
     case :global.whereis_name(global_name) do
       :undefined ->
         :yes = :global.register_name(global_name, self_pid)
 
       pid when is_pid(pid) ->
-        :ok = :global.unregister_name(global_name)
-        :global.register_name(global_name, self_pid)
+        :global.re_register_name(global_name, self_pid)
     end
 
-    {:ok, %{socket | pid: self_pid}}
+    {:ok, %{plug | pid: self_pid}}
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{name: name, pid: pid}) do
-    :global.send({:strom, name, :plug}, :continue_plug)
+    try_to_continue_socket(name)
 
     stream =
       Stream.resource(
@@ -76,50 +75,64 @@ defmodule Strom.Plug do
     Map.put(flow, name, stream)
   end
 
+  defp try_to_continue_socket(name) do
+    case :global.whereis_name({:strom, name, :socket}) do
+      pid when is_pid(pid) ->
+        send(pid, :continue_socket)
+
+      :undefined ->
+        :do_nothing
+    end
+  end
+
   @impl true
-  def handle_call({:new_data, event}, {_pid, _ref}, %__MODULE__{data: data} = socket) do
-    if socket.waiting_client do
-      send(socket.waiting_client, :continue_client)
+  def handle_call({:new_data, event}, {_pid, _ref}, %__MODULE__{data: data} = plug) do
+    if plug.waiting_client do
+      send(plug.waiting_client, :continue_client)
     end
 
-    socket = %{socket | data: data ++ [event], waiting_client: nil}
-    {:reply, :ok, socket}
+    plug = %{plug | data: data ++ [event], waiting_client: nil}
+    {:reply, :ok, plug}
   end
 
-  def handle_call(:done, {_pid, _ref}, %__MODULE__{} = socket) do
-    if socket.waiting_client do
-      send(socket.waiting_client, :continue_client)
+  def handle_call(:done, {_pid, _ref}, %__MODULE__{} = plug) do
+    if plug.waiting_client do
+      send(plug.waiting_client, :continue_client)
     end
 
-    {:reply, :ok, %{socket | done: true}}
+    {:reply, :ok, %{plug | done: true}}
   end
 
-  def handle_call(:get_data, {pid, _ref}, %__MODULE__{data: data, done: done} = socket) do
-    {reply, socket} =
+  def handle_call(:get_data, {pid, _ref}, %__MODULE__{data: data, done: done} = plug) do
+    {reply, plug} =
       case data do
         [] ->
           if done do
-            {:halt, socket}
+            {:halt, plug}
           else
-            {:pause, %{socket | waiting_client: pid}}
+            {:pause, %{plug | waiting_client: pid}}
           end
 
         data ->
-          {{:data, data}, %{socket | data: []}}
+          {{:data, data}, %{plug | data: []}}
       end
 
-    {:reply, reply, socket}
+    {:reply, reply, plug}
+  end
+
+  def handle_call(:stop, _from, %__MODULE__{} = plug) do
+    {:stop, :normal, :ok, plug}
   end
 
   @impl true
-  def handle_info(:continue, socket) do
+  def handle_info(:continue, plug) do
     # ignore unexpected :continue
-    {:noreply, socket}
+    {:noreply, plug}
   end
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid, name: name}) do
-    :global.unregister_name({:strom, name, :socket})
+    :global.unregister_name({:strom, name, :plug})
     GenServer.call(pid, :stop)
   end
 end

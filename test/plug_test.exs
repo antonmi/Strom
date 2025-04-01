@@ -1,52 +1,40 @@
 defmodule Strom.PlugTest do
   use ExUnit.Case, async: false
-  alias Strom.{Transformer, Source, Sink, Sink.Heap}
 
-  alias Strom.{Plug, Socket}
+  alias Strom.{Socket, Plug}
+  alias Strom.Cluster.SocketPlugNode
 
-  @moduletag timeout: 5000
-
-  test "call" do
-    source = Source.new(:numbers, [1, 2, 3, 4]) |> Source.start()
-    plus_one = Transformer.new(:numbers, &(&1 + 1)) |> Transformer.start()
-    plug = Plug.new(:numbers) |> Plug.start()
-
-    socket = Socket.new(:numbers) |> Socket.start()
-    mult_two = Transformer.new(:numbers, &(&1 * 2)) |> Transformer.start()
-    sink = Sink.new(:numbers, %Heap{}, true) |> Sink.start()
-
-    %{}
-    |> Source.call(source)
-    |> Transformer.call(plus_one)
-    |> Plug.call(plug)
-    |> Socket.call(socket)
-    |> Transformer.call(mult_two)
-    |> Sink.call(sink)
-
-    assert Heap.data(sink.origin) == [4, 6, 8, 10]
+  setup do
+    plug = Plug.start(Plug.new(:numbers))
+    on_exit(fn -> Plug.stop(plug) end)
+    %{plug: plug}
   end
 
-  describe "with cluster" do
-    setup do
-      :global.unregister_name({:strom, :numbers, :plug})
-      :global.unregister_name({:strom, :numbers, :socket})
+  test "call/2", %{plug: plug} do
+    %{other: [:a, :b, :c], numbers: stream} = Plug.call(%{other: [:a, :b, :c]}, plug)
 
-      [node1, node2] =
-        LocalCluster.start_nodes("test", 2,
-          applications: [:strom],
-          files: ["test/cluster/nodes.ex"]
-        )
-
-      on_exit(fn ->
-        :ok = LocalCluster.stop_nodes([node1, node2])
+    task =
+      Task.async(fn ->
+        assert Enum.to_list(stream) == [1, 2, 3]
       end)
 
-      %{node1: node1, node2: node2}
-    end
+    Process.sleep(10)
+    socket = Socket.start(Socket.new(:numbers))
+    Socket.call(%{numbers: [1, 2, 3]}, socket)
 
-    test "with cluster", %{node1: node1, node2: node2} do
-      assert :rpc.call(node1, TestModule, :node1, []) == %{}
-      assert :rpc.call(node2, TestModule, :node2, []) == [4, 6, 8, 10]
-    end
+    Task.await(task)
+  end
+
+  test "name clashes, just overrides for now", %{plug: plug} do
+    assert :global.whereis_name({:strom, :numbers, :plug}) == plug.pid
+    plug2 = Plug.start(Plug.new(:numbers))
+    assert :global.whereis_name({:strom, :numbers, :plug}) == plug2.pid
+    [node] =
+      LocalCluster.start_nodes("test", 1,
+        applications: [:strom],
+        files: ["test/cluster/socket_plug_node.ex"]
+      )
+    plug3 = :rpc.call(node, SocketPlugNode, :start_plug, [:numbers])
+    assert :global.whereis_name({:strom, :numbers, :plug}) == plug3.pid
   end
 end

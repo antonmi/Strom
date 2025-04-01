@@ -23,25 +23,24 @@ defmodule Strom.Socket do
     :sys.get_state(pid)
   end
 
-  def start_link(%__MODULE__{} = plug) do
-    GenServer.start_link(__MODULE__, plug)
+  def start_link(%__MODULE__{} = socket) do
+    GenServer.start_link(__MODULE__, socket)
   end
 
   @impl true
-  def init(%__MODULE__{name: name} = plug) do
+  def init(%__MODULE__{name: name} = socket) do
     self_pid = self()
-    global_name = {:strom, name, :plug}
+    global_name = {:strom, name, :socket}
 
     case :global.whereis_name(global_name) do
       :undefined ->
         :yes = :global.register_name(global_name, self_pid)
-
       pid when is_pid(pid) ->
-        :ok = :global.unregister_name(global_name)
-        :global.register_name(global_name, self_pid)
-    end
+          :yes = :global.re_register_name(global_name, self_pid)
 
-    {:ok, %{plug | pid: self_pid}}
+    end
+    {:ok, %{socket | pid: self_pid}}
+
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
@@ -52,34 +51,38 @@ defmodule Strom.Socket do
   end
 
   @impl true
-  def handle_cast({:call, stream}, %__MODULE__{name: name} = plug) do
+  def handle_call(:stop, _from, %__MODULE__{} = socket) do
+    {:stop, :normal, :ok, socket}
+  end
+
+  @impl true
+  def handle_cast({:call, stream}, %__MODULE__{name: name} = socket) do
     Enum.each(stream, fn event ->
       try_to_send(name, {:new_data, event})
     end)
 
     try_to_send(name, :done)
-
-    {:noreply, %{plug | done: true}}
+    {:noreply, %{socket | done: true}}
   end
 
   @impl true
-  def handle_info(:continue_plug, %__MODULE__{done: done, name: name} = plug) do
+  def handle_info(:continue_socket, %__MODULE__{done: done, name: name} = socket) do
     if done do
       try_to_send(name, :done)
     end
 
-    {:noreply, plug}
+    {:noreply, socket}
   end
 
   defp try_to_send(name, msg) do
-    case :global.whereis_name({:strom, name, :socket}) do
+    case :global.whereis_name({:strom, name, :plug}) do
       pid when is_pid(pid) ->
         :ok = GenServer.call(pid, msg)
 
       :undefined ->
         receive do
-          :continue_plug ->
-            flush(:continue_plug)
+          :continue_socket ->
+            flush(:continue_socket)
             try_to_send(name, msg)
         end
     end
@@ -87,7 +90,7 @@ defmodule Strom.Socket do
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid, name: name}) do
-    :global.unregister_name({:strom, name, :plug})
+    :global.unregister_name({:strom, name, :socket})
     GenServer.call(pid, :stop)
   end
 
