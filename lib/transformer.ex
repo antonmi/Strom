@@ -78,6 +78,7 @@ defmodule Strom.Transformer do
         %{id: __MODULE__, start: {__MODULE__, :start_link, [transformer]}, restart: :temporary}
       )
 
+    # TODO more explicit
     :sys.get_state(pid)
   end
 

@@ -9,8 +9,8 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
-            inputs: [],
-            outputs: [],
+            inputs: %{},
+            outputs: %{},
             opts: [],
             chunk: @chunk,
             buffer: @buffer,
@@ -29,10 +29,13 @@ defmodule Strom.GenMix do
         no_wait: Keyword.get(opts, :no_wait, false)
     }
 
-    DynamicSupervisor.start_child(
-      {:via, PartitionSupervisor, {Strom.ComponentSupervisor, gen_mix}},
-      %{id: __MODULE__, start: {__MODULE__, :start_link, [gen_mix]}, restart: :temporary}
-    )
+    {:ok, pid} =
+      DynamicSupervisor.start_child(
+        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, gen_mix}},
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [gen_mix]}, restart: :temporary}
+      )
+
+    %{gen_mix | pid: pid}
   end
 
   def start_link(%__MODULE__{} = state) do
@@ -40,41 +43,80 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def init(%__MODULE__{} = mix) do
-    {:ok, %{mix | pid: self()}}
+  def init(%__MODULE__{} = gen_mix) do
+    {:ok, %{gen_mix | pid: self()}}
   end
 
-  def call(flow, pid) do
-    GenServer.call(pid, {:call, flow}, :infinity)
+  def call(flow, gen_mix) do
+    input_streams =
+      Enum.reduce(gen_mix.inputs, %{}, fn {name, fun}, acc ->
+        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
+      end)
+
+    _tasks = GenServer.call(gen_mix.pid, {:run_inputs, input_streams})
+
+    sub_flow =
+      gen_mix.outputs
+      |> Enum.reduce(%{}, fn {name, _fun}, flow ->
+        stream =
+          Stream.resource(
+            fn ->
+              nil
+            end,
+            fn nil ->
+              case GenServer.call(gen_mix.pid, {:get_data, name}, :infinity) do
+                {:data, data} ->
+                  {data, nil}
+
+                :done ->
+                  {:halt, nil}
+
+                :pause ->
+                  receive do
+                    :continue_client ->
+                      flush(:continue_client)
+                      {[], nil}
+                  end
+              end
+            end,
+            fn nil -> nil end
+          )
+
+        Map.put(flow, name, stream)
+      end)
+
+    flow
+    |> Map.drop(Map.keys(gen_mix.inputs))
+    |> Map.merge(sub_flow)
   end
 
-  def stop(pid) do
-    GenServer.call(pid, :stop)
+  def stop(gen_mix) do
+    GenServer.call(gen_mix.pid, :stop)
   end
 
-  defp run_inputs(streams, mix) do
+  defp run_inputs(streams, gen_mix) do
     Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
-      task = async_run_stream({name, fun}, stream, mix)
+      task = async_run_stream({name, fun}, stream, gen_mix)
       Map.put(acc, name, task)
     end)
   end
 
-  defp async_run_stream({name, fun}, stream, mix) do
+  defp async_run_stream({name, fun}, stream, gen_mix) do
     Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         stream
-        |> Stream.chunk_every(mix.chunk)
+        |> Stream.chunk_every(gen_mix.chunk)
         |> Stream.each(fn chunk ->
           {chunk, _} = Enum.split_with(chunk, fun)
 
           new_data =
-            Enum.reduce(mix.outputs, %{}, fn {name, fun}, acc ->
+            Enum.reduce(gen_mix.outputs, %{}, fn {name, fun}, acc ->
               {data, _} = Enum.split_with(chunk, fun)
               Map.put(acc, name, data)
             end)
 
-          GenServer.cast(mix.pid, {:new_data, name, new_data, self()})
+          GenServer.cast(gen_mix.pid, {:new_data, name, new_data, self()})
 
           receive do
             :continue_task ->
@@ -98,144 +140,112 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_call({:call, flow}, _from, %__MODULE__{} = mix) do
-    input_streams =
-      Enum.reduce(mix.inputs, %{}, fn {name, fun}, acc ->
-        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
-      end)
+  def handle_call({:run_inputs, streams_to_call}, _from, gen_mix) do
+    tasks = run_inputs(streams_to_call, gen_mix)
 
-    tasks = run_inputs(input_streams, mix)
-
-    sub_flow =
-      mix.outputs
-      |> Enum.reduce(%{}, fn {name, _fun}, flow ->
-        stream =
-          Stream.resource(
-            fn ->
-              nil
-            end,
-            fn nil ->
-              case GenServer.call(mix.pid, {:get_data, name}, :infinity) do
-                {:data, data} ->
-                  {data, nil}
-
-                :done ->
-                  {:halt, nil}
-
-                :pause ->
-                  receive do
-                    :continue_client ->
-                      flush(:continue_client)
-                      {[], nil}
-                  end
-              end
-            end,
-            fn nil -> nil end
-          )
-
-        Map.put(flow, name, stream)
-      end)
-
-    flow =
-      flow
-      |> Map.drop(Map.keys(mix.inputs))
-      |> Map.merge(sub_flow)
-
-    {:reply, flow, %{mix | tasks: tasks, input_streams: input_streams}}
+    {:reply, tasks, %{gen_mix | tasks: tasks, input_streams: streams_to_call}}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{} = mix) do
-    Enum.each(mix.tasks, fn {_name, task} ->
+  def handle_call(:stop, _from, %__MODULE__{} = gen_mix) do
+    Enum.each(gen_mix.tasks, fn {_name, task} ->
       DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task.pid)
     end)
 
-    {:stop, :normal, :ok, mix}
+    {:stop, :normal, :ok, gen_mix}
   end
 
-  def handle_call({:get_data, name}, {pid, _ref}, mix) do
-    data = Map.get(mix.data, name, [])
+  def handle_call({:get_data, name}, {pid, _ref}, gen_mix) do
+    data = Map.get(gen_mix.data, name, [])
 
-    total_count = Enum.reduce(mix.data, 0, fn {_name, data}, count -> count + length(data) end)
+    total_count =
+      Enum.reduce(gen_mix.data, 0, fn {_name, data}, count -> count + length(data) end)
 
     waiting_tasks =
-      if total_count <= mix.buffer and mix.no_wait != :first_stream_done do
-        Enum.each(mix.waiting_tasks, fn {_name, task_pid} -> send(task_pid, :continue_task) end)
+      if total_count <= gen_mix.buffer and gen_mix.no_wait != :first_stream_done do
+        Enum.each(gen_mix.waiting_tasks, fn {_name, task_pid} ->
+          send(task_pid, :continue_task)
+        end)
+
         %{}
       else
-        mix.waiting_tasks
+        gen_mix.waiting_tasks
       end
 
-    mix = %{mix | data: Map.put(mix.data, name, []), waiting_tasks: waiting_tasks}
+    gen_mix = %{gen_mix | data: Map.put(gen_mix.data, name, []), waiting_tasks: waiting_tasks}
 
     cond do
-      length(data) == 0 and (map_size(mix.tasks) == 0 or mix.no_wait == :first_stream_done) ->
-        {:reply, :done, mix}
+      length(data) == 0 and
+          (map_size(gen_mix.tasks) == 0 or gen_mix.no_wait == :first_stream_done) ->
+        {:reply, :done, gen_mix}
 
       length(data) == 0 ->
-        waiting_clients = Map.put(mix.waiting_clients, name, pid)
-        {:reply, :pause, %{mix | waiting_clients: waiting_clients}}
+        waiting_clients = Map.put(gen_mix.waiting_clients, name, pid)
+        {:reply, :pause, %{gen_mix | waiting_clients: waiting_clients}}
 
       true ->
-        {:reply, {:data, data}, mix}
+        {:reply, {:data, data}, gen_mix}
     end
   end
 
   @impl true
-  def handle_cast({:new_data, name, new_data, task_pid}, %__MODULE__{} = mix) do
+  def handle_cast({:new_data, name, new_data, task_pid}, %__MODULE__{} = gen_mix) do
     {all_mix_data, total_count} =
-      Enum.reduce(new_data, {mix.data, 0}, fn {name, data}, {all_mix_data, count} ->
+      Enum.reduce(new_data, {gen_mix.data, 0}, fn {name, data}, {all_mix_data, count} ->
         prev_data = Map.get(all_mix_data, name, [])
         all_data = prev_data ++ data
         {Map.put(all_mix_data, name, all_data), count + length(all_data)}
       end)
 
-    Enum.each(mix.waiting_clients, fn {_name, client_pid} ->
+    Enum.each(gen_mix.waiting_clients, fn {_name, client_pid} ->
       send(client_pid, :continue_client)
     end)
 
     waiting_tasks =
-      if total_count < mix.buffer and mix.no_wait != :first_stream_done do
-        task = Map.get(mix.tasks, name)
+      if total_count < gen_mix.buffer and gen_mix.no_wait != :first_stream_done do
+        task = Map.get(gen_mix.tasks, name)
         send(task.pid, :continue_task)
-        mix.waiting_tasks
+        gen_mix.waiting_tasks
       else
-        Map.put(mix.waiting_tasks, name, task_pid)
+        Map.put(gen_mix.waiting_tasks, name, task_pid)
       end
 
-    mix = %{mix | data: all_mix_data, waiting_clients: %{}, waiting_tasks: waiting_tasks}
+    gen_mix = %{gen_mix | data: all_mix_data, waiting_clients: %{}, waiting_tasks: waiting_tasks}
 
-    {:noreply, mix}
+    {:noreply, gen_mix}
   end
 
   @impl true
-  def handle_info({_task_ref, {:task_done, name}}, mix) do
-    mix = %{mix | tasks: Map.delete(mix.tasks, name)}
+  def handle_info({_task_ref, {:task_done, name}}, gen_mix) do
+    gen_mix = %{gen_mix | tasks: Map.delete(gen_mix.tasks, name)}
 
-    Enum.each(mix.waiting_clients, fn {_name, client_pid} ->
+    Enum.each(gen_mix.waiting_clients, fn {_name, client_pid} ->
       send(client_pid, :continue_client)
     end)
 
-    mix =
-      if mix.no_wait do
-        %{mix | no_wait: :first_stream_done}
+    gen_mix =
+      if gen_mix.no_wait do
+        %{gen_mix | no_wait: :first_stream_done}
       else
-        mix
+        gen_mix
       end
 
-    {:noreply, %{mix | waiting_clients: %{}}}
+    {:noreply, %{gen_mix | waiting_clients: %{}}}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, mix) do
+  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, gen_mix) do
     # do nothing
-    {:noreply, mix}
+    {:noreply, gen_mix}
   end
 
-  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, mix) do
-    {name, _task} = Enum.find(mix.tasks, fn {_name, task} -> task.pid == task_pid end)
-    {{^name, function}, stream} = Enum.find(mix.input_streams, fn {{n, _}, _} -> n == name end)
-    new_task = async_run_stream({name, function}, stream, mix)
-    tasks = Map.put(mix.tasks, name, new_task)
+  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, gen_mix) do
+    {name, _task} = Enum.find(gen_mix.tasks, fn {_name, task} -> task.pid == task_pid end)
 
-    {:noreply, %{mix | tasks: tasks}}
+    {{^name, function}, stream} =
+      Enum.find(gen_mix.input_streams, fn {{n, _}, _} -> n == name end)
+
+    new_task = async_run_stream({name, function}, stream, gen_mix)
+    tasks = Map.put(gen_mix.tasks, name, new_task)
+
+    {:noreply, %{gen_mix | tasks: tasks}}
   end
 end

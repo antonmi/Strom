@@ -4,10 +4,10 @@ defmodule Strom.GenMixTest do
   alias Strom.GenMix
 
   test "start and stop" do
-    {:ok, pid} = GenMix.start(%GenMix{})
-    assert Process.alive?(pid)
-    :ok = GenMix.stop(pid)
-    refute Process.alive?(pid)
+    gen_mix = GenMix.start(%GenMix{})
+    assert Process.alive?(gen_mix.pid)
+    :ok = GenMix.stop(gen_mix)
+    refute Process.alive?(gen_mix.pid)
   end
 
   test "call" do
@@ -23,17 +23,15 @@ defmodule Strom.GenMixTest do
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = %GenMix{inputs: inputs, outputs: outputs}
+    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs})
 
-    {:ok, pid} = GenMix.start(gen_mix)
-
-    flow = GenMix.call(flow, pid)
+    flow = GenMix.call(flow, gen_mix)
 
     assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 7, 9]
     assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 8, 10]
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
 
-    GenMix.stop(pid)
+    GenMix.stop(gen_mix)
   end
 
   test "massive call" do
@@ -54,10 +52,9 @@ defmodule Strom.GenMixTest do
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = %GenMix{inputs: inputs, outputs: outputs}
-    {:ok, pid} = GenMix.start(gen_mix)
+    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs})
 
-    flow = GenMix.call(flow, pid)
+    flow = GenMix.call(flow, gen_mix)
 
     task1 =
       Task.async(fn ->
@@ -74,6 +71,6 @@ defmodule Strom.GenMixTest do
     Task.await(task1, :infinity)
     Task.await(task2, :infinity)
 
-    GenMix.stop(pid)
+    GenMix.stop(gen_mix)
   end
 end

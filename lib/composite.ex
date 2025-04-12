@@ -62,6 +62,7 @@ defmodule Strom.Composite do
       )
 
     Process.link(pid)
+    # TODO more explicit
     :sys.get_state(pid)
   end
 
