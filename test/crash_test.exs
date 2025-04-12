@@ -16,7 +16,7 @@ defmodule Strom.CrashTest do
   end
 
   def crash_fun(el) do
-    if Enum.member?(["4"], el) do
+    if Enum.member?(["3"], el) do
       raise "error"
     else
       el
@@ -36,7 +36,7 @@ defmodule Strom.CrashTest do
           |> Source.call(source)
           |> Transformer.call(transformer)
 
-        assert Enum.to_list(stream) == ["1", "2", "3", "5"]
+        assert Enum.to_list(stream) == ["1", "2", "4", "5"]
       end)
     end
 
