@@ -32,10 +32,12 @@ defmodule Strom.Transformer do
   use GenServer
 
   @chunk 1
+  @buffer 1000
 
   defstruct pid: nil,
             opts: [],
             chunk: @chunk,
+            buffer: @buffer,
             input_streams: %{},
             function: nil,
             acc: nil,
@@ -70,7 +72,11 @@ defmodule Strom.Transformer do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{opts: opts} = transformer) do
-    transformer = %{transformer | chunk: Keyword.get(opts, :chunk, @chunk)}
+    transformer = %{
+      transformer
+      | chunk: Keyword.get(opts, :chunk, @chunk),
+        buffer: Keyword.get(opts, :buffer, @buffer)
+    }
 
     {:ok, pid} =
       DynamicSupervisor.start_child(
@@ -115,6 +121,7 @@ defmodule Strom.Transformer do
             fn tasks ->
               task = Map.fetch!(tasks, name)
 
+              # TODO, try rescue
               {tasks, task} =
                 if Process.alive?(task.pid) do
                   {tasks, task}
@@ -163,24 +170,46 @@ defmodule Strom.Transformer do
       fn ->
         stream
         |> Stream.chunk_every(transformer.chunk)
-        |> Stream.transform(transformer.acc, fn chunk, acc ->
-          {chunk, new_acc} =
-            Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-              {new_events, acc} = transformer.function.(el, acc)
-              {events ++ new_events, acc}
-            end)
+        |> Stream.transform(
+          fn -> {[], transformer.acc} end,
+          fn chunk, {stored_events, acc} ->
+            {chunk, new_acc} =
+              Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+                {new_events, acc} = transformer.function.(el, acc)
+                {events ++ new_events, acc}
+              end)
 
-          receive do
-            {:get_data, client_pid} ->
-              send(client_pid, {name, chunk})
+            # TODO update acc in transformer
+            # or even update it on each function call above
+            # might be configurable
+
+            stored_events = stored_events ++ chunk
+
+            receive do
+              {:get_data, client_pid} ->
+                send(client_pid, {name, stored_events})
+                {[], {[], new_acc}}
+            after
+              1 ->
+                if length(stored_events) < transformer.buffer do
+                  {[], {stored_events, new_acc}}
+                else
+                  receive do
+                    {:get_data, client_pid} ->
+                      send(client_pid, {name, stored_events})
+                      {[], {[], new_acc}}
+                  end
+                end
+            end
+          end,
+          fn {stored_events, _acc} ->
+            receive do
+              {:get_data, client_pid} ->
+                send(client_pid, {name, stored_events})
+                {[], {[], nil}}
+            end
           end
-
-          # TODO update acc in transformer
-          # or even update it on each function call above
-          # might be configurable
-
-          {[], new_acc}
-        end)
+        )
         |> Stream.run()
 
         receive do
