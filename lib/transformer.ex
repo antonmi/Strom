@@ -98,16 +98,9 @@ defmodule Strom.Transformer do
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{names: names, function: function} = transformer)
-      when is_map(flow) and is_function(function, 2) do
+  def call(income_flow, %__MODULE__{names: names, function: function} = transformer)
+      when is_map(income_flow) and is_function(function, 2) do
     names = if is_list(names), do: names, else: [names]
-
-    input_streams =
-      Enum.reduce(names, %{}, fn name, streams ->
-        Map.put(streams, name, Map.fetch!(flow, name))
-      end)
-
-    tasks = GenServer.call(transformer.pid, {:run_inputs, input_streams})
 
     sub_flow =
       names
@@ -116,29 +109,25 @@ defmodule Strom.Transformer do
           Stream.resource(
             fn ->
               GenServer.call(transformer.pid, {:register_client, name, self()})
-              tasks
+              GenServer.call(transformer.pid, {:run_input, name, Map.fetch!(income_flow, name)})
             end,
-            fn tasks ->
-              task = Map.fetch!(tasks, name)
-
-              # TODO, try rescue
-              {tasks, task} =
+            fn task ->
+              task =
                 if Process.alive?(task.pid) do
-                  {tasks, task}
+                  task
                 else
                   tasks = GenServer.call(transformer.pid, :tasks)
-                  task = Map.fetch!(tasks, name)
-                  {tasks, task}
+                  Map.fetch!(tasks, name)
                 end
 
               send(task.pid, {:get_data, self()})
 
               receive do
                 {^name, :done} ->
-                  {:halt, tasks}
+                  {:halt, task}
 
                 {^name, data} ->
-                  {data, tasks}
+                  {data, task}
               end
             end,
             fn tasks -> tasks end
@@ -147,7 +136,7 @@ defmodule Strom.Transformer do
         Map.put(flow, name, stream)
       end)
 
-    flow
+    income_flow
     |> Map.drop(names)
     |> Map.merge(sub_flow)
   end
@@ -155,13 +144,6 @@ defmodule Strom.Transformer do
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{pid: pid}) do
     GenServer.call(pid, :stop)
-  end
-
-  defp run_inputs(streams, transformer) do
-    Enum.reduce(streams, %{}, fn {name, stream}, streams_acc ->
-      task = async_run_stream({name, stream}, transformer)
-      Map.put(streams_acc, name, task)
-    end)
   end
 
   defp async_run_stream({name, stream}, transformer) do
@@ -223,10 +205,15 @@ defmodule Strom.Transformer do
   end
 
   @impl true
-  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
-    tasks = run_inputs(streams_to_call, transformer)
+  def handle_call({:run_input, name, stream}, _from, %__MODULE__{} = transformer) do
+    task = async_run_stream({name, stream}, transformer)
 
-    {:reply, tasks, %{transformer | tasks: tasks, input_streams: streams_to_call}}
+    {:reply, task,
+     %{
+       transformer
+       | tasks: Map.put(transformer.tasks, name, task),
+         input_streams: Map.put(transformer.input_streams, name, stream)
+     }}
   end
 
   @impl true
