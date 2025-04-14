@@ -120,7 +120,7 @@ defmodule Strom.Transformer do
                   Map.fetch!(tasks, name)
                 end
 
-              send(task.pid, {:get_data, self()})
+              send(task.pid, {:ask, name, self()})
 
               receive do
                 {^name, :done} ->
@@ -168,7 +168,7 @@ defmodule Strom.Transformer do
             stored_events = stored_events ++ chunk
 
             receive do
-              {:get_data, client_pid} ->
+              {:ask, ^name, client_pid} ->
                 send(client_pid, {name, stored_events})
                 {[], {[], new_acc}}
             after
@@ -177,7 +177,7 @@ defmodule Strom.Transformer do
                   {[], {stored_events, new_acc}}
                 else
                   receive do
-                    {:get_data, client_pid} ->
+                    {:ask, ^name, client_pid} ->
                       send(client_pid, {name, stored_events})
                       {[], {[], new_acc}}
                   end
@@ -186,7 +186,7 @@ defmodule Strom.Transformer do
           end,
           fn {stored_events, _acc} ->
             receive do
-              {:get_data, client_pid} ->
+              {:ask, ^name, client_pid} ->
                 send(client_pid, {name, stored_events})
                 {[], {[], nil}}
             end
@@ -195,7 +195,7 @@ defmodule Strom.Transformer do
         |> Stream.run()
 
         receive do
-          {:get_data, client_pid} ->
+          {:ask, ^name, client_pid} ->
             send(client_pid, {name, :done})
         end
 

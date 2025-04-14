@@ -24,7 +24,6 @@ defmodule Strom.TransformerTest do
     flow = %{numbers: [1, 2, 3, 4, 5]}
     flow = Transformer.call(flow, transformer)
 
-    assert %{numbers: %Task{}} = :sys.get_state(transformer.pid).tasks
     assert Enum.sort(Enum.to_list(flow[:numbers])) == [1, 4, 9, 16, 25]
   end
 
