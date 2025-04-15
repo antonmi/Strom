@@ -53,7 +53,7 @@ defmodule Strom.GenMix do
         Map.put(acc, {name, fun}, Map.fetch!(flow, name))
       end)
 
-    _tasks = GenServer.call(gen_mix.pid, {:run_inputs, input_streams})
+    tasks = GenServer.call(gen_mix.pid, {:run_inputs, input_streams})
 
     sub_flow =
       gen_mix.outputs
@@ -61,25 +61,26 @@ defmodule Strom.GenMix do
         stream =
           Stream.resource(
             fn ->
-              nil
+              tasks
             end,
-            fn nil ->
-              case GenServer.call(gen_mix.pid, {:get_data, name}, :infinity) do
-                {:data, data} ->
-                  {data, nil}
+            fn tasks ->
+              if map_size(tasks) > 0 do
+                task = Enum.random(Map.values(tasks))
+                send(task.pid, {:ask, name, self()})
 
-                :done ->
-                  {:halt, nil}
+                receive do
+                  {^name, {:done, stream_name}, events} ->
+                    {events, Map.delete(tasks, stream_name)}
 
-                :pause ->
-                  receive do
-                    :continue_client ->
-                      flush(:continue_client)
-                      {[], nil}
-                  end
+                  {^name, events} ->
+                    {events, tasks}
+                    # after
+                end
+              else
+                {:halt, %{}}
               end
             end,
-            fn nil -> nil end
+            fn %{} -> %{} end
           )
 
         Map.put(flow, name, stream)
@@ -101,31 +102,60 @@ defmodule Strom.GenMix do
     end)
   end
 
-  defp async_run_stream({name, fun}, stream, gen_mix) do
+  defp async_run_stream({input_stream_name, fun}, stream, gen_mix) do
     Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         stream
         |> Stream.chunk_every(gen_mix.chunk)
-        |> Stream.each(fn chunk ->
-          {chunk, _} = Enum.split_with(chunk, fun)
+        |> Stream.transform(
+          fn -> %{} end,
+          fn chunk, stored ->
+            {chunk, _} = Enum.split_with(chunk, fun)
 
-          new_data =
-            Enum.reduce(gen_mix.outputs, %{}, fn {name, fun}, acc ->
-              {data, _} = Enum.split_with(chunk, fun)
-              Map.put(acc, name, data)
+            stored =
+              Enum.reduce(gen_mix.outputs, stored, fn {name, fun}, acc ->
+                {new_events, _} = Enum.split_with(chunk, fun)
+                stored_events = Map.get(stored, name, [])
+                Map.put(acc, name, stored_events ++ new_events)
+              end)
+
+            receive do
+              {:ask, name, client_pid} ->
+                send(client_pid, {name, Map.fetch!(stored, name)})
+                stored = Map.put(stored, name, [])
+                {[], stored}
+            after
+              1 ->
+                events_count =
+                  Enum.reduce(stored, 0, fn {_k, v}, counter -> counter + length(v) end)
+
+                if events_count < gen_mix.buffer do
+                  {[], stored}
+                else
+                  receive do
+                    {:ask, name, client_pid} ->
+                      send(client_pid, {name, Map.fetch!(stored, name)})
+                      stored = Map.put(stored, name, [])
+                      {[], stored}
+                  end
+                end
+            end
+          end,
+          fn stored ->
+            IO.inspect(stored, label: :stored)
+
+            Enum.each(stored, fn {name, events} ->
+              receive do
+                {:ask, ^name, client_pid} ->
+                  send(client_pid, {name, {:done, input_stream_name}, Map.get(stored, name, [])})
+              end
             end)
-
-          GenServer.cast(gen_mix.pid, {:new_data, name, new_data, self()})
-
-          receive do
-            :continue_task ->
-              flush(:continue_task)
           end
-        end)
+        )
         |> Stream.run()
 
-        {:task_done, name}
+        {:task_done, input_stream_name}
       end
     )
   end
