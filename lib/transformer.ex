@@ -172,7 +172,7 @@ defmodule Strom.Transformer do
                 send(client_pid, {name, stored_events})
                 {[], {[], new_acc}}
             after
-              1 ->
+              0 ->
                 if length(stored_events) < transformer.buffer do
                   {[], {stored_events, new_acc}}
                 else
@@ -207,7 +207,6 @@ defmodule Strom.Transformer do
   @impl true
   def handle_call({:run_input, name, stream}, _from, %__MODULE__{} = transformer) do
     task = async_run_stream({name, stream}, transformer)
-
     {:reply, task,
      %{
        transformer
@@ -232,9 +231,7 @@ defmodule Strom.Transformer do
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = transformer) do
-    Enum.each(transformer.tasks, fn {_name, task_pid} ->
-      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task_pid)
-    end)
+    Enum.each(Map.values(transformer.tasks), &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid))
 
     {:stop, :normal, :ok, transformer}
   end
