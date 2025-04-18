@@ -18,6 +18,7 @@ defmodule Strom.GenMix do
             input_streams: %{},
             tasks: %{},
             tasks_started: false,
+            tasks_run: false,
             asks: %{},
             data: %{},
             data_size: 0,
@@ -55,34 +56,38 @@ defmodule Strom.GenMix do
         Map.put(acc, {name, fun}, Map.fetch!(flow, name))
       end)
 
-    sub_flow =
-      gen_mix.outputs
-      |> Enum.reduce(%{}, fn {output_stream_name, _fun}, flow ->
-        stream =
-          Stream.resource(
-            fn ->
-              GenServer.call(gen_mix.pid, {:client_runs_stream, input_streams})
-            end,
-            fn gen_mix_pid ->
-              GenServer.cast(gen_mix_pid, {:ask, output_stream_name, self()})
-
-              receive do
-                {^output_stream_name, :done} ->
-                  {:halt, gen_mix_pid}
-
-                {^output_stream_name, events} ->
-                  {events, gen_mix_pid}
-              end
-            end,
-            fn gen_mix_pid -> gen_mix_pid end
-          )
-
-        Map.put(flow, output_stream_name, stream)
-      end)
+    gen_mix_pid = GenServer.call(gen_mix.pid, {:start_tasks, input_streams})
+    sub_flow = build_sub_flow(gen_mix.outputs, gen_mix_pid)
 
     flow
     |> Map.drop(Map.keys(gen_mix.inputs))
     |> Map.merge(sub_flow)
+  end
+
+  defp build_sub_flow(outputs, gen_mix_pid) do
+    Enum.reduce(outputs, %{}, fn {output_stream_name, _fun}, flow ->
+      stream =
+        Stream.resource(
+          fn ->
+            GenServer.call(gen_mix_pid, :run_tasks)
+            gen_mix_pid
+          end,
+          fn gen_mix_pid ->
+            GenServer.cast(gen_mix_pid, {:ask, output_stream_name, self()})
+
+            receive do
+              {^output_stream_name, :done} ->
+                {:halt, gen_mix_pid}
+
+              {^output_stream_name, events} ->
+                {events, gen_mix_pid}
+            end
+          end,
+          fn gen_mix_pid -> gen_mix_pid end
+        )
+
+      Map.put(flow, output_stream_name, stream)
+    end)
   end
 
   def stop(gen_mix) do
@@ -100,6 +105,11 @@ defmodule Strom.GenMix do
     Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
+        receive do
+          :continue_task ->
+            :ok
+        end
+
         stream
         |> Stream.chunk_every(gen_mix.chunk)
         |> Stream.each(fn chunk ->
@@ -132,7 +142,7 @@ defmodule Strom.GenMix do
 
   @impl true
   def handle_call(
-        {:client_runs_stream, streams_to_call},
+        {:start_tasks, streams_to_call},
         _from,
         %__MODULE__{tasks_started: false} = gen_mix
       ) do
@@ -144,15 +154,31 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:client_runs_stream, _streams_to_call},
+        {:start_tasks, _streams_to_call},
         _from,
         %__MODULE__{tasks_started: true} = gen_mix
       ) do
     {:reply, gen_mix.pid, gen_mix}
   end
 
+  def handle_call(
+        :run_tasks,
+        _from,
+        %__MODULE__{tasks: tasks, tasks_started: true, tasks_run: false} = gen_mix
+      ) do
+    Enum.each(Map.values(tasks), &send(&1.pid, :continue_task))
+    {:reply, gen_mix.pid, %{gen_mix | tasks_run: true, tasks: tasks}}
+  end
+
+  def handle_call(:run_tasks, _from, %__MODULE__{tasks_run: true} = gen_mix) do
+    {:reply, gen_mix.pid, gen_mix}
+  end
+
   def handle_call(:stop, _from, %__MODULE__{} = gen_mix) do
-    Enum.each(Map.values(gen_mix.tasks), &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid))
+    Enum.each(
+      Map.values(gen_mix.tasks),
+      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid)
+    )
 
     {:stop, :normal, :ok, gen_mix}
   end
@@ -241,7 +267,11 @@ defmodule Strom.GenMix do
   def handle_info({_task_ref, {:task_done, name}}, gen_mix) do
     tasks =
       if gen_mix.no_wait do
-        Enum.each(Map.values(gen_mix.tasks), &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid))
+        Enum.each(
+          Map.values(gen_mix.tasks),
+          &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid)
+        )
+
         %{}
       else
         Map.delete(gen_mix.tasks, name)
@@ -275,6 +305,7 @@ defmodule Strom.GenMix do
       Enum.find(gen_mix.input_streams, fn {{n, _}, _} -> n == name end)
 
     new_task = async_run_stream({name, function}, stream, gen_mix)
+    send(new_task.pid, :continue_task)
     tasks = Map.put(gen_mix.tasks, name, new_task)
 
     {:noreply, %{gen_mix | tasks: tasks}}

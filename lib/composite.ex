@@ -101,7 +101,6 @@ defmodule Strom.Composite do
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
-    collect_garbage(composite)
     {:reply, flow, composite}
   end
 
@@ -116,9 +115,7 @@ defmodule Strom.Composite do
 
   def reduce_flow(components, init_flow) do
     Enum.reduce(components, init_flow, fn %{__struct__: module} = component, flow ->
-      flow
-      |> module.call(component)
-      |> tap(fn _flow -> collect_garbage(component) end)
+      module.call(flow, component)
     end)
   end
 
@@ -142,14 +139,6 @@ defmodule Strom.Composite do
 
   defp monitor_component(component) do
     Process.monitor(component.pid)
-  end
-
-  defp collect_garbage(%Strom.Renamer{}), do: :nothing
-
-  defp collect_garbage(component) do
-    spawn(fn ->
-      :erlang.garbage_collect(component.pid)
-    end)
   end
 
   defp timestamp_postfix do

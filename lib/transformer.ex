@@ -207,6 +207,7 @@ defmodule Strom.Transformer do
   @impl true
   def handle_call({:run_input, name, stream}, _from, %__MODULE__{} = transformer) do
     task = async_run_stream({name, stream}, transformer)
+
     {:reply, task,
      %{
        transformer
@@ -231,7 +232,10 @@ defmodule Strom.Transformer do
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = transformer) do
-    Enum.each(Map.values(transformer.tasks), &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid))
+    Enum.each(
+      Map.values(transformer.tasks),
+      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid)
+    )
 
     {:stop, :normal, :ok, transformer}
   end
