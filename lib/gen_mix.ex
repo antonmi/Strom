@@ -15,7 +15,6 @@ defmodule Strom.GenMix do
             chunk: @chunk,
             buffer: @buffer,
             no_wait: false,
-            input_streams: %{},
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
@@ -34,7 +33,7 @@ defmodule Strom.GenMix do
 
     {:ok, pid} =
       DynamicSupervisor.start_child(
-        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, gen_mix}},
+        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, self()}},
         %{id: __MODULE__, start: {__MODULE__, :start_link, [gen_mix]}, restart: :temporary}
       )
 
@@ -94,21 +93,14 @@ defmodule Strom.GenMix do
     GenServer.call(gen_mix.pid, :stop)
   end
 
-  defp run_inputs(streams, gen_mix) do
-    Enum.reduce(streams, %{}, fn {{name, fun}, stream}, acc ->
-      task = async_run_stream({name, fun}, stream, gen_mix.outputs, gen_mix.pid, gen_mix.chunk)
-      Map.put(acc, name, task.pid)
-    end)
-  end
-
-  defp async_run_stream(
+  defp run_stream_in_task(
          {input_stream_name, input_stream_fun},
          stream,
          outputs,
          gen_mix_pid,
          chunk
        ) do
-    Task.Supervisor.async_nolink(
+    Task.Supervisor.start_child(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         case GenServer.call(gen_mix_pid, {:register_task, input_stream_name, self()}) do
@@ -147,26 +139,31 @@ defmodule Strom.GenMix do
         end)
         |> Stream.run()
 
-        {:task_done, input_stream_name}
-      end
+        GenServer.cast(gen_mix_pid, {:task_done, input_stream_name})
+      end,
+      restart: :transient
     )
   end
 
   @impl true
   def handle_call(
-        {:start_tasks, streams_to_call},
+        {:start_tasks, input_streams},
         _from,
         %__MODULE__{tasks_started: false} = gen_mix
       ) do
     tasks =
-      run_inputs(streams_to_call, gen_mix)
+      Enum.reduce(input_streams, %{}, fn {{name, fun}, stream}, acc ->
+        {:ok, task_pid} =
+          run_stream_in_task({name, fun}, stream, gen_mix.outputs, gen_mix.pid, gen_mix.chunk)
 
-    {:reply, gen_mix.pid,
-     %{gen_mix | tasks_started: true, tasks: tasks, input_streams: streams_to_call}}
+        Map.put(acc, name, task_pid)
+      end)
+
+    {:reply, gen_mix.pid, %{gen_mix | tasks_started: true, tasks: tasks}}
   end
 
   def handle_call(
-        {:start_tasks, _streams_to_call},
+        {:start_tasks, _input_streams},
         _from,
         %__MODULE__{tasks_started: true} = gen_mix
       ) do
@@ -187,7 +184,6 @@ defmodule Strom.GenMix do
   end
 
   def handle_call({:register_task, name, task_pid}, _from, %__MODULE__{tasks: tasks} = gen_mix) do
-    IO.inspect({:register_task, name, task_pid})
     tasks = Map.put(tasks, name, task_pid)
 
     {:reply, gen_mix.tasks_run, %{gen_mix | tasks: tasks}}
@@ -284,18 +280,18 @@ defmodule Strom.GenMix do
      }}
   end
 
-  @impl true
-  def handle_info({_task_ref, {:task_done, name}}, gen_mix) do
-    tasks =
+  def handle_cast({:task_done, input_stream_name}, %__MODULE__{} = gen_mix) do
+    {tasks, waiting_tasks} =
       if gen_mix.no_wait do
         Enum.each(
           Map.values(gen_mix.tasks),
           &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
         )
 
-        %{}
+        {%{}, %{}}
       else
-        Map.delete(gen_mix.tasks, name)
+        {Map.delete(gen_mix.tasks, input_stream_name),
+         Map.delete(gen_mix.waiting_tasks, input_stream_name)}
       end
 
     asks =
@@ -311,26 +307,6 @@ defmodule Strom.GenMix do
           gen_mix.asks
       end
 
-    {:noreply, %{gen_mix | tasks: tasks, asks: asks}}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, gen_mix) do
-    # do nothing
-    {:noreply, gen_mix}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, gen_mix) do
-    {name, _task} = Enum.find(gen_mix.tasks, fn {_name, pid} -> pid == task_pid end)
-
-    {{^name, function}, stream} =
-      Enum.find(gen_mix.input_streams, fn {{n, _}, _} -> n == name end)
-
-    new_task =
-      async_run_stream({name, function}, stream, gen_mix.outputs, gen_mix.pid, gen_mix.chunk)
-
-    send(new_task.pid, :continue_task)
-    tasks = Map.put(gen_mix.tasks, name, new_task.pid)
-
-    {:noreply, %{gen_mix | tasks: tasks}}
+    {:noreply, %{gen_mix | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
   end
 end

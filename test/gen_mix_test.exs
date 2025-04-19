@@ -139,4 +139,66 @@ defmodule Strom.GenMixTest do
 
     GenMix.stop(gen_mix)
   end
+
+  def factorial(n) do
+    Enum.reduce(1..n, 1, &(&1 * &2))
+  end
+
+  def build_stream(list, sleep \\ 0) do
+    Stream.resource(
+      fn -> list end,
+      fn
+        [] ->
+          {:halt, []}
+
+        [hd | tl] ->
+          Process.sleep(sleep)
+          {[hd], tl}
+      end,
+      fn [] -> [] end
+    )
+  end
+
+  test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
+    quick = Stream.cycle([101])
+    slow = build_stream(Enum.to_list(1..100), 1)
+
+    inputs = %{quick: fn _ -> true end, slow: fn _ -> true end}
+
+    outputs = %{
+      quick: fn n -> n > 100 end,
+      slow: fn n -> n <= 100 end
+    }
+
+    flow = %{quick: quick, slow: slow}
+
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: inputs,
+        outputs: outputs,
+        opts: [chunk: 3, buffer: 10, no_wait: true]
+      })
+
+    flow = GenMix.call(flow, gen_mix)
+
+    Task.async(fn ->
+      flow[:quick]
+      |> Stream.map(fn n ->
+        #              IO.write(".")
+        n
+      end)
+      |> Enum.to_list()
+    end)
+
+    slow_list =
+      flow[:slow]
+      |> Stream.map(fn n ->
+        Process.sleep(1)
+        #              IO.write("!")
+        n
+      end)
+      |> Enum.to_list()
+
+    assert length(slow_list) == 100
+  end
 end
