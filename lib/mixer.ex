@@ -13,7 +13,7 @@ defmodule Strom.Mixer do
   alias Strom.GenMix
 
   defstruct pid: nil,
-            inputs: %{},
+            inputs: [],
             outputs: %{},
             opts: []
 
@@ -39,7 +39,7 @@ defmodule Strom.Mixer do
         inputs: inputs,
         outputs: outputs,
         opts: opts,
-        process_chunk: &process_chunk/2
+        process_chunk: &process_chunk/4
       })
 
     %{mixer | pid: gen_mix.pid}
@@ -50,10 +50,9 @@ defmodule Strom.Mixer do
     GenMix.call(flow, mixer)
   end
 
-  def process_chunk(chunk, outputs) when map_size(outputs) == 1 do
+  def process_chunk(_input_stream_name, chunk, outputs, nil) when map_size(outputs) == 1 do
     [stream_name] = Map.keys(outputs)
-
-    {%{stream_name => chunk}, Enum.any?(chunk)}
+    {%{stream_name => chunk}, Enum.any?(chunk), nil}
   end
 
   @spec stop(__MODULE__.t()) :: :ok

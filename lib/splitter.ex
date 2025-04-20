@@ -53,7 +53,7 @@ defmodule Strom.Splitter do
         inputs: inputs,
         outputs: outputs,
         opts: opts,
-        process_chunk: &process_chunk/2
+        process_chunk: &process_chunk/4
       })
 
     %{splitter | pid: gen_mix.pid}
@@ -64,11 +64,11 @@ defmodule Strom.Splitter do
     GenMix.call(flow, splitter)
   end
 
-  def process_chunk(chunk, outputs) do
+  def process_chunk(_input_stream_name, chunk, outputs, nil) do
     outputs
-    |> Enum.reduce({%{}, false}, fn {stream_name, fun}, {acc, any?} ->
+    |> Enum.reduce({%{}, false, nil}, fn {stream_name, fun}, {acc, any?, nil} ->
       {data, _} = Enum.split_with(chunk, fun)
-      {Map.put(acc, stream_name, data), any? || Enum.any?(data)}
+      {Map.put(acc, stream_name, data), any? || Enum.any?(data), nil}
     end)
   end
 

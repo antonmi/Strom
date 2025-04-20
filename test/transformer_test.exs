@@ -90,8 +90,6 @@ defmodule Strom.TransformerTest do
       |> Transformer.new(fun, 100, chunk: 2)
       |> Transformer.start()
 
-    assert transformer.chunk == 2
-
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
 
     flow = Transformer.call(flow, transformer)
