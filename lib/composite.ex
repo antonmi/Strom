@@ -77,9 +77,7 @@ defmodule Strom.Composite do
 
   def build(components) do
     Enum.map(components, fn %{__struct__: module} = component ->
-      component
-      |> module.start()
-      |> tap(&monitor_component/1)
+      module.start(component)
     end)
   end
 
@@ -133,12 +131,6 @@ defmodule Strom.Composite do
     |> String.slice(0..15)
     |> then(&(&1 <> "_" <> timestamp_postfix()))
     |> String.to_atom()
-  end
-
-  defp monitor_component(%Strom.Renamer{}), do: :nothing
-
-  defp monitor_component(component) do
-    Process.monitor(component.pid)
   end
 
   defp timestamp_postfix do
