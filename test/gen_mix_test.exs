@@ -13,22 +13,17 @@ defmodule Strom.GenMixTest do
   test "call one by one" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
 
-    inputs = %{
-      numbers1: fn el -> el < 5 end,
-      numbers2: fn el -> el > 6 end
-    }
-
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs})
+    gen_mix = GenMix.start(%GenMix{inputs: [:numbers1, :numbers2], outputs: outputs})
 
     flow = GenMix.call(flow, gen_mix)
 
-    assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 8, 10]
-    assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 7, 9]
+    assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 6, 8, 10]
+    assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 5, 7, 9]
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
 
     GenMix.stop(gen_mix)
@@ -36,7 +31,6 @@ defmodule Strom.GenMixTest do
 
   test "call in a tasks" do
     flow = %{numbers1: Enum.to_list(1..100), numbers2: Enum.to_list(101..200)}
-    inputs = %{numbers1: fn _el -> true end, numbers2: fn _el -> true end}
 
     outputs = %{
       odd: fn el ->
@@ -47,7 +41,7 @@ defmodule Strom.GenMixTest do
       end
     }
 
-    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs})
+    gen_mix = GenMix.start(%GenMix{inputs: [:numbers1, :numbers2], outputs: outputs})
 
     flow = GenMix.call(flow, gen_mix)
     task_even = Task.async(fn -> Enum.count(flow[:even]) end)
@@ -58,7 +52,6 @@ defmodule Strom.GenMixTest do
 
   test "when buffer limit has been reached" do
     flow = %{numbers1: Enum.to_list(1..1_000), numbers2: Enum.to_list(1..1_000)}
-    inputs = %{numbers1: fn _el -> true end, numbers2: fn _el -> true end}
 
     outputs = %{
       odd: fn el ->
@@ -70,7 +63,11 @@ defmodule Strom.GenMixTest do
     }
 
     gen_mix =
-      GenMix.start(%GenMix{inputs: inputs, outputs: outputs, opts: [chunk: 10, buffer: 100]})
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2],
+        outputs: outputs,
+        opts: [chunk: 10, buffer: 100]
+      })
 
     flow = GenMix.call(flow, gen_mix)
 
@@ -86,14 +83,18 @@ defmodule Strom.GenMixTest do
   test "call with one infinite stream" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: Stream.cycle([1, 2, 3])}
 
-    inputs = %{numbers1: fn _el -> true end, numbers2: fn _el -> true end}
-
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs, opts: [no_wait: true]})
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2],
+        outputs: outputs,
+        opts: [no_wait: true]
+      })
+
     flow = GenMix.call(flow, gen_mix)
 
     assert Enum.count(flow[:even]) >= 2
@@ -107,31 +108,30 @@ defmodule Strom.GenMixTest do
       numbers3: Enum.to_list(1..100_000)
     }
 
-    inputs = %{
-      numbers1: fn el -> rem(el, 3) == 0 end,
-      numbers2: fn el -> rem(el, 4) == 0 end,
-      numbers3: fn el -> rem(el, 5) == 0 end
-    }
-
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = GenMix.start(%GenMix{inputs: inputs, outputs: outputs, opts: [chunk: 1000]})
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2, :numbers3],
+        outputs: outputs,
+        opts: [chunk: 1000]
+      })
 
     flow = GenMix.call(flow, gen_mix)
 
     task1 =
       Task.async(fn ->
         list = Enum.to_list(flow[:odd])
-        assert length(list) == 26667
+        assert length(list) == 150_000
       end)
 
     task2 =
       Task.async(fn ->
         list = Enum.to_list(flow[:even])
-        assert length(list) == 51666
+        assert length(list) == 150_000
       end)
 
     Task.await(task1, :infinity)
@@ -163,8 +163,6 @@ defmodule Strom.GenMixTest do
     quick = Stream.cycle([101])
     slow = build_stream(Enum.to_list(1..100), 1)
 
-    inputs = %{quick: fn _ -> true end, slow: fn _ -> true end}
-
     outputs = %{
       quick: fn n -> n > 100 end,
       slow: fn n -> n <= 100 end
@@ -174,7 +172,7 @@ defmodule Strom.GenMixTest do
 
     gen_mix =
       GenMix.start(%GenMix{
-        inputs: inputs,
+        inputs: [:quick, :slow],
         outputs: outputs,
         opts: [chunk: 3, buffer: 10, no_wait: true]
       })

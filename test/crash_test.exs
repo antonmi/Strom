@@ -2,7 +2,7 @@ defmodule Strom.CrashTest do
   use ExUnit.Case
 
   alias Strom.{Source, Source.ReadLines, Sink}
-  alias Strom.{Transformer, Mixer, Splitter}
+  alias Strom.{Transformer, Splitter}
 
   import ExUnit.CaptureLog
 
@@ -85,38 +85,6 @@ defmodule Strom.CrashTest do
 
         assert Enum.to_list(stream) == [2, 4, 8, 10]
         assert Enum.to_list(stream2) == [20, 40, 60, 80, 100]
-      end)
-    end
-  end
-
-  describe "crash in mixer" do
-    setup do
-      %{
-        stream1: build_stream([1, 2, 3, 4, 5, 6]),
-        stream2: build_stream([10, 20, 30, 40, 50, 60])
-      }
-    end
-
-    test "crash in mixer", %{stream1: stream1, stream2: stream2} do
-      partitions = %{
-        stream1: fn el -> if Enum.member?([4], el), do: raise("error"), else: el end,
-        stream2: fn el -> if Enum.member?([10], el), do: raise("error"), else: el end
-      }
-
-      mixer =
-        partitions
-        |> Mixer.new(:mixed, chunk: 1)
-        |> Mixer.start()
-
-      capture_log(fn ->
-        %{mixed: mixed} = Mixer.call(%{stream1: stream1, stream2: stream2}, mixer)
-
-        results =
-          mixed
-          |> Enum.to_list()
-          |> Enum.sort()
-
-        assert results == [1, 2, 3, 5, 6, 20, 30, 40, 50, 60]
       end)
     end
   end

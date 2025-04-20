@@ -9,7 +9,8 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
-            inputs: %{},
+            process_chunk: nil,
+            inputs: [],
             outputs: %{},
             opts: [],
             chunk: @chunk,
@@ -23,10 +24,11 @@ defmodule Strom.GenMix do
             data_size: 0,
             waiting_tasks: %{}
 
-  def start(%__MODULE__{opts: opts} = gen_mix) when is_list(opts) do
+  def start(%__MODULE__{process_chunk: process_chunk, opts: opts} = gen_mix) when is_list(opts) do
     gen_mix = %{
       gen_mix
-      | chunk: Keyword.get(opts, :chunk, @chunk),
+      | process_chunk: if(process_chunk, do: process_chunk, else: &process_chunk/2),
+        chunk: Keyword.get(opts, :chunk, @chunk),
         buffer: Keyword.get(opts, :buffer, @buffer),
         no_wait: Keyword.get(opts, :no_wait, false)
     }
@@ -51,15 +53,15 @@ defmodule Strom.GenMix do
 
   def call(flow, gen_mix) do
     input_streams =
-      Enum.reduce(gen_mix.inputs, %{}, fn {name, fun}, acc ->
-        Map.put(acc, {name, fun}, Map.fetch!(flow, name))
+      Enum.reduce(gen_mix.inputs, %{}, fn name, acc ->
+        Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
     gen_mix_pid = GenServer.call(gen_mix.pid, {:start_tasks, input_streams})
     sub_flow = build_sub_flow(gen_mix.outputs, gen_mix_pid)
 
     flow
-    |> Map.drop(Map.keys(gen_mix.inputs))
+    |> Map.drop(gen_mix.inputs)
     |> Map.merge(sub_flow)
   end
 
@@ -93,12 +95,21 @@ defmodule Strom.GenMix do
     GenServer.call(gen_mix.pid, :stop)
   end
 
+  def process_chunk(chunk, outputs) do
+    outputs
+    |> Enum.reduce({%{}, false}, fn {output_stream_name, output_stream_fun}, {acc, any?} ->
+      {data, _} = Enum.split_with(chunk, output_stream_fun)
+      {Map.put(acc, output_stream_name, data), any? || Enum.any?(data)}
+    end)
+  end
+
   defp run_stream_in_task(
-         {input_stream_name, input_stream_fun},
+         input_stream_name,
          stream,
          outputs,
          gen_mix_pid,
-         chunk
+         chunk,
+         process_chunk
        ) do
     Task.Supervisor.start_child(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
@@ -117,13 +128,7 @@ defmodule Strom.GenMix do
         stream
         |> Stream.chunk_every(chunk)
         |> Stream.each(fn chunk ->
-          {chunk, _} = Enum.split_with(chunk, input_stream_fun)
-
-          outputs
-          |> Enum.reduce({%{}, false}, fn {output_stream_name, output_stream_fun}, {acc, any?} ->
-            {data, _} = Enum.split_with(chunk, output_stream_fun)
-            {Map.put(acc, output_stream_name, data), any? || Enum.any?(data)}
-          end)
+          process_chunk.(chunk, outputs)
           |> case do
             {new_data, true} ->
               GenServer.cast(gen_mix_pid, {:new_data, input_stream_name, new_data, self()})
@@ -152,9 +157,16 @@ defmodule Strom.GenMix do
         %__MODULE__{tasks_started: false} = gen_mix
       ) do
     tasks =
-      Enum.reduce(input_streams, %{}, fn {{name, fun}, stream}, acc ->
+      Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
         {:ok, task_pid} =
-          run_stream_in_task({name, fun}, stream, gen_mix.outputs, gen_mix.pid, gen_mix.chunk)
+          run_stream_in_task(
+            name,
+            stream,
+            gen_mix.outputs,
+            gen_mix.pid,
+            gen_mix.chunk,
+            gen_mix.process_chunk
+          )
 
         Map.put(acc, name, task_pid)
       end)

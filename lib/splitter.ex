@@ -34,8 +34,6 @@ defmodule Strom.Splitter do
         ) :: __MODULE__.t()
   def new(input, outputs, opts \\ [])
       when is_list(outputs) or ((is_map(outputs) and map_size(outputs)) > 0 and is_list(opts)) do
-    inputs = %{input => fn _el -> true end}
-
     outputs =
       if is_list(outputs) do
         Enum.reduce(outputs, %{}, fn name, acc ->
@@ -45,7 +43,7 @@ defmodule Strom.Splitter do
         outputs
       end
 
-    %__MODULE__{inputs: inputs, outputs: outputs, opts: opts}
+    %__MODULE__{inputs: [input], outputs: outputs, opts: opts}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
@@ -54,7 +52,8 @@ defmodule Strom.Splitter do
       GenMix.start(%GenMix{
         inputs: inputs,
         outputs: outputs,
-        opts: opts
+        opts: opts,
+        process_chunk: &process_chunk/2
       })
 
     %{splitter | pid: gen_mix.pid}
@@ -63,6 +62,14 @@ defmodule Strom.Splitter do
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
   def call(flow, %__MODULE__{} = splitter) do
     GenMix.call(flow, splitter)
+  end
+
+  def process_chunk(chunk, outputs) do
+    outputs
+    |> Enum.reduce({%{}, false}, fn {stream_name, fun}, {acc, any?} ->
+      {data, _} = Enum.split_with(chunk, fun)
+      {Map.put(acc, stream_name, data), any? || Enum.any?(data)}
+    end)
   end
 
   @spec stop(__MODULE__.t()) :: :ok
