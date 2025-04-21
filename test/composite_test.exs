@@ -36,8 +36,8 @@ defmodule Strom.CompositeTest do
     end
   end
 
-  def check_alive(composite) do
-    [source1, source2, mixer, transformer, splitter, sink1] = composite.components
+  def check_alive(components) do
+    [source1, source2, mixer, transformer, splitter, sink1] = components
     assert Process.alive?(source1.pid)
     assert Process.alive?(source2.pid)
     assert Process.alive?(mixer.pid)
@@ -46,8 +46,8 @@ defmodule Strom.CompositeTest do
     assert Process.alive?(sink1.pid)
   end
 
-  def check_dead(composite) do
-    [source1, source2, mixer, transformer, splitter, sink1] = composite.components
+  def check_dead(components) do
+    [source1, source2, mixer, transformer, splitter, sink1] = components
     refute Process.alive?(source1.pid)
     refute Process.alive?(source2.pid)
     refute Process.alive?(mixer.pid)
@@ -78,11 +78,12 @@ defmodule Strom.CompositeTest do
         |> Composite.start()
 
       assert Process.alive?(composite.pid)
-      check_alive(composite)
+      components = Composite.components(composite)
+      check_alive(components)
 
       Composite.stop(composite)
       refute Process.alive?(composite.pid)
-      check_dead(composite)
+      check_dead(components)
     end
   end
 
@@ -94,11 +95,12 @@ defmodule Strom.CompositeTest do
         |> Composite.start()
 
       assert Process.alive?(composite.pid)
-      check_alive(composite)
+      components = Composite.components(composite)
+      check_alive(components)
 
       Composite.stop(composite)
       refute Process.alive?(composite.pid)
-      check_dead(composite)
+      check_dead(components)
     end
 
     test "call" do
