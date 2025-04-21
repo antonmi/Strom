@@ -7,8 +7,7 @@ defmodule Strom.Loop do
   defstruct name: nil,
             last_empty_call_at: nil,
             timeout: @timeout,
-            sleep: @sleep,
-            infinite: false
+            sleep: @sleep
 
   def new(name, opts \\ []) do
     %__MODULE__{
@@ -66,6 +65,4 @@ defmodule Strom.Loop do
     :ok = Agent.stop(name)
     loop
   end
-
-  def infinite?(%__MODULE__{infinite: infinite}), do: infinite
 end

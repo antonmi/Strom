@@ -144,7 +144,7 @@ defmodule Strom.CrashTest do
     defmodule CustomReadLines do
       @behaviour Strom.Source
 
-      defstruct path: nil, file: nil, infinite: false
+      defstruct path: nil, file: nil
 
       def new(path) when is_binary(path), do: %__MODULE__{path: path}
 
@@ -168,9 +168,6 @@ defmodule Strom.CrashTest do
 
       @impl true
       def stop(%__MODULE__{} = read_lines), do: %{read_lines | file: File.close(read_lines.file)}
-
-      @impl true
-      def infinite?(%__MODULE__{infinite: infinite}), do: infinite
 
       defp read_line(file) do
         case IO.read(file, :line) do

@@ -151,21 +151,6 @@ defmodule Strom.GenMix do
           end,
           fn acc -> acc end
         )
-        #        |> Stream.each(fn chunk ->
-        #          process_chunk.(chunk, outputs)
-        #          |> case do
-        #            {new_data, true} ->
-        #              GenServer.cast(gen_mix_pid, {:new_data, input_stream_name, new_data, self()})
-        #
-        #              receive do
-        #                :continue_task ->
-        #                  :ok
-        #              end
-        #
-        #            {_new_data, false} ->
-        #              :ok
-        #          end
-        #        end)
         |> Stream.run()
 
         GenServer.cast(gen_mix_pid, {:task_done, input_stream_name})
@@ -229,7 +214,7 @@ defmodule Strom.GenMix do
   def handle_call(:stop, _from, %__MODULE__{} = gen_mix) do
     Enum.each(
       Map.values(gen_mix.tasks),
-      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1.pid)
+      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
     )
 
     {:stop, :normal, :ok, gen_mix}

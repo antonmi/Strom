@@ -19,11 +19,7 @@ defmodule Strom.SourceTest do
     assert source.origin.path == "test/data/orders.csv"
     Source.stop(source)
     refute Process.alive?(source.pid)
-    assert source.buffer == 10
-  end
-
-  test "call", %{source: source} do
-    assert {["ORDER_CREATED,2017-04-18T20:00:00.000Z,111,3"], %Source{}} = Source.call(source)
+    assert source.opts == [buffer: 10]
   end
 
   test "stream lines", %{source: source} do
