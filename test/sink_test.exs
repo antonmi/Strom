@@ -16,7 +16,7 @@ defmodule Strom.SinkTest do
   setup do
     sink =
       :my_stream
-      |> Sink.new(WriteLines.new("test/data/output.csv"), true)
+      |> Sink.new(WriteLines.new("test/data/output.csv"), sync: true)
       |> Sink.start()
 
     %{sink: sink}
@@ -27,6 +27,11 @@ defmodule Strom.SinkTest do
     assert sink.origin.path == "test/data/output.csv"
     Sink.stop(sink)
     refute Process.alive?(sink.pid)
+  end
+
+  test "write stream", %{sink: sink} do
+    assert %{} = Sink.call(%{my_stream: ["a", "b", "c", "d"]}, sink)
+    assert File.read!("test/data/output.csv") == "a\nb\nc\nd\n"
   end
 
   test "stream lines", %{sink: sink} do

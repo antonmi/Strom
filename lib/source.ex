@@ -65,6 +65,7 @@ defmodule Strom.Source do
     }
   end
 
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{origin: origin, inputs: inputs, outputs: outputs, opts: opts} = source) do
     origin =
       if is_struct(origin) do
@@ -85,7 +86,7 @@ defmodule Strom.Source do
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{origin: origin, inputs: [input]} = source) do
+  def call(flow, %__MODULE__{origin: origin, inputs: [input]} = source) when is_map(flow) do
     stream =
       if is_struct(origin) do
         build_stream(origin)

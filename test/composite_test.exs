@@ -31,7 +31,7 @@ defmodule Strom.CompositeTest do
     def components do
       [
         split(:numbers, %{more: &(&1 >= 10), less: &(&1 < 10)}),
-        sink(:less, Null.new(), true)
+        sink(:less, Null.new(), sync: true)
       ]
     end
   end
@@ -69,7 +69,7 @@ defmodule Strom.CompositeTest do
         Mixer.new([:s1, :s2], :s),
         Transformer.new(:s, &(&1 + 1)),
         Splitter.new(:s, odd_even),
-        Sink.new(:odd, Null.new(), true)
+        Sink.new(:odd, Null.new(), sync: true)
       ]
 
       composite =

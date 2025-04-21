@@ -35,7 +35,7 @@ defmodule Strom.Integration.TelegramTest do
         source(:input, ReadLines.new("test/data/orders.csv")),
         transform(:input, &Decompose.call/2, nil),
         transform(:input, &Recompose.call/2, []),
-        sink(:input, WriteLines.new("test/data/telegram.txt"), true)
+        sink(:input, WriteLines.new("test/data/telegram.txt"), sync: true)
       ]
     end
   end

@@ -10,9 +10,9 @@ defmodule Strom.DSL do
     end
   end
 
-  defmacro sink(name, origin, sync \\ false) do
+  defmacro sink(name, origin, opts \\ []) do
     quote do
-      Sink.new(unquote(name), unquote(origin), unquote(sync))
+      Sink.new(unquote(name), unquote(origin), unquote(opts))
     end
   end
 

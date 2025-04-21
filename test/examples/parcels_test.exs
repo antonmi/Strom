@@ -65,7 +65,7 @@ defmodule Strom.Examples.ParcelsTest do
         transform(:orders, &__MODULE__.order_to_string/1, nil, chunk: @chunk),
         transform(:parcels, &__MODULE__.parcel_to_string/1, nil, chunk: @chunk),
         sink(:orders, WriteLines.new("test/examples/parcels/orders.csv")),
-        sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), true)
+        sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), sync: true)
       ]
     end
   end
@@ -211,7 +211,7 @@ defmodule Strom.Examples.ParcelsTest do
         sink(
           :all_parcels_shipped,
           WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"),
-          true
+          sync: true
         )
       ]
     end
