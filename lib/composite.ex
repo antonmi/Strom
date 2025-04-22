@@ -62,7 +62,7 @@ defmodule Strom.Composite do
       )
 
     Process.link(pid)
-    :sys.get_state(pid)
+    %{composite | pid: pid}
   end
 
   def start_link(%__MODULE__{name: name} = composite) do
@@ -70,16 +70,12 @@ defmodule Strom.Composite do
   end
 
   @impl true
-  def init(%__MODULE__{components: components} = composite) do
-    {:ok, %{composite | pid: self(), components: build(components)}}
+  def init(%__MODULE__{} = composite) do
+    {:ok, %{composite | pid: self()}, {:continue, :start_components}}
   end
 
-  def build(components) do
-    Enum.map(components, fn %{__struct__: module} = component ->
-      component
-      |> module.start()
-      |> tap(&monitor_component/1)
-    end)
+  def components(%__MODULE__{name: name}) do
+    GenServer.call({:global, name}, :components)
   end
 
   @spec call(Strom.flow(), __MODULE__.t() | atom()) :: Strom.flow()
@@ -90,18 +86,37 @@ defmodule Strom.Composite do
     do: GenServer.call({:global, name}, {:call, flow}, :infinity)
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{name: name, components: components}) do
+  def stop(%__MODULE__{name: name}) do
     pid = :global.whereis_name(name)
     Process.unlink(pid)
-    stop_components(components)
+    GenServer.call({:global, name}, :stop_components, :infinity)
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
+  end
+
+  @impl true
+  def handle_continue(:start_components, %__MODULE__{components: components} = composite) do
+    {:noreply, %{composite | components: start_components(components)}}
+  end
+
+  def start_components(components) do
+    Enum.map(components, fn %{__struct__: module} = component ->
+      module.start(component)
+    end)
   end
 
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
-    collect_garbage(composite)
     {:reply, flow, composite}
+  end
+
+  def handle_call(:components, _from, %__MODULE__{components: components} = composite) do
+    {:reply, components, composite}
+  end
+
+  def handle_call(:stop_components, _from, %__MODULE__{components: components} = composite) do
+    stop_components(components)
+    {:reply, :ok, composite}
   end
 
   @impl true
@@ -110,14 +125,12 @@ defmodule Strom.Composite do
         %__MODULE__{components: components} = composite
       ) do
     stop_components(components)
-    {:noreply, %{composite | components: build(components)}}
+    {:noreply, %{composite | components: start_components(components)}}
   end
 
   def reduce_flow(components, init_flow) do
     Enum.reduce(components, init_flow, fn %{__struct__: module} = component, flow ->
-      flow
-      |> module.call(component)
-      |> tap(fn _flow -> collect_garbage(component) end)
+      module.call(flow, component)
     end)
   end
 
@@ -135,20 +148,6 @@ defmodule Strom.Composite do
     |> String.slice(0..15)
     |> then(&(&1 <> "_" <> timestamp_postfix()))
     |> String.to_atom()
-  end
-
-  defp monitor_component(%Strom.Renamer{}), do: :nothing
-
-  defp monitor_component(component) do
-    Process.monitor(component.pid)
-  end
-
-  defp collect_garbage(%Strom.Renamer{}), do: :nothing
-
-  defp collect_garbage(component) do
-    spawn(fn ->
-      :erlang.garbage_collect(component.pid)
-    end)
   end
 
   defp timestamp_postfix do

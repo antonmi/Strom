@@ -1,7 +1,7 @@
 defmodule Strom.Source.IOGets do
   @behaviour Strom.Source
 
-  defstruct infinite: false
+  defstruct []
 
   def new, do: %__MODULE__{}
 
@@ -16,7 +16,4 @@ defmodule Strom.Source.IOGets do
 
   @impl true
   def stop(%__MODULE__{} = io_gets), do: io_gets
-
-  @impl true
-  def infinite?(%__MODULE__{infinite: infinite}), do: infinite
 end

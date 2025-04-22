@@ -4,36 +4,101 @@ defmodule Strom.GenMixTest do
   alias Strom.GenMix
 
   test "start and stop" do
-    {:ok, pid} = GenMix.start(%GenMix{})
-    assert Process.alive?(pid)
-    :ok = GenMix.stop(pid)
-    refute Process.alive?(pid)
+    gen_mix = GenMix.start(%GenMix{})
+    assert Process.alive?(gen_mix.pid)
+    :ok = GenMix.stop(gen_mix)
+    refute Process.alive?(gen_mix.pid)
   end
 
-  test "call" do
+  test "call one by one" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
-
-    inputs = %{
-      numbers1: fn el -> el < 5 end,
-      numbers2: fn el -> el > 6 end
-    }
 
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = %GenMix{inputs: inputs, outputs: outputs}
+    gen_mix = GenMix.start(%GenMix{inputs: [:numbers1, :numbers2], outputs: outputs})
 
-    {:ok, pid} = GenMix.start(gen_mix)
+    flow = GenMix.call(flow, gen_mix)
 
-    flow = GenMix.call(flow, pid)
-
-    assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 7, 9]
-    assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 8, 10]
+    assert Enum.sort(Enum.to_list(flow[:even])) == [2, 4, 6, 8, 10]
+    assert Enum.sort(Enum.to_list(flow[:odd])) == [1, 3, 5, 7, 9]
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
 
-    GenMix.stop(pid)
+    GenMix.stop(gen_mix)
+  end
+
+  test "call in a tasks" do
+    flow = %{numbers1: Enum.to_list(1..100), numbers2: Enum.to_list(101..200)}
+
+    outputs = %{
+      odd: fn el ->
+        rem(el, 2) == 1
+      end,
+      even: fn el ->
+        rem(el, 2) == 0
+      end
+    }
+
+    gen_mix = GenMix.start(%GenMix{inputs: [:numbers1, :numbers2], outputs: outputs})
+
+    flow = GenMix.call(flow, gen_mix)
+    task_even = Task.async(fn -> Enum.count(flow[:even]) end)
+    task_odd = Task.async(fn -> Enum.count(flow[:odd]) end)
+    assert Task.await(task_even) == 100
+    assert Task.await(task_odd) == 100
+  end
+
+  test "when buffer limit has been reached" do
+    flow = %{numbers1: Enum.to_list(1..1_000), numbers2: Enum.to_list(1..1_000)}
+
+    outputs = %{
+      odd: fn el ->
+        rem(el, 2) == 1
+      end,
+      even: fn el ->
+        rem(el, 2) == 0
+      end
+    }
+
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2],
+        outputs: outputs,
+        opts: [chunk: 10, buffer: 100]
+      })
+
+    flow = GenMix.call(flow, gen_mix)
+
+    task_even = Task.async(fn -> Enum.count(flow[:even]) end)
+    Process.sleep(50)
+    assert length(:sys.get_state(gen_mix.pid).data[:even]) == 0
+    assert length(:sys.get_state(gen_mix.pid).data[:odd]) >= 100
+    task_odd = Task.async(fn -> Enum.count(flow[:odd]) end)
+    assert Task.await(task_even) == 1000
+    assert Task.await(task_odd) == 1000
+  end
+
+  test "call with one infinite stream" do
+    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: Stream.cycle([1, 2, 3])}
+
+    outputs = %{
+      odd: fn el -> rem(el, 2) == 1 end,
+      even: fn el -> rem(el, 2) == 0 end
+    }
+
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2],
+        outputs: outputs,
+        opts: [no_wait: true]
+      })
+
+    flow = GenMix.call(flow, gen_mix)
+
+    assert Enum.count(flow[:even]) >= 2
+    assert Enum.count(flow[:odd]) >= 3
   end
 
   test "massive call" do
@@ -43,37 +108,95 @@ defmodule Strom.GenMixTest do
       numbers3: Enum.to_list(1..100_000)
     }
 
-    inputs = %{
-      numbers1: fn el -> rem(el, 3) == 0 end,
-      numbers2: fn el -> rem(el, 4) == 0 end,
-      numbers3: fn el -> rem(el, 5) == 0 end
-    }
-
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
       even: fn el -> rem(el, 2) == 0 end
     }
 
-    gen_mix = %GenMix{inputs: inputs, outputs: outputs}
-    {:ok, pid} = GenMix.start(gen_mix)
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:numbers1, :numbers2, :numbers3],
+        outputs: outputs,
+        opts: [chunk: 1000]
+      })
 
-    flow = GenMix.call(flow, pid)
+    flow = GenMix.call(flow, gen_mix)
 
     task1 =
       Task.async(fn ->
         list = Enum.to_list(flow[:odd])
-        assert length(list) == 26667
+        assert length(list) == 150_000
       end)
 
     task2 =
       Task.async(fn ->
         list = Enum.to_list(flow[:even])
-        assert length(list) == 51666
+        assert length(list) == 150_000
       end)
 
     Task.await(task1, :infinity)
     Task.await(task2, :infinity)
 
-    GenMix.stop(pid)
+    GenMix.stop(gen_mix)
+  end
+
+  def factorial(n) do
+    Enum.reduce(1..n, 1, &(&1 * &2))
+  end
+
+  def build_stream(list, sleep \\ 0) do
+    Stream.resource(
+      fn -> list end,
+      fn
+        [] ->
+          {:halt, []}
+
+        [hd | tl] ->
+          Process.sleep(sleep)
+          {[hd], tl}
+      end,
+      fn [] -> [] end
+    )
+  end
+
+  test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
+    quick = Stream.cycle([101])
+    slow = build_stream(Enum.to_list(1..100), 1)
+
+    outputs = %{
+      quick: fn n -> n > 100 end,
+      slow: fn n -> n <= 100 end
+    }
+
+    flow = %{quick: quick, slow: slow}
+
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: [:quick, :slow],
+        outputs: outputs,
+        opts: [chunk: 3, buffer: 10, no_wait: true]
+      })
+
+    flow = GenMix.call(flow, gen_mix)
+
+    Task.async(fn ->
+      flow[:quick]
+      |> Stream.map(fn n ->
+        #              IO.write(".")
+        n
+      end)
+      |> Enum.to_list()
+    end)
+
+    slow_list =
+      flow[:slow]
+      |> Stream.map(fn n ->
+        Process.sleep(1)
+        #              IO.write("!")
+        n
+      end)
+      |> Enum.to_list()
+
+    assert length(slow_list) == 100
   end
 end

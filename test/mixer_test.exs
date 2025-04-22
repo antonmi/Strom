@@ -66,27 +66,6 @@ defmodule Strom.MixerTest do
       %{flow: flow}
     end
 
-    test "call with map", %{flow: flow} do
-      partitions = %{
-        source1: fn el -> String.contains?(el, "111") end,
-        source2: fn el -> String.contains?(el, "111") end
-      }
-
-      mixer =
-        partitions
-        |> Mixer.new(:mixed)
-        |> Mixer.start()
-
-      %{mixed: mixed, source3: source3} = Mixer.call(flow, mixer)
-
-      lines = Enum.to_list(mixed)
-      assert length(lines) == 99
-      {_orders, parcels} = orders_and_parcels()
-
-      source3_lines = Enum.to_list(source3)
-      assert length(source3_lines) == length(parcels)
-    end
-
     test "call with list of streams", %{flow: flow} do
       mixer =
         [:source1, :source2]
@@ -130,29 +109,6 @@ defmodule Strom.MixerTest do
 
       {orders, _parcels} = orders_and_parcels()
       assert length(lines) == length(orders) * 2
-    end
-
-    test "mixer as simple filter" do
-      source1 =
-        :stream
-        |> Source.new(ReadLines.new("test/data/orders.csv"))
-        |> Source.start()
-
-      mixer =
-        %{
-          stream: fn el -> String.contains?(el, "111,3") end
-        }
-        |> Mixer.new(:stream)
-        |> Mixer.start()
-
-      %{stream: stream} =
-        %{}
-        |> Source.call(source1)
-        |> Mixer.call(mixer)
-
-      stream
-      |> Enum.to_list()
-      |> Enum.each(fn el -> assert String.contains?(el, "111,3") end)
     end
   end
 

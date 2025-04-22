@@ -2,7 +2,7 @@ defmodule Strom.CrashTest do
   use ExUnit.Case
 
   alias Strom.{Source, Source.ReadLines, Sink}
-  alias Strom.{Transformer, Mixer, Splitter}
+  alias Strom.{Transformer, Splitter}
 
   import ExUnit.CaptureLog
 
@@ -16,91 +16,88 @@ defmodule Strom.CrashTest do
   end
 
   def crash_fun(el) do
-    if Enum.member?(["4"], el) do
+    if Enum.member?([3], el) do
       raise "error"
     else
-      el
+      el * 2
     end
   end
 
+  def build_stream(list, sleep \\ 0) do
+    {:ok, agent} = Agent.start_link(fn -> list end)
+
+    Stream.resource(
+      fn -> agent end,
+      fn agent ->
+        Process.sleep(sleep)
+
+        Agent.get_and_update(agent, fn
+          [] -> {{:halt, agent}, []}
+          [datum | data] -> {{[datum], agent}, data}
+        end)
+      end,
+      fn agent -> agent end
+    )
+  end
+
   describe "crash in transformer" do
-    test "crash when chunk is 1", %{source: source} do
+    setup do
+      %{stream: build_stream([1, 2, 3, 4, 5])}
+    end
+
+    test "crash when chunk is 1", %{stream: stream} do
       transformer =
         :stream
         |> Transformer.new(&crash_fun/1, nil, chunk: 1)
         |> Transformer.start()
 
       capture_log(fn ->
-        %{stream: stream} =
-          %{}
-          |> Source.call(source)
-          |> Transformer.call(transformer)
+        %{stream: stream} = Transformer.call(%{stream: stream}, transformer)
 
-        assert Enum.to_list(stream) == ["1", "2", "3", "5"]
+        assert Enum.to_list(stream) == [2, 4, 8, 10]
       end)
     end
 
-    test "crash when chunk is 2", %{source: source} do
+    test "crash when chunk is 2", %{stream: stream} do
       transformer =
         :stream
         |> Transformer.new(&crash_fun/1, nil, chunk: 2)
         |> Transformer.start()
 
       capture_log(fn ->
-        %{stream: stream} =
-          %{}
-          |> Source.call(source)
-          |> Transformer.call(transformer)
+        %{stream: stream} = Transformer.call(%{stream: stream}, transformer)
 
-        results = Enum.to_list(stream)
-        assert results == ["1", "2", "5"]
+        assert Enum.to_list(stream) == [2, 4, 10]
       end)
     end
-  end
 
-  describe "crash in mixer" do
-    setup do
-      source2 =
-        :stream2
-        |> Source.new(ReadLines.new("test/data/numbers2.txt"), buffer: 1)
-        |> Source.start()
+    test "crush when transformer process 2 steams", %{stream: stream} do
+      stream2 = build_stream([10, 20, 30, 40, 50])
 
-      %{source2: source2}
-    end
-
-    test "crash in mixer", %{source: source, source2: source2} do
-      partitions = %{
-        stream: fn el -> if Enum.member?(["4"], el), do: raise("error"), else: el end,
-        stream2: fn el -> if Enum.member?(["10"], el), do: raise("error"), else: el end
-      }
-
-      mixer =
-        partitions
-        |> Mixer.new(:mixed, chunk: 1)
-        |> Mixer.start()
+      transformer =
+        [:stream, :stream2]
+        |> Transformer.new(&crash_fun/1, nil, chunk: 1)
+        |> Transformer.start()
 
       capture_log(fn ->
-        %{mixed: mixed} =
-          %{}
-          |> Source.call(source)
-          |> Source.call(source2)
-          |> Mixer.call(mixer)
+        %{stream: stream, stream2: stream2} =
+          Transformer.call(%{stream: stream, stream2: stream2}, transformer)
 
-        results =
-          mixed
-          |> Enum.to_list()
-          |> Enum.sort()
-
-        assert results == ["1", "2", "20", "3", "30", "40", "5", "50"]
+        assert Enum.to_list(stream) == [2, 4, 8, 10]
+        assert Enum.to_list(stream2) == [20, 40, 60, 80, 100]
       end)
     end
   end
 
   describe "crash in splitter" do
-    test "crash in splitter", %{source: source} do
+    setup do
+      %{stream: build_stream([1, 2, 3, 4, 5, 6], 1)}
+    end
+
+    test "crash in splitter, run in tasks", %{stream: stream} do
       partitions = %{
-        s1: fn el -> if Enum.member?(["1"], el), do: raise("error"), else: true end,
-        s2: fn el -> if Enum.member?(["4"], el), do: raise("error"), else: true end
+        s1: fn el -> if el == 1, do: raise("error"), else: true end,
+        s2: fn el -> if el == 4, do: raise("error"), else: true end
       }
 
       splitter =
@@ -110,15 +107,35 @@ defmodule Strom.CrashTest do
 
       capture_log(fn ->
         %{s1: s1, s2: s2} =
-          %{}
-          |> Source.call(source)
+          %{stream: stream}
           |> Splitter.call(splitter)
 
-        s1res = Enum.to_list(s1)
-        s2res = Enum.to_list(s2)
+        task1 = Task.async(fn -> Enum.to_list(s1) end)
+        task2 = Task.async(fn -> Enum.to_list(s2) end)
 
-        assert s1res == ["2", "3", "5"]
-        assert s2res == ["2", "3", "5"]
+        assert Task.await(task1) == [2, 3, 5, 6]
+        assert Task.await(task2) == [2, 3, 5, 6]
+      end)
+    end
+
+    test "crash in splitter, run one by one", %{stream: stream} do
+      partitions = %{
+        s1: fn el -> if el == 1, do: raise("error"), else: true end,
+        s2: fn el -> if el == 4, do: raise("error"), else: true end
+      }
+
+      splitter =
+        :stream
+        |> Splitter.new(partitions, chunk: 1)
+        |> Splitter.start()
+
+      capture_log(fn ->
+        %{s1: s1, s2: s2} =
+          %{stream: stream}
+          |> Splitter.call(splitter)
+
+        assert Enum.to_list(s1) == [2, 3, 5, 6]
+        assert Enum.to_list(s2) == [2, 3, 5, 6]
       end)
     end
   end
@@ -127,7 +144,7 @@ defmodule Strom.CrashTest do
     defmodule CustomReadLines do
       @behaviour Strom.Source
 
-      defstruct path: nil, file: nil, infinite: false
+      defstruct path: nil, file: nil
 
       def new(path) when is_binary(path), do: %__MODULE__{path: path}
 
@@ -151,9 +168,6 @@ defmodule Strom.CrashTest do
 
       @impl true
       def stop(%__MODULE__{} = read_lines), do: %{read_lines | file: File.close(read_lines.file)}
-
-      @impl true
-      def infinite?(%__MODULE__{infinite: infinite}), do: infinite
 
       defp read_line(file) do
         case IO.read(file, :line) do

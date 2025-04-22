@@ -65,7 +65,7 @@ defmodule Strom.Examples.ParcelsTest do
         transform(:orders, &__MODULE__.order_to_string/1, nil, chunk: @chunk),
         transform(:parcels, &__MODULE__.parcel_to_string/1, nil, chunk: @chunk),
         sink(:orders, WriteLines.new("test/examples/parcels/orders.csv")),
-        sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), true)
+        sink(:parcels, WriteLines.new("test/examples/parcels/parcels.csv"), sync: true)
       ]
     end
   end
@@ -211,7 +211,7 @@ defmodule Strom.Examples.ParcelsTest do
         sink(
           :all_parcels_shipped,
           WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"),
-          true
+          sync: true
         )
       ]
     end
@@ -226,8 +226,20 @@ defmodule Strom.Examples.ParcelsTest do
       |> Composite.new()
       |> Composite.start()
 
-    Composite.call(%{stream: List.duplicate(:tick, @orders_count)}, gen_data)
-    Process.sleep(100)
+    stream =
+      Stream.resource(
+        fn -> 0 end,
+        fn
+          @orders_count ->
+            {:halt, @orders_count}
+
+          counter ->
+            {[:tick], counter + 1}
+        end,
+        fn counter -> counter end
+      )
+
+    Composite.call(%{stream: stream}, gen_data)
     Composite.stop(gen_data)
   end
 

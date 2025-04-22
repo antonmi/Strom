@@ -23,7 +23,33 @@ defmodule Strom.TransformerTest do
 
     flow = %{numbers: [1, 2, 3, 4, 5]}
     flow = Transformer.call(flow, transformer)
+
     assert Enum.sort(Enum.to_list(flow[:numbers])) == [1, 4, 9, 16, 25]
+  end
+
+  test "call several transformers with one stream" do
+    transformer1 =
+      :numbers
+      |> Transformer.new(&(&1 + 1))
+      |> Transformer.start()
+
+    transformer2 =
+      :numbers
+      |> Transformer.new(&(&1 + 1))
+      |> Transformer.start()
+
+    transformer3 =
+      :numbers
+      |> Transformer.new(&(&1 + 1))
+      |> Transformer.start()
+
+    flow =
+      %{numbers: [1, 2, 3, 4, 5]}
+      |> Transformer.call(transformer1)
+      |> Transformer.call(transformer2)
+      |> Transformer.call(transformer3)
+
+    assert Enum.sort(Enum.to_list(flow[:numbers])) == [4, 5, 6, 7, 8]
   end
 
   test "with chunk and buffer" do
@@ -63,8 +89,6 @@ defmodule Strom.TransformerTest do
       [:numbers1, :numbers2]
       |> Transformer.new(fun, 100, chunk: 2)
       |> Transformer.start()
-
-    assert transformer.chunk == 2
 
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
 

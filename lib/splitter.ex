@@ -20,8 +20,8 @@ defmodule Strom.Splitter do
   alias Strom.GenMix
 
   defstruct pid: nil,
-            input: nil,
-            outputs: [],
+            inputs: %{},
+            outputs: %{},
             opts: []
 
   @type t() :: %__MODULE__{}
@@ -34,13 +34,6 @@ defmodule Strom.Splitter do
         ) :: __MODULE__.t()
   def new(input, outputs, opts \\ [])
       when is_list(outputs) or ((is_map(outputs) and map_size(outputs)) > 0 and is_list(opts)) do
-    %Strom.Splitter{input: input, outputs: outputs, opts: opts}
-  end
-
-  @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{input: input, outputs: outputs, opts: opts} = splitter) do
-    inputs = %{input => fn _el -> true end}
-
     outputs =
       if is_list(outputs) do
         Enum.reduce(outputs, %{}, fn name, acc ->
@@ -50,21 +43,35 @@ defmodule Strom.Splitter do
         outputs
       end
 
-    gen_mix = %GenMix{
-      inputs: inputs,
-      outputs: outputs,
-      opts: opts
-    }
+    %__MODULE__{inputs: [input], outputs: outputs, opts: opts}
+  end
 
-    {:ok, pid} = GenMix.start(gen_mix)
-    %{splitter | pid: pid, opts: opts}
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
+  def start(%__MODULE__{inputs: inputs, outputs: outputs, opts: opts} = splitter) do
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: inputs,
+        outputs: outputs,
+        opts: opts,
+        process_chunk: &process_chunk/4
+      })
+
+    %{splitter | pid: gen_mix.pid}
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{pid: pid}) do
-    GenMix.call(flow, pid)
+  def call(flow, %__MODULE__{} = splitter) do
+    GenMix.call(flow, splitter)
+  end
+
+  def process_chunk(_input_stream_name, chunk, outputs, nil) do
+    outputs
+    |> Enum.reduce({%{}, false, nil}, fn {stream_name, fun}, {acc, any?, nil} ->
+      {data, _} = Enum.split_with(chunk, fun)
+      {Map.put(acc, stream_name, data), any? || Enum.any?(data), nil}
+    end)
   end
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{pid: pid}), do: GenMix.stop(pid)
+  def stop(%__MODULE__{} = splitter), do: GenMix.stop(splitter)
 end

@@ -29,256 +29,72 @@ defmodule Strom.Transformer do
       {[2, 4, 6], [8, 10, 12]}
   """
 
-  use GenServer
-
-  @chunk 1
-  @buffer 1000
+  alias Strom.GenMix
 
   defstruct pid: nil,
-            opts: [],
-            chunk: @chunk,
-            buffer: @buffer,
-            input_streams: %{},
-            function: nil,
+            inputs: [],
+            outputs: %{},
             acc: nil,
-            names: [],
-            tasks: %{},
-            data: %{},
-            waiting_clients: %{}
+            opts: []
 
   @type t() :: %__MODULE__{}
   @type event() :: any()
   @type acc() :: any()
-
   @type func() ::
           (event() -> event())
           | (event(), acc() -> {[event()], acc()})
 
   @spec new(Strom.stream_name(), func(), acc(), list()) :: __MODULE__.t()
-  def new(names, function, acc \\ nil, opts \\ []) when is_function(function) and is_list(opts) do
-    %__MODULE__{
-      function: function,
-      acc: acc,
-      names: names,
-      opts: opts
-    }
+  def new(names, function, acc \\ nil, opts \\ [])
+      when (is_atom(names) or is_list(names)) and is_function(function) and is_list(opts) do
+    inputs = if is_list(names), do: names, else: [names]
+
+    function =
+      if is_function(function, 1) do
+        fn el, nil -> {[function.(el)], nil} end
+      else
+        function
+      end
+
+    outputs =
+      Enum.reduce(inputs, %{}, fn name, out ->
+        Map.put(out, name, fn el, acc -> function.(el, acc) end)
+      end)
+
+    %__MODULE__{inputs: inputs, outputs: outputs, opts: opts, acc: acc}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{opts: opts} = transformer) do
-    transformer = %{
-      transformer
-      | chunk: Keyword.get(opts, :chunk, @chunk),
-        buffer: Keyword.get(opts, :buffer, @buffer)
-    }
+  def start(%__MODULE__{inputs: inputs, outputs: outputs, acc: acc, opts: opts} = transformer) do
+    gen_mix =
+      GenMix.start(%GenMix{
+        inputs: inputs,
+        outputs: outputs,
+        acc: acc,
+        opts: opts,
+        process_chunk: &process_chunk/4
+      })
 
-    {:ok, pid} =
-      DynamicSupervisor.start_child(
-        {:via, PartitionSupervisor, {Strom.ComponentSupervisor, transformer}},
-        %{id: __MODULE__, start: {__MODULE__, :start_link, [transformer]}, restart: :temporary}
-      )
-
-    :sys.get_state(pid)
-  end
-
-  def start_link(%__MODULE__{} = transformer) do
-    GenServer.start_link(__MODULE__, transformer)
-  end
-
-  @impl true
-  def init(%__MODULE__{} = transformer) do
-    function =
-      if is_function(transformer.function, 1) do
-        fn el, nil -> {[transformer.function.(el)], nil} end
-      else
-        transformer.function
-      end
-
-    {:ok, %{transformer | pid: self(), function: function}}
+    %{transformer | pid: gen_mix.pid}
   end
 
   @spec call(Strom.flow(), __MODULE__.t()) :: Strom.flow()
-  def call(flow, %__MODULE__{names: names, function: function} = transformer)
-      when is_map(flow) and is_function(function, 2) do
-    names = if is_list(names), do: names, else: [names]
+  def call(flow, %__MODULE__{} = transformer) do
+    GenMix.call(flow, transformer)
+  end
 
-    input_streams =
-      Enum.reduce(names, %{}, fn name, streams ->
-        Map.put(streams, name, Map.fetch!(flow, name))
+  def process_chunk(input_stream_name, chunk, outputs, acc) do
+    output_function = Map.get(outputs, input_stream_name)
+
+    {chunk, new_acc} =
+      Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
+        {new_events, acc} = output_function.(el, acc)
+        {events ++ new_events, acc}
       end)
 
-    :ok = GenServer.call(transformer.pid, {:run_inputs, input_streams})
-
-    sub_flow =
-      names
-      |> Enum.reduce(%{}, fn name, flow ->
-        stream =
-          Stream.resource(
-            fn ->
-              nil
-            end,
-            fn nil ->
-              case GenServer.call(transformer.pid, {:get_data, name}, :infinity) do
-                {:data, data} ->
-                  {data, nil}
-
-                :done ->
-                  {:halt, nil}
-
-                :pause ->
-                  receive do
-                    :continue_client ->
-                      {[], nil}
-                  end
-              end
-            end,
-            fn nil -> nil end
-          )
-
-        Map.put(flow, name, stream)
-      end)
-
-    flow
-    |> Map.drop(names)
-    |> Map.merge(sub_flow)
+    {%{input_stream_name => chunk}, Enum.any?(chunk), new_acc}
   end
 
   @spec stop(__MODULE__.t()) :: :ok
-  def stop(%__MODULE__{pid: pid}) do
-    GenServer.call(pid, :stop)
-  end
-
-  defp run_inputs(streams, transformer) do
-    Enum.reduce(streams, %{}, fn {name, stream}, streams_acc ->
-      task = async_run_stream({name, stream}, transformer)
-      Map.put(streams_acc, name, task)
-    end)
-  end
-
-  defp async_run_stream({name, stream}, transformer) do
-    Task.Supervisor.async_nolink(
-      {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
-      fn ->
-        stream
-        |> Stream.chunk_every(transformer.chunk)
-        |> Stream.transform(transformer.acc, fn chunk, acc ->
-          {chunk, new_acc} =
-            Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-              {new_events, acc} = transformer.function.(el, acc)
-              {events ++ new_events, acc}
-            end)
-
-          GenServer.cast(transformer.pid, {:new_data, name, chunk})
-
-          receive do
-            :continue_task ->
-              flush(:continue_task)
-          end
-
-          {[], new_acc}
-        end)
-        |> Stream.run()
-
-        {:task_done, name}
-      end
-    )
-  end
-
-  defp flush(message) do
-    receive do
-      ^message ->
-        flush(message)
-    after
-      0 -> :ok
-    end
-  end
-
-  @impl true
-  def handle_call({:run_inputs, streams_to_call}, _from, %__MODULE__{} = transformer) do
-    tasks = run_inputs(streams_to_call, transformer)
-
-    {:reply, :ok, %{transformer | tasks: tasks, input_streams: streams_to_call}}
-  end
-
-  def handle_call({:get_data, name}, {pid, _ref}, transformer) do
-    if task = transformer.tasks[name] do
-      send(task.pid, :continue_task)
-    end
-
-    data = Map.get(transformer.data, name, [])
-
-    cond do
-      length(data) == 0 and is_nil(transformer.tasks[name]) ->
-        {:reply, :done, transformer}
-
-      length(data) == 0 ->
-        waiting_clients = Map.put(transformer.waiting_clients, name, pid)
-        {:reply, :pause, %{transformer | waiting_clients: waiting_clients}}
-
-      true ->
-        transformer = %{transformer | data: Map.put(transformer.data, name, [])}
-        {:reply, {:data, data}, transformer}
-    end
-  end
-
-  def handle_call(:stop, _from, %__MODULE__{} = transformer) do
-    Enum.each(transformer.tasks, fn {_name, task_pid} ->
-      DynamicSupervisor.terminate_child(Strom.TaskSupervisor, task_pid)
-    end)
-
-    {:stop, :normal, :ok, transformer}
-  end
-
-  @impl true
-  def handle_cast({:new_data, name, chunk}, %__MODULE__{} = transformer) do
-    prev_data = Map.get(transformer.data, name, [])
-    all_data = prev_data ++ chunk
-
-    waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
-
-    if length(all_data) < transformer.buffer do
-      task = Map.fetch!(transformer.tasks, name)
-      send(task.pid, :continue_task)
-    end
-
-    new_data = Map.put(transformer.data, name, all_data)
-    transformer = %{transformer | data: new_data, waiting_clients: waiting_clients}
-
-    {:noreply, transformer}
-  end
-
-  @impl true
-  def handle_info({_task_ref, {:task_done, name}}, transformer) do
-    tasks = Map.delete(transformer.tasks, name)
-
-    waiting_clients = continue_waiting_client(transformer.waiting_clients, name)
-
-    {:noreply, %{transformer | waiting_clients: waiting_clients, tasks: tasks}}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, _task_pid, :normal}, transformer) do
-    # do nothing for now
-    {:noreply, transformer}
-  end
-
-  def handle_info({:DOWN, _task_ref, :process, task_pid, _not_normal}, transformer) do
-    {name, _task} = Enum.find(transformer.tasks, fn {_name, task} -> task.pid == task_pid end)
-    stream = Map.fetch!(transformer.input_streams, name)
-
-    new_task = async_run_stream({name, stream}, transformer)
-    tasks = Map.put(transformer.tasks, name, new_task)
-
-    {:noreply, %{transformer | tasks: tasks}}
-  end
-
-  defp continue_waiting_client(waiting_clients, name) do
-    case waiting_clients[name] do
-      nil ->
-        waiting_clients
-
-      client_pid when is_pid(client_pid) ->
-        send(client_pid, :continue_client)
-        Map.delete(waiting_clients, name)
-    end
-  end
+  def stop(%__MODULE__{} = transformer), do: GenMix.stop(transformer)
 end
