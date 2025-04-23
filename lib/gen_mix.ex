@@ -1,6 +1,6 @@
 defmodule Strom.GenMix do
   @moduledoc """
-  Generic functionality used by `Strom.Mixer` and `Strom.Splitter`.
+  Generic functionality used by other components.
   """
 
   use GenServer
@@ -12,7 +12,7 @@ defmodule Strom.GenMix do
             process_chunk: nil,
             inputs: [],
             outputs: %{},
-            acc: nil,
+            accs: %{},
             opts: [],
             chunk: @chunk,
             buffer: @buffer,
@@ -111,22 +111,22 @@ defmodule Strom.GenMix do
          outputs,
          gen_mix_pid,
          chunk,
-         process_chunk,
-         acc
+         process_chunk
        ) do
     Task.Supervisor.start_child(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
-        case GenServer.call(gen_mix_pid, {:register_task, input_stream_name, self()}) do
-          true ->
-            :tasks_run
+        acc =
+          case GenServer.call(gen_mix_pid, {:register_task, input_stream_name, self()}) do
+            {true, acc} ->
+              acc
 
-          false ->
-            receive do
-              :continue_task ->
-                :ok
-            end
-        end
+            {false, _} ->
+              receive do
+                {:continue_task, acc} ->
+                  acc
+              end
+          end
 
         stream
         |> Stream.chunk_every(chunk)
@@ -136,12 +136,16 @@ defmodule Strom.GenMix do
             process_chunk.(input_stream_name, chunk, outputs, acc)
             |> case do
               {new_data, true, new_acc} ->
-                GenServer.cast(gen_mix_pid, {:new_data, input_stream_name, new_data, self()})
+                GenServer.cast(
+                  gen_mix_pid,
+                  {:new_data, input_stream_name, {new_data, new_acc}, self()}
+                )
 
-                receive do
-                  :continue_task ->
-                    :ok
-                end
+                new_acc =
+                  receive do
+                    {:continue_task, acc} ->
+                      acc
+                  end
 
                 {[], new_acc}
 
@@ -174,8 +178,7 @@ defmodule Strom.GenMix do
             gen_mix.outputs,
             gen_mix.pid,
             gen_mix.chunk,
-            gen_mix.process_chunk,
-            gen_mix.acc
+            gen_mix.process_chunk
           )
 
         Map.put(acc, name, task_pid)
@@ -195,9 +198,12 @@ defmodule Strom.GenMix do
   def handle_call(
         :run_tasks,
         _from,
-        %__MODULE__{tasks: tasks, tasks_started: true, tasks_run: false} = gen_mix
+        %__MODULE__{tasks: tasks, tasks_started: true, tasks_run: false, accs: accs} = gen_mix
       ) do
-    Enum.each(Map.values(tasks), &send(&1, :continue_task))
+    Enum.each(tasks, fn {name, task_pid} ->
+      send(task_pid, {:continue_task, Map.get(accs, name)})
+    end)
+
     {:reply, gen_mix.pid, %{gen_mix | tasks_run: true, tasks: tasks}}
   end
 
@@ -205,10 +211,14 @@ defmodule Strom.GenMix do
     {:reply, gen_mix.pid, gen_mix}
   end
 
-  def handle_call({:register_task, name, task_pid}, _from, %__MODULE__{tasks: tasks} = gen_mix) do
+  def handle_call(
+        {:register_task, name, task_pid},
+        _from,
+        %__MODULE__{tasks: tasks, accs: accs} = gen_mix
+      ) do
     tasks = Map.put(tasks, name, task_pid)
 
-    {:reply, gen_mix.tasks_run, %{gen_mix | tasks: tasks}}
+    {:reply, {gen_mix.tasks_run, Map.get(accs, name)}, %{gen_mix | tasks: tasks}}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = gen_mix) do
@@ -221,7 +231,10 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_cast({:new_data, input_stream_name, new_data, task_pid}, %__MODULE__{} = gen_mix) do
+  def handle_cast(
+        {:new_data, input_stream_name, {new_data, new_acc}, task_pid},
+        %__MODULE__{} = gen_mix
+      ) do
     {all_mix_data, remaining_asks, total_count} =
       Enum.reduce(new_data, {gen_mix.data, gen_mix.asks, 0}, fn {output_stream_name, data},
                                                                 {all_mix_data, asks, count} ->
@@ -247,21 +260,21 @@ defmodule Strom.GenMix do
 
     waiting_tasks =
       if total_count < gen_mix.buffer do
-        send(task_pid, :continue_task)
+        send(task_pid, {:continue_task, new_acc})
         gen_mix.waiting_tasks
       else
         Map.put(gen_mix.waiting_tasks, input_stream_name, task_pid)
       end
 
-    gen_mix = %{
-      gen_mix
-      | data: all_mix_data,
-        data_size: total_count,
-        asks: remaining_asks,
-        waiting_tasks: waiting_tasks
-    }
-
-    {:noreply, gen_mix}
+    {:noreply,
+     %{
+       gen_mix
+       | data: all_mix_data,
+         accs: Map.put(gen_mix.accs, input_stream_name, new_acc),
+         data_size: total_count,
+         asks: remaining_asks,
+         waiting_tasks: waiting_tasks
+     }}
   end
 
   def handle_cast({:ask, output_stream_name, client_pid}, %__MODULE__{asks: asks} = gen_mix) do
@@ -286,7 +299,10 @@ defmodule Strom.GenMix do
 
     waiting_tasks =
       if new_data_size < gen_mix.buffer do
-        Enum.each(Map.values(gen_mix.waiting_tasks), &send(&1, :continue_task))
+        Enum.each(gen_mix.waiting_tasks, fn {name, task_pid} ->
+          send(task_pid, {:continue_task, Map.get(gen_mix.accs, name)})
+        end)
+
         %{}
       else
         gen_mix.waiting_tasks

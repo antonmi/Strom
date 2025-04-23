@@ -70,7 +70,7 @@ defmodule Strom.Transformer do
       GenMix.start(%GenMix{
         inputs: inputs,
         outputs: outputs,
-        acc: acc,
+        accs: Enum.reduce(inputs, %{}, fn name, accs -> Map.put(accs, name, acc) end),
         opts: opts,
         process_chunk: &process_chunk/4
       })
