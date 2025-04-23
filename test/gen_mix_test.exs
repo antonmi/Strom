@@ -161,6 +161,7 @@ defmodule Strom.GenMixTest do
 
   test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
     quick = Stream.cycle([101])
+    #    quick = build_stream(List.duplicate([101], 10000), 1)
     slow = build_stream(Enum.to_list(1..100), 1)
 
     outputs = %{
@@ -174,7 +175,7 @@ defmodule Strom.GenMixTest do
       GenMix.start(%GenMix{
         inputs: [:quick, :slow],
         outputs: outputs,
-        opts: [chunk: 3, buffer: 10, no_wait: true]
+        opts: [chunk: 5, buffer: 3, no_wait: true]
       })
 
     flow = GenMix.call(flow, gen_mix)
@@ -182,7 +183,7 @@ defmodule Strom.GenMixTest do
     Task.async(fn ->
       flow[:quick]
       |> Stream.map(fn n ->
-        #              IO.write(".")
+        #        IO.write(".")
         n
       end)
       |> Enum.to_list()
@@ -192,7 +193,7 @@ defmodule Strom.GenMixTest do
       flow[:slow]
       |> Stream.map(fn n ->
         Process.sleep(1)
-        #              IO.write("!")
+        #        IO.write("!")
         n
       end)
       |> Enum.to_list()

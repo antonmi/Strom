@@ -1,4 +1,4 @@
- defmodule Strom.LoopTest do
+defmodule Strom.LoopTest do
   use ExUnit.Case, async: true
 
   alias Strom.{Loop, Source, Sink, Transformer, Mixer, Splitter}
@@ -55,4 +55,4 @@
 
     assert Enum.to_list(flow[:numbers]) == [10, 10, 10, 10, 10]
   end
- end
+end

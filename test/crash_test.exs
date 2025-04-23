@@ -23,6 +23,14 @@ defmodule Strom.CrashTest do
     end
   end
 
+  def crash_fun_with_acc(el, acc) do
+    if Enum.member?([3], el) do
+      raise "error"
+    else
+      {[el + acc], el + acc}
+    end
+  end
+
   def build_stream(list, sleep \\ 0) do
     {:ok, agent} = Agent.start_link(fn -> list end)
 
@@ -85,6 +93,23 @@ defmodule Strom.CrashTest do
 
         assert Enum.to_list(stream) == [2, 4, 8, 10]
         assert Enum.to_list(stream2) == [20, 40, 60, 80, 100]
+      end)
+    end
+
+    test "crush when transformer process 2 steams with accumulators", %{stream: stream} do
+      stream2 = build_stream([10, 20, 30, 40, 50])
+
+      transformer =
+        [:stream, :stream2]
+        |> Transformer.new(&crash_fun_with_acc/2, 0, chunk: 1)
+        |> Transformer.start()
+
+      capture_log(fn ->
+        %{stream: stream, stream2: stream2} =
+          Transformer.call(%{stream: stream, stream2: stream2}, transformer)
+
+        assert Enum.to_list(stream) == [1, 3, 7, 12]
+        assert Enum.to_list(stream2) == [10, 30, 60, 100, 150]
       end)
     end
   end
