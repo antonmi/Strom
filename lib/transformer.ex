@@ -11,7 +11,7 @@ defmodule Strom.Transformer do
       iex> Enum.to_list(stream)
       [2, 4, 6]
 
-      ## `transform` example:
+      ## `reduce` example:
       iex> alias Strom.Transformer
       iex> fun = fn el, acc -> {[el, acc], acc + 10} end
       iex> transformer = :numbers |> Transformer.new(fun, 10) |> Transformer.start()

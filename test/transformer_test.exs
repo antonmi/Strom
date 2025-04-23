@@ -97,5 +97,7 @@ defmodule Strom.TransformerTest do
     assert Enum.sort(Enum.to_list(flow[:numbers1])) == [1, 2, 3, 4, 5, 100, 101, 102, 103, 104]
     assert Enum.sort(Enum.to_list(flow[:numbers2])) == [6, 7, 8, 9, 10, 100, 101, 102, 103, 104]
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
+
+    Transformer.stop(transformer)
   end
 end

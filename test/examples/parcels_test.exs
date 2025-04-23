@@ -79,7 +79,7 @@ defmodule Strom.Examples.ParcelsTest do
     @seconds_in_week 3600 * 24 * 7
 
     def build_order(event) do
-      #      if Enum.random(1..100) == 3, do: raise "error"
+      #            if Enum.random(1..10) == 3, do: Process.sleep(1)
       list = String.split(event, ",")
       {:ok, occurred_at, _} = DateTime.from_iso8601(Enum.at(list, 1))
 
@@ -103,46 +103,61 @@ defmodule Strom.Examples.ParcelsTest do
       }
     end
 
-    def force_order(event, memo) do
+    def order_seen(event, memo) do
       order_number = event[:order_number]
 
       case event[:type] do
-        "PARCEL_SHIPPED" ->
-          case Map.get(memo, order_number) do
-            nil ->
-              {[], Map.put(memo, order_number, [event])}
-
-            true ->
-              {[event], memo}
-
-            parcels ->
-              {[], Map.put(memo, order_number, parcels ++ [event])}
-          end
-
         "ORDER_CREATED" ->
-          case Map.get(memo, order_number) do
-            nil ->
-              {[event], Map.put(memo, order_number, true)}
+          {[event], order_number}
 
-            parcels ->
-              {[event | parcels], Map.put(memo, order_number, true)}
+        "PARCEL_SHIPPED" ->
+          case order_number > memo do
+            true ->
+              {[{:not_seen, event}], memo}
+
+            false ->
+              {[event], memo}
           end
       end
     end
 
-    def decide(event, memo) do
+    def force_order({:not_seen, parcel}, memo) do
+      order_number = parcel[:order_number]
+      #            IO.inspect(map_size(memo), label: :not_seen)
+      parcels = Map.get(memo, order_number, [])
+      {[], Map.put(memo, order_number, parcels ++ [parcel])}
+    end
+
+    def force_order(event, memo) do
       order_number = event[:order_number]
 
       case event[:type] do
         "ORDER_CREATED" ->
-          memo = Map.put(memo, order_number, {event[:to_ship], event[:occurred_at]})
-          {[], memo}
+          stored_parcels = Map.get(memo, order_number, [])
+          {[event | stored_parcels], Map.delete(memo, order_number)}
 
         "PARCEL_SHIPPED" ->
-          case Map.get(memo, order_number) do
+          {[event], memo}
+      end
+    end
+
+    def decide(event, agent) do
+      order_number = event[:order_number]
+      #            IO.inspect(map_size(memo), label: :decide)
+
+      case event[:type] do
+        "ORDER_CREATED" ->
+          Agent.update(agent, fn memo ->
+            Map.put(memo, order_number, {event[:to_ship], event[:occurred_at]})
+          end)
+
+          {[], agent}
+
+        "PARCEL_SHIPPED" ->
+          case Agent.get(agent, fn memo -> Map.get(memo, order_number) end) do
             # THRESHOLD_EXCEEDED was sent already
             nil ->
-              {[], memo}
+              {[], agent}
 
             {1, order_occurred_at} ->
               good_or_bad =
@@ -161,8 +176,8 @@ defmodule Strom.Examples.ParcelsTest do
                   }
                 end
 
-              memo = Map.delete(memo, order_number)
-              {[good_or_bad], memo}
+              Agent.update(agent, fn memo -> Map.delete(memo, order_number) end)
+              {[good_or_bad], agent}
 
             {amount, order_occurred_at} when amount > 1 ->
               if DateTime.diff(event[:occurred_at], order_occurred_at, :second) >
@@ -173,11 +188,14 @@ defmodule Strom.Examples.ParcelsTest do
                   occurred_at: event[:occurred_at]
                 }
 
-                memo = Map.delete(memo, order_number)
-                {[bad], memo}
+                Agent.update(agent, fn memo -> Map.delete(memo, order_number) end)
+                {[bad], agent}
               else
-                memo = Map.put(memo, order_number, {amount - 1, order_occurred_at})
-                {[], memo}
+                Agent.update(agent, fn memo ->
+                  Map.put(memo, order_number, {amount - 1, order_occurred_at})
+                end)
+
+                {[], agent}
               end
           end
       end
@@ -190,14 +208,18 @@ defmodule Strom.Examples.ParcelsTest do
     @chunk 1000
 
     def components() do
+      {:ok, agent} = Agent.start_link(fn -> %{} end)
+
       [
         source(:orders, ReadLines.new("test/examples/parcels/orders.csv"), chunk: @chunk),
         transform([:orders], &__MODULE__.build_order/1, nil, chunk: @chunk),
         source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv"), chunk: @chunk),
         transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: @chunk),
         mix([:orders, :parcels], :mixed, chunk: @chunk),
+        #        mix([:orders, :parcels], :mixed, chunk: %{orders: 1000, parcels: 3000}),
+        transform([:mixed], &ParcelsFlow.order_seen/2, 0, chunk: @chunk),
         transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: @chunk),
-        transform([:mixed], &ParcelsFlow.decide/2, %{}, chunk: @chunk),
+        transform([:mixed], &ParcelsFlow.decide/2, agent, chunk: @chunk),
         split(
           :mixed,
           %{
@@ -206,7 +228,9 @@ defmodule Strom.Examples.ParcelsTest do
           },
           chunk: @chunk
         ),
-        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1, nil),
+        transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1, nil,
+          chunk: @chunk
+        ),
         sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv")),
         sink(
           :all_parcels_shipped,
