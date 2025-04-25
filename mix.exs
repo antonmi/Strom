@@ -25,7 +25,8 @@ defmodule Strom.MixProject do
   defp deps do
     [
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev], runtime: false}
     ]
   end
 

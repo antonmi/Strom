@@ -1,4 +1,5 @@
 defmodule Strom.Sink.IOPuts do
+  @moduledoc "Sink to IO"
   @behaviour Strom.Sink
 
   defstruct line_sep: "", prefix: ""

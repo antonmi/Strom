@@ -1,4 +1,5 @@
 defmodule Strom.Sink.WriteLines do
+  @moduledoc "Sink to file line by line"
   @behaviour Strom.Sink
 
   @line_sep "\n"

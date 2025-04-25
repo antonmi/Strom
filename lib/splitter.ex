@@ -33,16 +33,18 @@ defmodule Strom.Splitter do
           list()
         ) :: __MODULE__.t()
   def new(input, outputs, opts \\ [])
-      when is_list(outputs) or ((is_map(outputs) and map_size(outputs)) > 0 and is_list(opts)) do
-    outputs =
-      if is_list(outputs) do
-        Enum.reduce(outputs, %{}, fn name, acc ->
-          Map.put(acc, name, fn _el -> true end)
-        end)
-      else
-        outputs
-      end
 
+  def new(input, outputs, opts) when is_list(outputs) and is_list(opts) do
+    outputs =
+      Enum.reduce(outputs, %{}, fn name, acc ->
+        Map.put(acc, name, fn _el -> true end)
+      end)
+
+    %__MODULE__{inputs: [input], outputs: outputs, opts: opts}
+  end
+
+  def new(input, outputs, opts)
+      when is_map(outputs) and map_size(outputs) > 0 and is_list(opts) do
     %__MODULE__{inputs: [input], outputs: outputs, opts: opts}
   end
 

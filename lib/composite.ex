@@ -143,8 +143,7 @@ defmodule Strom.Composite do
   defp generate_name(components) do
     components
     |> Enum.map(fn %{__struct__: struct} -> to_string(struct) end)
-    |> Enum.map(&String.at(&1, 13))
-    |> Enum.join("")
+    |> Enum.map_join("", &String.at(&1, 13))
     |> String.slice(0..15)
     |> then(&(&1 <> "_" <> timestamp_postfix()))
     |> String.to_atom()

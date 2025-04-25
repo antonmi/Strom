@@ -1,4 +1,5 @@
 defmodule Strom.Source.IOGets do
+  @moduledoc "Source for reading IO inputs"
   @behaviour Strom.Source
 
   defstruct []

@@ -1,4 +1,5 @@
 defmodule Strom.Source.ReadLines do
+  @moduledoc "Source for reading a file line by line"
   @behaviour Strom.Source
 
   defstruct path: nil, file: nil

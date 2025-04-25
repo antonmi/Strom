@@ -1,4 +1,5 @@
 defmodule Strom.MixerTree do
+  @moduledoc "Composite of mixers, use it when you need mixing a lot of streams"
   alias Strom.Composite
   alias Strom.Mixer
 

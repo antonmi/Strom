@@ -1,4 +1,5 @@
 defmodule Strom.Sink.Null do
+  @moduledoc "Sink to nowhere"
   @behaviour Strom.Sink
 
   defstruct []
