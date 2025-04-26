@@ -73,7 +73,7 @@ defmodule Strom.GenMixTest do
 
     task_even = Task.async(fn -> Enum.count(flow[:even]) end)
     Process.sleep(50)
-    assert length(:sys.get_state(gen_mix.pid).data[:even]) == 0
+    assert :sys.get_state(gen_mix.pid).data[:even] == []
     assert length(:sys.get_state(gen_mix.pid).data[:odd]) >= 100
     task_odd = Task.async(fn -> Enum.count(flow[:odd]) end)
     assert Task.await(task_even) == 1000
