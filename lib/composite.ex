@@ -37,16 +37,11 @@ defmodule Strom.Composite do
   def new(components, name \\ nil) when is_list(components) do
     components =
       components
-      |> List.flatten()
-      |> Enum.reduce([], fn component, acc ->
-        case component do
-          %__MODULE__{components: components} ->
-            acc ++ components
-
-          component ->
-            acc ++ [component]
-        end
+      |> Enum.map(fn
+        %__MODULE__{components: components} -> components
+        component -> component
       end)
+      |> List.flatten()
 
     name = if name, do: name, else: generate_name(components)
 
@@ -71,7 +66,7 @@ defmodule Strom.Composite do
 
   @impl true
   def init(%__MODULE__{} = composite) do
-    {:ok, %{composite | pid: self()}, {:continue, :start_components}}
+    {:ok, %{composite | pid: self(), components: start_components(composite.components)}}
   end
 
   def components(%__MODULE__{name: name}) do
@@ -91,11 +86,6 @@ defmodule Strom.Composite do
     Process.unlink(pid)
     GenServer.call({:global, name}, :stop_components, :infinity)
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
-  end
-
-  @impl true
-  def handle_continue(:start_components, %__MODULE__{components: components} = composite) do
-    {:noreply, %{composite | components: start_components(components)}}
   end
 
   def start_components(components) do

@@ -87,9 +87,8 @@ defmodule Strom.Transformer do
     output_function = Map.get(outputs, input_stream_name)
 
     {chunk, new_acc} =
-      Enum.reduce(chunk, {[], acc}, fn el, {events, acc} ->
-        {new_events, acc} = output_function.(el, acc)
-        {events ++ new_events, acc}
+      Enum.flat_map_reduce(chunk, acc, fn el, acc ->
+        output_function.(el, acc)
       end)
 
     {%{input_stream_name => chunk}, Enum.any?(chunk), new_acc}

@@ -205,8 +205,8 @@ defmodule Strom.GenMix do
     {:stop, :normal, :ok, gm}
   end
 
-  defp process_new_data(new_data, data, asks) do
-    Enum.reduce(new_data, {data, asks, 0}, fn {output_name, data}, {all_data, asks, count} ->
+  defp process_new_data(new_data, gm_data, asks) do
+    Enum.reduce(new_data, {gm_data, asks, 0}, fn {output_name, data}, {all_data, asks, count} ->
       data_for_output = Map.get(all_data, output_name, []) ++ data
 
       {data_for_output, asks} =
