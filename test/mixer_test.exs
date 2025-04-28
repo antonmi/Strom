@@ -26,6 +26,17 @@ defmodule Strom.MixerTest do
     assert Enum.sort(Enum.to_list(stream)) == [1, 2, 3, 4, 5, 6]
   end
 
+  test "output stream has the same name as one of the input streams" do
+    mixer =
+      [:stream1, :stream2]
+      |> Mixer.new(:stream1, chunk: 1)
+      |> Mixer.start()
+
+    flow = %{stream1: [1, 2, 3], stream2: [4, 5, 6]}
+    %{stream1: stream} = Mixer.call(flow, mixer)
+    assert Enum.sort(Enum.to_list(stream)) == [1, 2, 3, 4, 5, 6]
+  end
+
   describe "complex cases" do
     def orders_and_parcels do
       orders =

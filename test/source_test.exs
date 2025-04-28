@@ -28,7 +28,7 @@ defmodule Strom.SourceTest do
     assert Enum.join(lines, "\n") == File.read!("test/data/orders.csv")
   end
 
-  test "several sources", %{source: source} do
+  test "two sources reading the same file", %{source: source} do
     another_source =
       :another_stream
       |> Source.new(ReadLines.new("test/data/orders.csv"))
@@ -46,7 +46,7 @@ defmodule Strom.SourceTest do
     assert Enum.join(another_list, "\n") == File.read!("test/data/orders.csv")
   end
 
-  test "several sources for one stream" do
+  test "two sources stream into one stream, stream are concatenated" do
     source =
       :my_stream
       |> Source.new([4, 5, 6])
@@ -58,20 +58,19 @@ defmodule Strom.SourceTest do
     assert Enum.sort(numbers) == [1, 2, 3, 4, 5, 6]
   end
 
+  def build_tick_stream() do
+    Stream.resource(
+      fn -> 0 end,
+      fn
+        5 -> {:halt, 5}
+        counter -> {[:tick], counter + 1}
+      end,
+      fn counter -> counter end
+    )
+  end
+
   test "stream in the source" do
-    stream =
-      Stream.resource(
-        fn -> 5 end,
-        fn count ->
-          if count > 0 do
-            Process.sleep(1)
-            {[:tick], count - 1}
-          else
-            {:halt, 0}
-          end
-        end,
-        fn 0 -> 0 end
-      )
+    stream = build_tick_stream()
 
     source =
       :my_stream
