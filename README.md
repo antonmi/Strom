@@ -45,7 +45,7 @@ function = fn string -> "Hello, #{string}!" end
 transformer = :stream |> Strom.Transformer.new(function)
 
 io_puts = Strom.Sink.IOPuts.new()
-sink = :stream |> Strom.Sink.new(io_puts, true)
+sink = :stream |> Strom.Sink.new(io_puts, sync: true)
 
 greeter = Strom.Composite.new([source, transformer, sink])
 greeter = Strom.Composite.start(greeter)

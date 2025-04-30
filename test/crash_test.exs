@@ -114,6 +114,38 @@ defmodule Strom.CrashTest do
     end
   end
 
+  describe "kill transformer process" do
+    setup do
+      %{stream: build_stream(Enum.to_list(1..10), 1)}
+    end
+
+    test "kill transformer process", %{stream: stream} do
+      transformer =
+        :stream
+        |> Transformer.new(& &1, nil, chunk: 1)
+        |> Transformer.start()
+
+      list_task =
+        Task.async(fn ->
+          %{stream: stream} = Transformer.call(%{stream: stream}, transformer)
+          Enum.to_list(stream)
+        end)
+
+      Process.sleep(5)
+      %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
+      Process.exit(transformer.pid, :kill)
+
+      try do
+        Task.await(list_task, 20)
+      catch
+        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
+          assert task_pid == list_task.pid
+      end
+
+      assert Process.alive?(task_pid)
+    end
+  end
+
   describe "crash in splitter" do
     setup do
       %{stream: build_stream([1, 2, 3, 4, 5, 6], 1)}

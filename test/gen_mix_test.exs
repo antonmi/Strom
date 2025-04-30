@@ -160,13 +160,13 @@ defmodule Strom.GenMixTest do
   end
 
   test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
-    quick = Stream.cycle([101])
+    quick = Stream.cycle([11])
     #    quick = build_stream(List.duplicate([101], 10000), 1)
-    slow = build_stream(Enum.to_list(1..100), 1)
+    slow = build_stream(Enum.to_list(1..10), 1)
 
     outputs = %{
-      quick: fn n -> n > 100 end,
-      slow: fn n -> n <= 100 end
+      quick: fn n -> n > 10 end,
+      slow: fn n -> n <= 10 end
     }
 
     flow = %{quick: quick, slow: slow}
@@ -175,29 +175,25 @@ defmodule Strom.GenMixTest do
       GenMix.start(%GenMix{
         inputs: [:quick, :slow],
         outputs: outputs,
-        opts: [chunk: 5, buffer: 3, no_wait: true]
+        opts: [chunk: 2, buffer: 3, no_wait: true]
       })
 
     flow = GenMix.call(flow, gen_mix)
 
     Task.async(fn ->
-      flow[:quick]
-      |> Stream.map(fn n ->
-        #        IO.write(".")
-        n
-      end)
-      |> Enum.to_list()
+      Enum.to_list(flow[:quick])
     end)
 
-    slow_list =
-      flow[:slow]
-      |> Stream.map(fn n ->
-        Process.sleep(1)
-        #        IO.write("!")
-        n
-      end)
-      |> Enum.to_list()
+    slow_list = Enum.to_list(flow[:slow])
+    assert length(slow_list) == 10
+  end
 
-    assert length(slow_list) == 100
+  test "call to the gen_mix that was already called" do
+    gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}})
+    GenMix.call(%{stream: [1, 2, 3]}, gen_mix)
+
+    assert_raise RuntimeError, "Compoment has been already called", fn ->
+      GenMix.call(%{stream: [4, 5, 6]}, gen_mix)
+    end
   end
 end

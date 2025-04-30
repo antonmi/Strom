@@ -9,6 +9,7 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
+            id: nil,
             process_chunk: nil,
             inputs: [],
             outputs: %{},
@@ -55,13 +56,22 @@ defmodule Strom.GenMix do
     {:ok, %{gm | pid: self()}}
   end
 
+  @spec call(map(), map()) :: map() | no_return()
   def call(flow, gm) do
     input_streams =
       Enum.reduce(gm.inputs, %{}, fn name, acc ->
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    gm_pid = GenServer.call(gm.pid, {:start_tasks, input_streams})
+    gm_pid =
+      case GenServer.call(gm.pid, {:start_tasks, input_streams}) do
+        {:ok, gm_pid} ->
+          gm_pid
+
+        {:error, :already_called} ->
+          raise "Compoment has been already called"
+      end
+
     sub_flow = build_sub_flow(gm.outputs, gm_pid)
 
     flow
@@ -167,7 +177,7 @@ defmodule Strom.GenMix do
         Map.put(acc, name, task_pid)
       end)
 
-    {:reply, gm.pid, %{gm | tasks_started: true, tasks: tasks}}
+    {:reply, {:ok, gm.pid}, %{gm | tasks_started: true, tasks: tasks}}
   end
 
   def handle_call(
@@ -175,7 +185,7 @@ defmodule Strom.GenMix do
         _from,
         %__MODULE__{tasks_started: true} = gm
       ) do
-    {:reply, gm.pid, gm}
+    {:reply, {:error, :already_called}, gm}
   end
 
   def handle_call(:run_tasks, _from, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
