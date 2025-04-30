@@ -78,8 +78,14 @@ defmodule Strom.CompositeTest do
         |> Composite.start()
 
       assert Process.alive?(composite.pid)
+      assert Process.alive?(Process.whereis(composite.registry_name))
+
       components = Composite.components(composite)
       check_alive(components)
+
+      assert Registry.count(composite.registry_name) == 6
+      first_component_pid = hd(components).pid
+      assert [{^first_component_pid, nil}] = Registry.lookup(composite.registry_name, 0)
 
       Composite.stop(composite)
       refute Process.alive?(composite.pid)

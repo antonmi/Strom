@@ -9,7 +9,7 @@ defmodule Strom.Renamer do
       iex> Renamer.call(flow, renamer)
       %{foo1: [1], foo2: [2]}
   """
-  defstruct names: %{}
+  defstruct names: %{}, reg_id: nil
 
   @type t() :: %__MODULE__{}
 

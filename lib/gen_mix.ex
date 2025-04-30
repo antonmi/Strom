@@ -9,7 +9,7 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
-            id: nil,
+            reg_id: nil,
             process_chunk: nil,
             inputs: [],
             outputs: %{},
@@ -48,7 +48,13 @@ defmodule Strom.GenMix do
   end
 
   def start_link(%__MODULE__{} = gm) do
-    GenServer.start_link(__MODULE__, gm)
+    case gm.reg_id do
+      nil ->
+        GenServer.start_link(__MODULE__, gm)
+
+      {:via, Registry, _} = gm_reg_id ->
+        GenServer.start_link(__MODULE__, gm, name: gm_reg_id)
+    end
   end
 
   @impl true
@@ -63,42 +69,44 @@ defmodule Strom.GenMix do
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    gm_pid =
-      case GenServer.call(gm.pid, {:start_tasks, input_streams}) do
-        {:ok, gm_pid} ->
-          gm_pid
+    gm_identifier = if gm.reg_id, do: gm.reg_id, else: gm.pid
+
+    gm_identifier =
+      case GenServer.call(gm_identifier, {:start_tasks, input_streams}) do
+        {:ok, gm_identifier} ->
+          gm_identifier
 
         {:error, :already_called} ->
           raise "Compoment has been already called"
       end
 
-    sub_flow = build_sub_flow(gm.outputs, gm_pid)
+    sub_flow = build_sub_flow(gm.outputs, gm_identifier)
 
     flow
     |> Map.drop(gm.inputs)
     |> Map.merge(sub_flow)
   end
 
-  defp build_sub_flow(outputs, gm_pid) do
+  defp build_sub_flow(outputs, gm_identifier) do
     Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
       stream =
         Stream.resource(
           fn ->
-            GenServer.call(gm_pid, :run_tasks)
-            gm_pid
+            GenServer.call(gm_identifier, :run_tasks)
+            gm_identifier
           end,
-          fn gm_pid ->
-            GenServer.cast(gm_pid, {:ask, output_name, self()})
+          fn gm_identifier ->
+            GenServer.cast(gm_identifier, {:ask, output_name, self()})
 
             receive do
               {^output_name, :done} ->
-                {:halt, gm_pid}
+                {:halt, gm_identifier}
 
               {^output_name, events} ->
-                {events, gm_pid}
+                {events, gm_identifier}
             end
           end,
-          fn gm_pid -> gm_pid end
+          fn gm_identifier -> gm_identifier end
         )
 
       Map.put(flow, output_name, stream)
@@ -117,12 +125,12 @@ defmodule Strom.GenMix do
     end)
   end
 
-  defp run_stream_in_task({name, stream}, {gm_pid, outputs, chunk}, process_chunk) do
+  defp run_stream_in_task({name, stream}, {gm_identifier, outputs, chunk}, process_chunk) do
     Task.Supervisor.start_child(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         acc =
-          case GenServer.call(gm_pid, {:register_task, name, self()}) do
+          case GenServer.call(gm_identifier, {:register_task, name, self()}) do
             {true, acc} ->
               acc
 
@@ -140,7 +148,7 @@ defmodule Strom.GenMix do
           fn chunk, acc ->
             case process_chunk.(name, chunk, outputs, acc) do
               {new_data, true, new_acc} ->
-                GenServer.cast(gm_pid, {:new_data, name, {new_data, new_acc}})
+                GenServer.cast(gm_identifier, {:new_data, name, {new_data, new_acc}})
 
                 receive do
                   :continue_task ->
@@ -157,7 +165,7 @@ defmodule Strom.GenMix do
         )
         |> Stream.run()
 
-        GenServer.cast(gm_pid, {:task_done, name})
+        GenServer.cast(gm_identifier, {:task_done, name})
       end,
       restart: :transient
     )
@@ -169,15 +177,21 @@ defmodule Strom.GenMix do
         _from,
         %__MODULE__{tasks_started: false} = gm
       ) do
+    gm_identifier = if gm.reg_id, do: gm.reg_id, else: gm.pid
+
     tasks =
       Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
         {:ok, task_pid} =
-          run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
+          run_stream_in_task(
+            {name, stream},
+            {gm_identifier, gm.outputs, gm.chunk},
+            gm.process_chunk
+          )
 
         Map.put(acc, name, task_pid)
       end)
 
-    {:reply, {:ok, gm.pid}, %{gm | tasks_started: true, tasks: tasks}}
+    {:reply, {:ok, gm_identifier}, %{gm | tasks_started: true, tasks: tasks}}
   end
 
   def handle_call(

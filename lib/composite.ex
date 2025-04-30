@@ -27,6 +27,7 @@ defmodule Strom.Composite do
 
   defstruct pid: nil,
             name: nil,
+            registry_name: nil,
             components: []
 
   use GenServer
@@ -44,20 +45,31 @@ defmodule Strom.Composite do
       |> List.flatten()
 
     name = if name, do: name, else: generate_name(components)
+    registry_name = :"Registry_#{name}"
 
-    %__MODULE__{name: name, components: components}
+    %__MODULE__{name: name, registry_name: registry_name, components: components}
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{} = composite) do
+  def start(%__MODULE__{registry_name: registry_name} = composite) do
+    {:ok, _pid} =
+      DynamicSupervisor.start_child(
+        Strom.DynamicSupervisor,
+        %{
+          id: registry_name,
+          start: {Registry, :start_link, [[keys: :unique, name: registry_name]]},
+          restart: :transient
+        }
+      )
+
     {:ok, pid} =
       DynamicSupervisor.start_child(
         Strom.DynamicSupervisor,
-        %{id: __MODULE__, start: {__MODULE__, :start_link, [composite]}, restart: :permanent}
+        %{id: registry_name, start: {__MODULE__, :start_link, [composite]}, restart: :transient}
       )
 
     Process.link(pid)
-    %{composite | pid: pid}
+    %{composite | pid: pid, registry_name: registry_name}
   end
 
   def start_link(%__MODULE__{name: name} = composite) do
@@ -66,7 +78,12 @@ defmodule Strom.Composite do
 
   @impl true
   def init(%__MODULE__{} = composite) do
-    {:ok, %{composite | pid: self(), components: start_components(composite.components)}}
+    {:ok,
+     %{
+       composite
+       | pid: self(),
+         components: start_components(composite.components, composite.registry_name)
+     }}
   end
 
   def components(%__MODULE__{name: name}) do
@@ -88,10 +105,16 @@ defmodule Strom.Composite do
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
   end
 
-  def start_components(components) do
-    Enum.map(components, fn %{__struct__: module} = component ->
-      module.start(component)
-    end)
+  @spec start_components(any(), atom()) :: list()
+  def start_components(components, registry_name) do
+    {components, _counter} =
+      components
+      |> Enum.reduce({[], 0}, fn %{__struct__: module} = component, {acc, counter} ->
+        component = %{component | reg_id: {:via, Registry, {registry_name, counter}}}
+        {[module.start(component) | acc], counter + 1}
+      end)
+
+    Enum.reverse(components)
   end
 
   @impl true
@@ -115,7 +138,7 @@ defmodule Strom.Composite do
         %__MODULE__{components: components} = composite
       ) do
     stop_components(components)
-    {:noreply, %{composite | components: start_components(components)}}
+    {:noreply, %{composite | components: start_components(components, composite.registry_name)}}
   end
 
   def reduce_flow(components, init_flow) do

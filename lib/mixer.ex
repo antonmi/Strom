@@ -13,6 +13,7 @@ defmodule Strom.Mixer do
   alias Strom.GenMix
 
   defstruct pid: nil,
+            reg_id: nil,
             inputs: [],
             outputs: %{},
             opts: []
@@ -33,13 +34,14 @@ defmodule Strom.Mixer do
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{inputs: inputs, outputs: outputs, opts: opts} = mixer) do
+  def start(%__MODULE__{inputs: inputs, outputs: outputs, opts: opts, reg_id: reg_id} = mixer) do
     gen_mix =
       GenMix.start(%GenMix{
         inputs: inputs,
         outputs: outputs,
         opts: opts,
-        process_chunk: &process_chunk/4
+        process_chunk: &process_chunk/4,
+        reg_id: reg_id
       })
 
     %{mixer | pid: gen_mix.pid}
