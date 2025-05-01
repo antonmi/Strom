@@ -21,6 +21,7 @@ defmodule Strom.Sink do
   alias Strom.GenMix
 
   defstruct pid: nil,
+            composite_name: nil,
             reg_id: nil,
             origin: nil,
             inputs: [],
@@ -43,7 +44,7 @@ defmodule Strom.Sink do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(
-        %__MODULE__{origin: origin, inputs: inputs, outputs: outputs, opts: opts, reg_id: reg_id} =
+        %__MODULE__{origin: origin, inputs: inputs, outputs: outputs, opts: opts, reg_id: reg_id, composite_name: composite_name} =
           sink
       ) do
     origin = apply(origin.__struct__, :start, [origin])
@@ -54,7 +55,8 @@ defmodule Strom.Sink do
         outputs: outputs,
         opts: opts,
         process_chunk: &process_chunk/4,
-        reg_id: reg_id
+        reg_id: reg_id,
+        composite_name: composite_name
       })
 
     %{sink | pid: gen_mix.pid, origin: origin}

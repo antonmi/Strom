@@ -3,6 +3,7 @@ defmodule Strom.CrashTest do
 
   alias Strom.{Source, Source.ReadLines, Sink}
   alias Strom.{Transformer, Splitter}
+  alias Strom.Composite
 
   import ExUnit.CaptureLog
 
@@ -143,6 +144,47 @@ defmodule Strom.CrashTest do
       end
 
       assert Process.alive?(task_pid)
+    end
+  end
+
+  describe "kill transformer process when using composite" do
+    setup do
+      %{stream: build_stream(Enum.to_list(1..10), 1)}
+    end
+
+    test "kill transformer process", %{stream: stream} do
+      # :observer.start()
+      transformer = Transformer.new(:stream, & &1, nil, chunk: 1)
+
+      composite =
+        [transformer]
+        |>Composite.new()
+        |>Composite.start()
+        |> IO.inspect()
+
+      [transformer] = Composite.components(composite)
+
+      list_task =
+        Task.async(fn ->
+          %{stream: stream} = Composite.call(%{stream: stream}, composite)
+          Enum.to_list(stream)
+        end)
+
+      Process.sleep(5)
+      %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
+      IO.inspect(task_pid, label: :task_pid)
+
+      Process.exit(transformer.pid, :kill)
+
+
+      # try do
+        Task.await(list_task, 100000) |> IO.inspect(label: :list_task)
+      # catch
+      #   :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
+      #     assert task_pid == list_task.pid
+      # end
+
+      # assert Process.alive?(task_pid)
     end
   end
 

@@ -32,6 +32,7 @@ defmodule Strom.Transformer do
   alias Strom.GenMix
 
   defstruct pid: nil,
+            composite_name: nil,
             reg_id: nil,
             inputs: [],
             outputs: %{},
@@ -67,7 +68,7 @@ defmodule Strom.Transformer do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(
-        %__MODULE__{inputs: inputs, outputs: outputs, acc: acc, opts: opts, reg_id: reg_id} =
+        %__MODULE__{inputs: inputs, outputs: outputs, acc: acc, opts: opts, composite_name: composite_name,reg_id: reg_id} =
           transformer
       ) do
     gen_mix =
@@ -77,6 +78,7 @@ defmodule Strom.Transformer do
         accs: Enum.reduce(inputs, %{}, fn name, accs -> Map.put(accs, name, acc) end),
         opts: opts,
         process_chunk: &process_chunk/4,
+        composite_name: composite_name,
         reg_id: reg_id
       })
 
