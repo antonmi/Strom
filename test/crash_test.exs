@@ -158,9 +158,8 @@ defmodule Strom.CrashTest do
 
       composite =
         [transformer]
-        |>Composite.new()
-        |>Composite.start()
-        |> IO.inspect()
+        |> Composite.new()
+        |> Composite.start()
 
       [transformer] = Composite.components(composite)
 
@@ -172,19 +171,17 @@ defmodule Strom.CrashTest do
 
       Process.sleep(5)
       %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
-      IO.inspect(task_pid, label: :task_pid)
 
       Process.exit(transformer.pid, :kill)
 
+      try do
+        Task.await(list_task, 20)
+      catch
+        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
+          assert task_pid == list_task.pid
+      end
 
-      # try do
-        Task.await(list_task, 100000) |> IO.inspect(label: :list_task)
-      # catch
-      #   :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
-      #     assert task_pid == list_task.pid
-      # end
-
-      # assert Process.alive?(task_pid)
+      assert Process.alive?(task_pid)
     end
   end
 

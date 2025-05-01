@@ -28,8 +28,7 @@ defmodule Strom.Composite do
   defstruct pid: nil,
             name: nil,
             registry_name: nil,
-            components: [],
-            component_tasks: %{}
+            components: []
 
   use GenServer
 
@@ -66,7 +65,7 @@ defmodule Strom.Composite do
     {:ok, pid} =
       DynamicSupervisor.start_child(
         Strom.DynamicSupervisor,
-        %{id: registry_name, start: {__MODULE__, :start_link, [composite]}, restart: :transient}
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [composite]}, restart: :transient}
       )
 
     Process.link(pid)
@@ -83,7 +82,7 @@ defmodule Strom.Composite do
      %{
        composite
        | pid: self(),
-         components: start_components(composite.components,composite.name, composite.registry_name)
+         components: start_components(composite.components, composite.registry_name)
      }}
   end
 
@@ -106,14 +105,14 @@ defmodule Strom.Composite do
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
   end
 
-  @spec start_components(any(), atom(), atom()) :: list()
-  def start_components(components, name,registry_name) do
+  @spec start_components(any(), atom()) :: list()
+  def start_components(components, registry_name) do
     {components, _counter} =
       components
       |> Enum.reduce({[], 0}, fn %{__struct__: module} = component, {acc, counter} ->
-        component = %{component | composite_name: name, reg_id: {:via, Registry, {registry_name, counter}}}
+        component = %{component | reg_id: {:via, Registry, {registry_name, counter}}}
         component = module.start(component)
-        Process.monitor(component.pid)
+        # Process.monitor(component.pid)
         {[component | acc], counter + 1}
       end)
 
@@ -130,47 +129,35 @@ defmodule Strom.Composite do
     {:reply, components, composite}
   end
 
-
   def handle_call(:stop_components, _from, %__MODULE__{components: components} = composite) do
     stop_components(components)
     {:reply, :ok, composite}
   end
 
-  def handle_cast({:update_component_tasks, number, tasks}, %__MODULE__{component_tasks: component_tasks} = composite) do
-    component_tasks = Map.put(component_tasks, number, tasks)
-    {:noreply, %{composite | component_tasks: component_tasks}}
-  end
-
-
   @impl true
   def handle_info(
         {:DOWN, _ref, :process, component_pid, _reason},
-        %__MODULE__{components: components, registry_name: registry_name, component_tasks: component_tasks} = composite
+        %__MODULE__{components: components, registry_name: registry_name} = composite
       ) do
-    IO.inspect("DOWN")
-    %{__struct__: module} = component = Enum.find(components, fn %{pid: pid} -> pid == component_pid end)
-    |> IO.inspect()
+    %{__struct__: module} =
+      component = Enum.find(components, fn %{pid: pid} -> pid == component_pid end)
+
     {:via, Registry, {^registry_name, number}} = component.reg_id
-    IO.inspect(number, label: :number)
-    IO.inspect(component_tasks[number], label: :component_tasks)
-    Registry.lookup(registry_name, 0) |> IO.inspect()
+    Registry.lookup(registry_name, 0)
     restarted_component = module.start(component)
-    |> IO.inspect(label: :afret_start)
-    :sys.get_state(restarted_component.pid) |> IO.inspect(label: :state)
-    IO.inspect(composite.component_tasks[number], label: :component_tasks)
+    :sys.get_state(restarted_component.pid)
 
-    GenServer.cast(restarted_component.pid, {:update_and_continue_tasks, component_tasks[number]})
+    components =
+      Enum.reduce(components, [], fn c, acc ->
+        case c.reg_id do
+          {:via, Registry, {^registry_name, ^number}} ->
+            [restarted_component | acc]
 
-    components = Enum.reduce(components, [], fn c, acc ->
-      case c.reg_id do
-        {:via, Registry, {^registry_name, ^number}} ->
-          [restarted_component | acc]
-        _ ->
-          [acc | c]
-      end
-    end)
-    |> Enum.reverse()
-    |> IO.inspect(label: :components)
+          _ ->
+            [acc | c]
+        end
+      end)
+      |> Enum.reverse()
 
     # stop_components(components)
     {:noreply, %{composite | components: components}}

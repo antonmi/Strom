@@ -10,7 +10,6 @@ defmodule Strom.GenMix do
 
   defstruct pid: nil,
             reg_id: nil,
-            composite_name: nil,
             process_chunk: nil,
             inputs: [],
             outputs: %{},
@@ -115,7 +114,6 @@ defmodule Strom.GenMix do
 
       {^output_name, events} ->
         {events, gm_identifier}
-
     after
       1000 ->
         ask_and_wait(gm_identifier, output_name)
@@ -159,8 +157,6 @@ defmodule Strom.GenMix do
               {new_data, true, new_acc} ->
                 GenServer.cast(gm_identifier, {:new_data, name, {new_data, new_acc}})
 
-                IO.inspect("Waiting for continue task")
-
                 receive do
                   :continue_task ->
                     :ok
@@ -203,19 +199,16 @@ defmodule Strom.GenMix do
         Map.put(acc, name, task_pid)
       end)
 
-    case registry_name(gm_identifier) do
-      nil ->
-        :do_nothing
+    # case registry_name(gm_identifier) do
+    #   nil ->
+    #     :do_nothing
 
-      {name, number} ->
-        GenServer.cast({:global, gm.composite_name}, {:update_component_tasks, number, tasks})
-    end
+    #   {name, number} ->
+    #     GenServer.cast({:global, gm.composite_name}, {:update_component_tasks, number, tasks})
+    # end
 
     {:reply, {:ok, gm_identifier}, %{gm | tasks_started: true, tasks: tasks}}
   end
-
-  defp registry_name(gm_identifier) when is_pid(gm_identifier), do: nil
-  defp registry_name({:via, Registry, {name, key}}), do: {name, key}
 
   def handle_call(
         {:start_tasks, _input_streams},
@@ -292,7 +285,6 @@ defmodule Strom.GenMix do
         {:new_data, input_name, {new_data, new_acc}},
         %__MODULE__{} = gm
       ) do
-    IO.inspect("New data #{inspect(new_data)}")
     {all_data, remaining_asks, total_count} = process_new_data(new_data, gm.data, gm.asks)
 
     waiting_tasks =
@@ -377,7 +369,6 @@ defmodule Strom.GenMix do
 
   def handle_cast({:update_and_continue_tasks, tasks}, %__MODULE__{} = gm) do
     Enum.each(tasks, &send(elem(&1, 1), :continue_task))
-    IO.inspect("Sending continue to #{inspect(Map.values(tasks))}")
     {:noreply, %{gm | tasks: tasks, tasks_started: true, tasks_run: true}}
   end
 end
