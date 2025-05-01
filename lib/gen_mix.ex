@@ -18,6 +18,7 @@ defmodule Strom.GenMix do
             chunk: @chunk,
             buffer: @buffer,
             no_wait: false,
+            input_streams: %{},
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
@@ -189,6 +190,7 @@ defmodule Strom.GenMix do
     tasks =
       Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
         {:ok, task_pid} =
+        # task =
           run_stream_in_task(
             {name, stream},
             {gm_identifier, gm.outputs, gm.chunk},
@@ -199,6 +201,7 @@ defmodule Strom.GenMix do
         Map.put(acc, name, task_pid)
       end)
 
+    # Process.flag(:trap_exit, true)
     # case registry_name(gm_identifier) do
     #   nil ->
     #     :do_nothing
@@ -207,7 +210,7 @@ defmodule Strom.GenMix do
     #     GenServer.cast({:global, gm.composite_name}, {:update_component_tasks, number, tasks})
     # end
 
-    {:reply, {:ok, gm_identifier}, %{gm | tasks_started: true, tasks: tasks}}
+    {:reply, {:ok, gm_identifier}, %{gm | tasks_started: true, input_streams: input_streams, tasks: tasks}}
   end
 
   def handle_call(
@@ -370,5 +373,34 @@ defmodule Strom.GenMix do
   def handle_cast({:update_and_continue_tasks, tasks}, %__MODULE__{} = gm) do
     Enum.each(tasks, &send(elem(&1, 1), :continue_task))
     {:noreply, %{gm | tasks: tasks, tasks_started: true, tasks_run: true}}
+  end
+
+  @impl true
+  def handle_info({ref, _}, gm) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, gm}
+  end
+
+  def handle_info({:EXIT, pid, :normal}, gm) do
+    {:noreply, gm}
+  end
+
+  def handle_info({:EXIT, pid, not_normal}, gm) do
+    {name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
+    stream = Map.get(gm.input_streams, name)
+
+    gm_identifier = if gm.reg_id, do: gm.reg_id, else: gm.pid
+    task =
+      run_stream_in_task(
+        {name, stream},
+        {gm_identifier, gm.outputs, gm.chunk},
+        gm.process_chunk
+      )
+    send(task.pid, {:run_task, gm.accs[name]})
+    {:noreply, %{gm | tasks: Map.put(gm.tasks, name, task.pid)}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, gm) do
+    {:noreply, gm}
   end
 end

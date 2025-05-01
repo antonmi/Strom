@@ -158,7 +158,7 @@ defmodule Strom.Composite do
         end
       end)
       |> Enum.reverse()
-
+IO.inspect(components)
     # stop_components(components)
     {:noreply, %{composite | components: components}}
   end

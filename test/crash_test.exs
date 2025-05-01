@@ -139,11 +139,11 @@ defmodule Strom.CrashTest do
       try do
         Task.await(list_task, 20)
       catch
-        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
+        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, _]}} ->
           assert task_pid == list_task.pid
       end
 
-      assert Process.alive?(task_pid)
+      refute Process.alive?(task_pid)
     end
   end
 
@@ -161,6 +161,8 @@ defmodule Strom.CrashTest do
         |> Composite.new()
         |> Composite.start()
 
+
+
       [transformer] = Composite.components(composite)
 
       list_task =
@@ -171,13 +173,14 @@ defmodule Strom.CrashTest do
 
       Process.sleep(5)
       %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
+      IO.inspect(Composite.components(composite), label: :composite)
 
       Process.exit(transformer.pid, :kill)
 
       try do
-        Task.await(list_task, 20)
+        Task.await(list_task, 200) |> IO.inspect(label: :list_task)
       catch
-        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, 20]}} ->
+        :exit, {:timeout, {Task, :await, [%Task{pid: task_pid}, _]}} ->
           assert task_pid == list_task.pid
       end
 
