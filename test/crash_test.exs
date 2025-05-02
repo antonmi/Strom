@@ -79,6 +79,21 @@ defmodule Strom.CrashTest do
       end)
     end
 
+    test "two sequentioal crashes" do
+      stream = build_stream([1, 2, 3, 4, 5, 3, 4, 5])
+
+      transformer =
+        :stream
+        |> Transformer.new(&crash_fun/1, nil, chunk: 1)
+        |> Transformer.start()
+
+      capture_log(fn ->
+        %{stream: stream} = Transformer.call(%{stream: stream}, transformer)
+
+        assert Enum.to_list(stream) == [2, 4, 8, 10, 8, 10]
+      end)
+    end
+
     test "crush when transformer process 2 steams", %{stream: stream} do
       stream2 = build_stream([10, 20, 30, 40, 50])
 
@@ -142,7 +157,7 @@ defmodule Strom.CrashTest do
           assert task_pid == list_task.pid
       end
 
-      assert Process.alive?(task_pid)
+      refute Process.alive?(task_pid)
     end
   end
 

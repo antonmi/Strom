@@ -17,6 +17,7 @@ defmodule Strom.GenMix do
             chunk: @chunk,
             buffer: @buffer,
             no_wait: false,
+            input_streams: %{},
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
@@ -117,7 +118,7 @@ defmodule Strom.GenMix do
   end
 
   defp run_stream_in_task({name, stream}, {gm_pid, outputs, chunk}, process_chunk) do
-    Task.Supervisor.start_child(
+    Task.Supervisor.async(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         acc =
@@ -155,10 +156,7 @@ defmodule Strom.GenMix do
           fn acc -> acc end
         )
         |> Stream.run()
-
-        GenServer.cast(gm_pid, {:task_done, name})
-      end,
-      restart: :transient
+      end
     )
   end
 
@@ -170,13 +168,15 @@ defmodule Strom.GenMix do
       ) do
     tasks =
       Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
-        {:ok, task_pid} =
+        task =
           run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
 
-        Map.put(acc, name, task_pid)
+        Process.flag(:trap_exit, true)
+        Map.put(acc, name, task.pid)
       end)
 
-    {:reply, {:ok, gm.pid}, %{gm | tasks_started: true, tasks: tasks}}
+    {:reply, {:ok, gm.pid},
+     %{gm | tasks_started: true, tasks: tasks, input_streams: input_streams}}
   end
 
   def handle_call(
@@ -307,7 +307,10 @@ defmodule Strom.GenMix do
      }}
   end
 
-  def handle_cast({:task_done, input_name}, %__MODULE__{} = gm) do
+  @impl true
+  def handle_info({:EXIT, pid, :normal}, gm) do
+    {input_name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
+
     {tasks, waiting_tasks} =
       if gm.no_wait do
         Enum.each(
@@ -334,5 +337,29 @@ defmodule Strom.GenMix do
       end
 
     {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+  end
+
+  def handle_info({:EXIT, pid, _not_normal}, gm) do
+    {name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
+    stream = Map.get(gm.input_streams, name)
+
+    task = run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
+    Process.flag(:trap_exit, true)
+    send(task.pid, {:run_task, gm.accs[name]})
+
+    {:noreply, %{gm | tasks: Map.put(gm.tasks, name, task.pid)}}
+  end
+
+  def handle_info({ref, _}, gm) do
+    # Task is done
+    # handled by handle_info({:EXIT, pid, :normal}
+    Process.demonitor(ref, [:flush])
+    {:noreply, gm}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, gm) do
+    # The task failed
+    # handled by handle_info({:EXIT, pid, _not_normal}
+    {:noreply, gm}
   end
 end
