@@ -37,11 +37,11 @@ defmodule Strom.Composite do
   def new(components, name \\ nil) when is_list(components) do
     components =
       components
-      |> Enum.map(fn
-        %__MODULE__{components: components} -> components
-        component -> component
-      end)
       |> List.flatten()
+      |> Enum.flat_map(fn
+        %__MODULE__{components: components} -> components
+        component -> [component]
+      end)
 
     name = if name, do: name, else: generate_name(components)
 

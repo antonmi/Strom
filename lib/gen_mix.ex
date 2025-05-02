@@ -9,7 +9,6 @@ defmodule Strom.GenMix do
   @buffer 1000
 
   defstruct pid: nil,
-            id: nil,
             process_chunk: nil,
             inputs: [],
             outputs: %{},
