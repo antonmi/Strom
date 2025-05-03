@@ -60,14 +60,14 @@ defmodule Strom.Composite do
         %{
           id: registry_name,
           start: {Registry, :start_link, [[keys: :unique, name: registry_name]]},
-          restart: :transient
+          restart: :temporary
         }
       )
 
     {:ok, pid} =
       DynamicSupervisor.start_child(
         Strom.DynamicSupervisor,
-        %{id: __MODULE__, start: {__MODULE__, :start_link, [composite]}, restart: :transient}
+        %{id: __MODULE__, start: {__MODULE__, :start_link, [composite]}, restart: :temporary}
       )
 
     Process.link(pid)
