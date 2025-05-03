@@ -13,9 +13,5 @@ Clustering:
 
 
 Refactoring
-- crash in gen_mix, proper tests
-- buffer in gen_mix
-- handle task crash in transformer without Process.alive? (use the same approach as in the gen_mix)
-- mixing to the stream with the same name
-- call components twice
-- batch transformer
+- do {:global, name} is needed currently
+- chunk transformer

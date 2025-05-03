@@ -7,8 +7,10 @@ defmodule Strom.GenMix do
 
   @chunk 1
   @buffer 1000
+  @client_timeout 5000
 
   defstruct pid: nil,
+            composite: nil,
             process_chunk: nil,
             inputs: [],
             outputs: %{},
@@ -48,7 +50,21 @@ defmodule Strom.GenMix do
   end
 
   def start_link(%__MODULE__{} = gm) do
-    GenServer.start_link(__MODULE__, gm)
+    case name_or_pid(gm) do
+      nil ->
+        GenServer.start_link(__MODULE__, gm)
+
+      registry_name ->
+        GenServer.start_link(__MODULE__, gm, name: registry_name)
+    end
+  end
+
+  defp name_or_pid(%{pid: pid, composite: nil}), do: pid
+
+  defp name_or_pid(%{composite: composite}) do
+    {composite_name, ref} = composite
+    registry_name = String.to_existing_atom("Registry_#{composite_name}")
+    {:via, Registry, {registry_name, ref}}
   end
 
   @impl true
@@ -63,7 +79,7 @@ defmodule Strom.GenMix do
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    gm_pid =
+    gm_identifier =
       case GenServer.call(gm.pid, {:start_tasks, input_streams}) do
         {:ok, gm_pid} ->
           gm_pid
@@ -72,37 +88,47 @@ defmodule Strom.GenMix do
           raise "Compoment has been already called"
       end
 
-    sub_flow = build_sub_flow(gm.outputs, gm_pid)
+    sub_flow = build_sub_flow(gm.outputs, gm_identifier)
 
     flow
     |> Map.drop(gm.inputs)
     |> Map.merge(sub_flow)
   end
 
-  defp build_sub_flow(outputs, gm_pid) do
+  defp build_sub_flow(outputs, gm_identifier) do
     Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
       stream =
         Stream.resource(
           fn ->
-            GenServer.call(gm_pid, :run_tasks)
-            gm_pid
+            GenServer.call(gm_identifier, :run_tasks)
+            gm_identifier
           end,
-          fn gm_pid ->
-            GenServer.cast(gm_pid, {:ask, output_name, self()})
-
-            receive do
-              {^output_name, :done} ->
-                {:halt, gm_pid}
-
-              {^output_name, events} ->
-                {events, gm_pid}
-            end
+          fn gm_identifier ->
+            ask_and_wait(gm_identifier, output_name)
           end,
-          fn gm_pid -> gm_pid end
+          fn gm_identifier -> gm_identifier end
         )
 
       Map.put(flow, output_name, stream)
     end)
+  end
+
+  defp ask_and_wait(gm_identifier, output_name) do
+    GenServer.cast(gm_identifier, {:ask, output_name, self()})
+
+    receive do
+      {^output_name, :done} ->
+        {:halt, gm_identifier}
+
+      {^output_name, events} ->
+        {events, gm_identifier}
+
+      :continue_ask ->
+        ask_and_wait(gm_identifier, output_name)
+    after
+      @client_timeout ->
+        raise "No response from component #{inspect(gm_identifier)}, in #{output_name}"
+    end
   end
 
   def stop(gm) do
@@ -122,15 +148,9 @@ defmodule Strom.GenMix do
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         acc =
-          case GenServer.call(gm_pid, {:register_task, name, self()}) do
-            {true, acc} ->
+          receive do
+            {:run_task, acc} ->
               acc
-
-            {false, _} ->
-              receive do
-                {:run_task, acc} ->
-                  acc
-              end
           end
 
         stream
@@ -165,7 +185,13 @@ defmodule Strom.GenMix do
         {:start_tasks, input_streams},
         _from,
         %__MODULE__{tasks_started: false} = gm
-      ) do
+      )
+      when is_map(input_streams) do
+    if gm.composite do
+      {composite_name, ref} = gm.composite
+      GenServer.cast({:global, composite_name}, {:store_input_streams, {ref, input_streams}})
+    end
+
     tasks =
       Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
         task =
@@ -175,43 +201,56 @@ defmodule Strom.GenMix do
         Map.put(acc, name, task.pid)
       end)
 
-    {:reply, {:ok, gm.pid},
+    {:reply, {:ok, name_or_pid(gm)},
      %{gm | tasks_started: true, tasks: tasks, input_streams: input_streams}}
   end
 
   def handle_call(
-        {:start_tasks, _input_streams},
+        {:start_tasks, input_streams},
         _from,
         %__MODULE__{tasks_started: true} = gm
-      ) do
+      )
+      when is_map(input_streams) do
     {:reply, {:error, :already_called}, gm}
   end
 
-  def handle_call(:run_tasks, _from, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
+  def handle_call(
+        :run_tasks,
+        {client_pid, _ref},
+        %__MODULE__{tasks_started: true, tasks_run: false} = gm
+      ) do
     Enum.each(gm.tasks, fn {name, task_pid} ->
       send(task_pid, {:run_task, gm.accs[name]})
     end)
 
+    store_client_in_composite(gm.composite, client_pid)
+
     {:reply, gm.pid, %{gm | tasks_run: true}}
   end
 
-  def handle_call(:run_tasks, _from, %__MODULE__{tasks_run: true} = gm) do
+  def handle_call(:run_tasks, {client_pid, _ref}, %__MODULE__{tasks_run: true} = gm) do
+    store_client_in_composite(gm.composite, client_pid)
+
     {:reply, gm.pid, gm}
   end
 
-  def handle_call({:register_task, name, task_pid}, _from, %__MODULE__{} = gm) do
-    tasks = Map.put(gm.tasks, name, task_pid)
-
-    {:reply, {gm.tasks_run, gm.accs[name]}, %{gm | tasks: tasks}}
-  end
-
   def handle_call(:stop, _from, %__MODULE__{} = gm) do
-    Enum.each(
-      Map.values(gm.tasks),
-      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
-    )
+    terminate_tasks(gm.tasks)
 
     {:stop, :normal, :ok, gm}
+  end
+
+  defp terminate_tasks(tasks) do
+    Enum.each(
+      Map.values(tasks),
+      &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
+    )
+  end
+
+  defp store_client_in_composite(nil, _client_pid), do: :do_nothinfg
+
+  defp store_client_in_composite({composite_name, ref}, client_pid) do
+    GenServer.cast({:global, composite_name}, {:store_client, {ref, client_pid}})
   end
 
   defp process_new_data(new_data, gm_data, asks) do
@@ -313,11 +352,7 @@ defmodule Strom.GenMix do
 
     {tasks, waiting_tasks} =
       if gm.no_wait do
-        Enum.each(
-          Map.values(gm.tasks),
-          &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
-        )
-
+        terminate_tasks(gm.tasks)
         {%{}, %{}}
       else
         {Map.delete(gm.tasks, input_name), Map.delete(gm.waiting_tasks, input_name)}

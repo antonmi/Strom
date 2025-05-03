@@ -35,6 +35,7 @@ defmodule Strom.Source do
   alias Strom.GenMix
 
   defstruct pid: nil,
+            composite: nil,
             origin: nil,
             inputs: [],
             outputs: %{},
@@ -66,7 +67,15 @@ defmodule Strom.Source do
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{origin: origin, inputs: inputs, outputs: outputs, opts: opts} = source) do
+  def start(
+        %__MODULE__{
+          origin: origin,
+          inputs: inputs,
+          outputs: outputs,
+          opts: opts,
+          composite: composite
+        } = source
+      ) do
     origin =
       if is_struct(origin) do
         apply(origin.__struct__, :start, [origin])
@@ -79,7 +88,8 @@ defmodule Strom.Source do
         inputs: inputs,
         outputs: outputs,
         opts: opts,
-        process_chunk: &process_chunk/4
+        process_chunk: &process_chunk/4,
+        composite: composite
       })
 
     %{source | pid: gen_mix.pid, origin: origin}

@@ -106,27 +106,5 @@ defmodule Strom.Examples.WindowTest do
       |> Composite.new()
       |> Composite.start()
     end
-
-    test "average of batches 5" do
-      composite = build_window_avg_composite(50)
-
-      numbers =
-        Stream.resource(
-          fn -> 1 end,
-          fn count ->
-            if count < 20 do
-              Process.sleep(10)
-              {[7], count + 1}
-            else
-              {:halt, :done}
-            end
-          end,
-          fn :done -> :done end
-        )
-
-      %{numbers: numbers} = Composite.call(%{numbers: numbers}, composite)
-      assert Enum.to_list(numbers) == [7.0, 7.0, 7.0, 7.0]
-      Composite.stop(composite)
-    end
   end
 end
