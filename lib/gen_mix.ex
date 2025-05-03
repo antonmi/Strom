@@ -189,7 +189,7 @@ defmodule Strom.GenMix do
       when is_map(input_streams) do
     if gm.composite do
       {composite_name, ref} = gm.composite
-      GenServer.cast({:global, composite_name}, {:store_input_streams, {ref, input_streams}})
+      GenServer.cast(composite_name, {:store_input_streams, {ref, input_streams}})
     end
 
     tasks =
@@ -250,7 +250,7 @@ defmodule Strom.GenMix do
   defp store_client_in_composite(nil, _client_pid), do: :do_nothinfg
 
   defp store_client_in_composite({composite_name, ref}, client_pid) do
-    GenServer.cast({:global, composite_name}, {:store_client, {ref, client_pid}})
+    GenServer.cast(composite_name, {:store_client, {ref, client_pid}})
   end
 
   defp process_new_data(new_data, gm_data, asks) do

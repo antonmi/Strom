@@ -13,5 +13,4 @@ Clustering:
 
 
 Refactoring
-- do {:global, name} is needed currently
 - chunk transformer

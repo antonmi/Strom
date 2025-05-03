@@ -75,7 +75,7 @@ defmodule Strom.Composite do
   end
 
   def start_link(%__MODULE__{name: name} = composite) do
-    GenServer.start_link(__MODULE__, composite, name: {:global, name})
+    GenServer.start_link(__MODULE__, composite, name: name)
   end
 
   @impl true
@@ -84,21 +84,21 @@ defmodule Strom.Composite do
   end
 
   def components(%__MODULE__{name: name}) do
-    GenServer.call({:global, name}, :components)
+    GenServer.call(name, :components)
   end
 
   @spec call(Strom.flow(), __MODULE__.t() | atom()) :: Strom.flow()
   def call(flow, %__MODULE__{name: name}),
-    do: GenServer.call({:global, name}, {:call, flow}, :infinity)
+    do: GenServer.call(name, {:call, flow}, :infinity)
 
   def call(flow, name) when is_atom(name),
-    do: GenServer.call({:global, name}, {:call, flow}, :infinity)
+    do: GenServer.call(name, {:call, flow}, :infinity)
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{name: name}) do
-    pid = :global.whereis_name(name)
+    pid = Process.whereis(name)
     Process.unlink(pid)
-    GenServer.call({:global, name}, :stop_components, :infinity)
+    GenServer.call(name, :stop_components, :infinity)
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
   end
 
