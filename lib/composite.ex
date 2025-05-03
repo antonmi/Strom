@@ -27,8 +27,7 @@ defmodule Strom.Composite do
 
   defstruct pid: nil,
             name: nil,
-            components: [],
-            inputs_and_clients: %{}
+            components: []
 
   use GenServer
   alias Strom.Renamer
@@ -133,71 +132,18 @@ defmodule Strom.Composite do
   end
 
   @impl true
-  def handle_cast(
-        {:store_input_streams, {ref, input_streams}},
-        %__MODULE__{inputs_and_clients: inputs_and_clients} = composite
-      ) do
-    {_inputs, clients} = Map.get(inputs_and_clients, ref, {%{}, MapSet.new()})
-
-    {:noreply,
-     %{composite | inputs_and_clients: Map.put(inputs_and_clients, ref, {input_streams, clients})}}
-  end
-
-  @impl true
-  def handle_cast(
-        {:store_client, {ref, pid}},
-        %__MODULE__{inputs_and_clients: inputs_and_clients} = composite
-      ) do
-    {inputs, clients} = Map.get(inputs_and_clients, ref, {%{}, MapSet.new()})
-    clients = MapSet.put(clients, pid)
-
-    {:noreply,
-     %{
-       composite
-       | inputs_and_clients: Map.put(composite.inputs_and_clients, ref, {inputs, clients})
-     }}
-  end
-
-  @impl true
   def handle_info(
         {:DOWN, _ref, :process, pid, _reason},
-        %__MODULE__{components: components, inputs_and_clients: inputs_and_clients} = composite
+        %__MODULE__{components: components} = composite
       ) do
-    components =
-      components
-      |> Enum.reduce([], fn component, acc ->
-        case component do
-          %{pid: ^pid, composite: {_composite_name, ref}, __struct__: module} ->
-            {inputs, clients} = Map.get(inputs_and_clients, ref, {%{}, MapSet.new()})
-            component = restart_component(component, module, inputs, clients)
-            [component | acc]
-
-          component ->
-            [component | acc]
-        end
-      end)
-      |> Enum.reverse()
-
-    {:noreply, %{composite | components: components}}
+    component = Enum.find(components, fn %{pid: ^pid} -> true end)
+    {:stop, {:component_crashed, component}, composite}
   end
 
   defp reduce_flow(components, init_flow) do
     Enum.reduce(components, init_flow, fn %{__struct__: module} = component, flow ->
       module.call(flow, component)
     end)
-  end
-
-  defp restart_component(component, module, inputs, clients) do
-    component = module.start(component)
-    Process.monitor(component.pid)
-    GenServer.call(component.pid, {:start_tasks, inputs})
-    GenServer.call(component.pid, :run_tasks)
-
-    Enum.each(Enum.to_list(clients), fn client_pid ->
-      send(client_pid, :continue_ask)
-    end)
-
-    component
   end
 
   defp stop_components(components) do

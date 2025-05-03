@@ -7,7 +7,6 @@ defmodule Strom.GenMix do
 
   @chunk 1
   @buffer 1000
-  @client_timeout 5000
 
   defstruct pid: nil,
             composite: nil,
@@ -20,6 +19,7 @@ defmodule Strom.GenMix do
             buffer: @buffer,
             no_wait: false,
             input_streams: %{},
+            clients: MapSet.new(),
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
@@ -125,9 +125,6 @@ defmodule Strom.GenMix do
 
       :continue_ask ->
         ask_and_wait(gm_identifier, output_name)
-    after
-      @client_timeout ->
-        raise "No response from component #{inspect(gm_identifier)}, in #{output_name}"
     end
   end
 
@@ -187,11 +184,6 @@ defmodule Strom.GenMix do
         %__MODULE__{tasks_started: false} = gm
       )
       when is_map(input_streams) do
-    if gm.composite do
-      {composite_name, ref} = gm.composite
-      GenServer.cast(composite_name, {:store_input_streams, {ref, input_streams}})
-    end
-
     tasks =
       Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
         task =
@@ -223,15 +215,11 @@ defmodule Strom.GenMix do
       send(task_pid, {:run_task, gm.accs[name]})
     end)
 
-    store_client_in_composite(gm.composite, client_pid)
-
-    {:reply, gm.pid, %{gm | tasks_run: true}}
+    {:reply, gm.pid, %{gm | clients: MapSet.put(gm.clients, client_pid), tasks_run: true}}
   end
 
   def handle_call(:run_tasks, {client_pid, _ref}, %__MODULE__{tasks_run: true} = gm) do
-    store_client_in_composite(gm.composite, client_pid)
-
-    {:reply, gm.pid, gm}
+    {:reply, gm.pid, %{gm | clients: MapSet.put(gm.clients, client_pid)}}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = gm) do
@@ -245,12 +233,6 @@ defmodule Strom.GenMix do
       Map.values(tasks),
       &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
     )
-  end
-
-  defp store_client_in_composite(nil, _client_pid), do: :do_nothinfg
-
-  defp store_client_in_composite({composite_name, ref}, client_pid) do
-    GenServer.cast(composite_name, {:store_client, {ref, client_pid}})
   end
 
   defp process_new_data(new_data, gm_data, asks) do

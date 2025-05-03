@@ -162,12 +162,9 @@ defmodule Strom.CrashTest do
     end
   end
 
-  describe "kill transformer process in composite" do
-    setup do
-      %{stream: build_stream(Enum.to_list(1..10), 1)}
-    end
-
-    test "task is killed also", %{stream: stream} do
+  describe "crash in component gm will crash composite" do
+    test "crash composite" do
+      stream = build_stream(Enum.to_list(1..10), 1)
       transformer = Transformer.new(:stream, & &1, nil, chunk: 1)
 
       composite =
@@ -175,62 +172,24 @@ defmodule Strom.CrashTest do
         |> Composite.new()
         |> Composite.start()
 
-      list_task =
+      task =
         Task.async(fn ->
           %{stream: stream} = Composite.call(%{stream: stream}, composite)
           Enum.to_list(stream)
         end)
 
       Process.sleep(5)
-      :sys.get_state(composite.pid)
       [transformer] = Composite.components(composite)
-      %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
-      Process.exit(transformer.pid, :kill)
 
-      Process.sleep(5)
+      Process.unlink(composite.pid)
+      Process.unlink(task.pid)
 
-      refute Process.alive?(transformer.pid)
-      refute Process.alive?(task_pid)
+      capture_log(fn ->
+        Process.exit(transformer.pid, :kill)
 
-      [new_transformer] = Composite.components(composite)
-      %{tasks: %{stream: new_task_pid}} = :sys.get_state(new_transformer.pid)
-
-      assert Process.alive?(new_transformer.pid)
-      assert Process.alive?(new_task_pid)
-
-      numbers = Task.await(list_task)
-      assert length(numbers) >= 9
-
-      Composite.stop(composite)
-    end
-
-    test "with many streams" do
-      transformer = Transformer.new([:stream1, :stream2, :stream3], & &1, nil, chunk: 1)
-
-      composite =
-        [transformer]
-        |> Composite.new()
-        |> Composite.start()
-
-      numbers = [1, 2, 3, 4, 5, 6]
-      stream1 = build_stream(numbers, 1)
-      stream2 = build_stream(numbers, 1)
-      stream3 = build_stream(numbers, 1)
-      flow = %{stream1: stream1, stream2: stream2, stream3: stream3}
-      %{stream1: stream1, stream2: stream2, stream3: stream3} = Composite.call(flow, composite)
-      list_task1 = Task.async(fn -> Enum.to_list(stream1) end)
-      list_task2 = Task.async(fn -> Enum.to_list(stream2) end)
-      list_task3 = Task.async(fn -> Enum.to_list(stream3) end)
-
-      Process.sleep(5)
-      :sys.get_state(composite.pid)
-      [transformer] = Composite.components(composite)
-      Process.exit(transformer.pid, :kill)
-
-      [numbers1, numbers2, numbers3] = Task.await_many([list_task1, list_task2, list_task3])
-      assert length(numbers1) >= 5
-      assert length(numbers2) >= 5
-      assert length(numbers3) >= 5
+        Process.sleep(20)
+        refute Process.alive?(composite.pid)
+      end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
     end
   end
 
