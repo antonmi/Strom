@@ -97,7 +97,7 @@ defmodule Strom.Composite do
   def stop(%__MODULE__{name: name}) do
     pid = Process.whereis(name)
     Process.unlink(pid)
-    GenServer.call(name, :stop_components, :infinity)
+    GenServer.call(name, :stop_components)
     DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
   end
 
