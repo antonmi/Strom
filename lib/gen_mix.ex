@@ -19,7 +19,6 @@ defmodule Strom.GenMix do
             buffer: @buffer,
             no_wait: false,
             input_streams: %{},
-            clients: MapSet.new(),
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
@@ -208,18 +207,18 @@ defmodule Strom.GenMix do
 
   def handle_call(
         :run_tasks,
-        {client_pid, _ref},
+        {_client_pid, _ref},
         %__MODULE__{tasks_started: true, tasks_run: false} = gm
       ) do
     Enum.each(gm.tasks, fn {name, task_pid} ->
       send(task_pid, {:run_task, gm.accs[name]})
     end)
 
-    {:reply, gm.pid, %{gm | clients: MapSet.put(gm.clients, client_pid), tasks_run: true}}
+    {:reply, gm.pid, %{gm | tasks_run: true}}
   end
 
-  def handle_call(:run_tasks, {client_pid, _ref}, %__MODULE__{tasks_run: true} = gm) do
-    {:reply, gm.pid, %{gm | clients: MapSet.put(gm.clients, client_pid)}}
+  def handle_call(:run_tasks, {_client_pid, _ref}, %__MODULE__{tasks_run: true} = gm) do
+    {:reply, gm.pid, gm}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = gm) do
