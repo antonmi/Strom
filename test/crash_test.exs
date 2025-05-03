@@ -3,6 +3,7 @@ defmodule Strom.CrashTest do
 
   alias Strom.{Source, Source.ReadLines, Sink}
   alias Strom.{Transformer, Splitter}
+  alias Strom.Composite
 
   import ExUnit.CaptureLog
 
@@ -79,6 +80,21 @@ defmodule Strom.CrashTest do
       end)
     end
 
+    test "two sequentioal crashes" do
+      stream = build_stream([1, 2, 3, 4, 5, 3, 4, 5])
+
+      transformer =
+        :stream
+        |> Transformer.new(&crash_fun/1, nil, chunk: 1)
+        |> Transformer.start()
+
+      capture_log(fn ->
+        %{stream: stream} = Transformer.call(%{stream: stream}, transformer)
+
+        assert Enum.to_list(stream) == [2, 4, 8, 10, 8, 10]
+      end)
+    end
+
     test "crush when transformer process 2 steams", %{stream: stream} do
       stream2 = build_stream([10, 20, 30, 40, 50])
 
@@ -119,7 +135,7 @@ defmodule Strom.CrashTest do
       %{stream: build_stream(Enum.to_list(1..10), 1)}
     end
 
-    test "kill transformer process", %{stream: stream} do
+    test "task is killed also", %{stream: stream} do
       transformer =
         :stream
         |> Transformer.new(& &1, nil, chunk: 1)
@@ -142,7 +158,38 @@ defmodule Strom.CrashTest do
           assert task_pid == list_task.pid
       end
 
-      assert Process.alive?(task_pid)
+      refute Process.alive?(task_pid)
+    end
+  end
+
+  describe "crash in component gm will crash composite" do
+    test "crash composite" do
+      stream = build_stream(Enum.to_list(1..10), 1)
+      transformer = Transformer.new(:stream, & &1, nil, chunk: 1)
+
+      composite =
+        [transformer]
+        |> Composite.new()
+        |> Composite.start()
+
+      task =
+        Task.async(fn ->
+          %{stream: stream} = Composite.call(%{stream: stream}, composite)
+          Enum.to_list(stream)
+        end)
+
+      Process.sleep(5)
+      [transformer] = Composite.components(composite)
+
+      Process.unlink(composite.pid)
+      Process.unlink(task.pid)
+
+      capture_log(fn ->
+        Process.exit(transformer.pid, :kill)
+
+        Process.sleep(20)
+        refute Process.alive?(composite.pid)
+      end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
     end
   end
 

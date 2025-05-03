@@ -20,6 +20,7 @@ defmodule Strom.Splitter do
   alias Strom.GenMix
 
   defstruct pid: nil,
+            composite: nil,
             inputs: %{},
             outputs: %{},
             opts: []
@@ -49,13 +50,16 @@ defmodule Strom.Splitter do
   end
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
-  def start(%__MODULE__{inputs: inputs, outputs: outputs, opts: opts} = splitter) do
+  def start(
+        %__MODULE__{inputs: inputs, outputs: outputs, opts: opts, composite: composite} = splitter
+      ) do
     gen_mix =
       GenMix.start(%GenMix{
         inputs: inputs,
         outputs: outputs,
         opts: opts,
-        process_chunk: &process_chunk/4
+        process_chunk: &process_chunk/4,
+        composite: composite
       })
 
     %{splitter | pid: gen_mix.pid}
