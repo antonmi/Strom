@@ -7,15 +7,6 @@ defmodule Strom.CrashTest do
 
   import ExUnit.CaptureLog
 
-  setup do
-    source =
-      :stream
-      |> Source.new(ReadLines.new("test/data/numbers1.txt"), chunk: 1, buffer: 1)
-      |> Source.start()
-
-    %{source: source}
-  end
-
   def crash_fun(el) do
     if Enum.member?([3], el) do
       raise "error"
@@ -187,7 +178,7 @@ defmodule Strom.CrashTest do
       capture_log(fn ->
         Process.exit(transformer.pid, :kill)
 
-        Process.sleep(20)
+        Process.sleep(50)
         refute Process.alive?(composite.pid)
       end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
     end
@@ -348,7 +339,12 @@ defmodule Strom.CrashTest do
         |> Sink.new(CustomWriteLines.new("test/data/output.csv"))
         |> Sink.start()
 
-      %{sink: sink}
+      source =
+        :stream
+        |> Source.new(ReadLines.new("test/data/numbers1.txt"), chunk: 1, buffer: 1)
+        |> Source.start()
+
+      %{sink: sink, source: source}
     end
 
     test "crash in sink", %{source: source, sink: sink} do

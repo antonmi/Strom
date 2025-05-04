@@ -116,6 +116,14 @@ defmodule Strom.Composite do
     |> Enum.reverse()
   end
 
+  def delete(composite, index) do
+    GenServer.call(composite.name, {:delete, index})
+  end
+
+  def insert(composite, index, new_components) do
+    GenServer.call(composite.name, {:insert, index, new_components})
+  end
+
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
@@ -131,9 +139,55 @@ defmodule Strom.Composite do
     {:reply, :ok, composite}
   end
 
+  def handle_call(
+        {:delete, index},
+        _from,
+        %__MODULE__{components: components} = composite
+      ) do
+    component = Enum.at(components, index)
+    {_composite_name, ref} = component.composite
+    gm = Strom.GenMix.state(component.pid)
+
+    next_component = Enum.at(components, index + 1)
+    GenServer.call(next_component.pid, {:reregister, ref, gm.input_streams})
+
+    :ok = component.__struct__.stop(component)
+
+    {:reply, composite, %{composite | components: List.delete_at(components, index)}}
+  end
+
+  def handle_call(
+        {:insert, index, new_components},
+        _from,
+        %__MODULE__{components: components, name: name} = composite
+      )
+      when is_list(new_components) do
+    component_before = Enum.at(components, index - 1)
+    component_after = Enum.at(components, index)
+
+    gm_before = Strom.GenMix.state(component_before.pid)
+
+    new_components = start_components(new_components, name)
+    _flow = reduce_flow(new_components, gm_before.input_streams)
+
+    last_new_component = Enum.at(new_components, -1)
+    last_new_gm = Strom.GenMix.state(last_new_component.pid)
+    {_composite_name, ref} = last_new_component.composite
+    GenServer.call(component_after.pid, {:reregister, ref, last_new_gm.input_streams})
+
+    components = List.insert_at(components, index, new_components) |> List.flatten()
+
+    {:reply, composite, %{composite | components: components}}
+  end
+
   @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, composite) do
+    # component stopped normally
+    {:noreply, composite}
+  end
+
   def handle_info(
-        {:DOWN, _ref, :process, pid, _reason},
+        {:DOWN, _ref, :process, pid, _not_normal},
         %__MODULE__{components: components} = composite
       ) do
     component = Enum.find(components, fn %{pid: ^pid} -> true end)

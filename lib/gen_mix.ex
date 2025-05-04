@@ -94,6 +94,8 @@ defmodule Strom.GenMix do
     |> Map.merge(sub_flow)
   end
 
+  def state(pid), do: GenServer.call(pid, :state)
+
   defp build_sub_flow(outputs, gm_identifier) do
     Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
       stream =
@@ -183,14 +185,7 @@ defmodule Strom.GenMix do
         %__MODULE__{tasks_started: false} = gm
       )
       when is_map(input_streams) do
-    tasks =
-      Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
-        task =
-          run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
-
-        Process.flag(:trap_exit, true)
-        Map.put(acc, name, task.pid)
-      end)
+    tasks = do_start_tasks(input_streams, gm)
 
     {:reply, {:ok, name_or_pid(gm)},
      %{gm | tasks_started: true, tasks: tasks, input_streams: input_streams}}
@@ -210,9 +205,7 @@ defmodule Strom.GenMix do
         {_client_pid, _ref},
         %__MODULE__{tasks_started: true, tasks_run: false} = gm
       ) do
-    Enum.each(gm.tasks, fn {name, task_pid} ->
-      send(task_pid, {:run_task, gm.accs[name]})
-    end)
+    do_run_tasks(gm.tasks, gm.accs)
 
     {:reply, gm.pid, %{gm | tasks_run: true}}
   end
@@ -225,6 +218,43 @@ defmodule Strom.GenMix do
     terminate_tasks(gm.tasks)
 
     {:stop, :normal, :ok, gm}
+  end
+
+  def handle_call(:state, _from, %__MODULE__{} = gm) do
+    {:reply, gm, gm}
+  end
+
+  def handle_call(
+        {:reregister, new_ref, new_input_streams},
+        _from,
+        %__MODULE__{composite: {name, _ref}} = gm
+      ) do
+    registry_name = String.to_existing_atom("Registry_#{name}")
+    Registry.register(registry_name, new_ref, nil)
+
+    terminate_tasks(gm.tasks)
+    tasks = do_start_tasks(new_input_streams, gm)
+
+    do_run_tasks(tasks, gm.accs)
+
+    {:reply, gm,
+     %{gm | composite: {name, new_ref}, input_streams: new_input_streams, tasks: tasks}}
+  end
+
+  defp do_start_tasks(input_streams, gm) do
+    Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
+      task =
+        run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
+
+      Process.flag(:trap_exit, true)
+      Map.put(acc, name, task.pid)
+    end)
+  end
+
+  defp do_run_tasks(tasks, accs) do
+    Enum.each(tasks, fn {name, task_pid} ->
+      send(task_pid, {:run_task, accs[name]})
+    end)
   end
 
   defp terminate_tasks(tasks) do
