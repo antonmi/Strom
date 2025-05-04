@@ -39,13 +39,13 @@ defmodule Strom.ReplaceTest do
           Enum.to_list(stream)
         end)
 
-      Process.sleep(10)
+      Process.sleep(5)
       composite = Composite.delete(composite, 0)
       components = Composite.components(composite)
       assert length(components) == 1
 
       list = Task.await(task)
-      # one event is lost, I'll address this later
+      # one event can be lost, I'll address this later
       assert length(list) >= 9
       assert [11 | _] = list
       assert [10 | _] = Enum.reverse(list)
@@ -88,11 +88,10 @@ defmodule Strom.ReplaceTest do
       components = Composite.components(composite)
       assert length(components) == 5
 
-      list = Task.await(task) |> IO.inspect(label: "list")
-      # one or two events are lost, I'll address this later
-      assert length(list) >= 8
+      list = Task.await(task)
+      assert length(list) == 10
       assert [11 | _] = list
-      assert hd(Enum.reverse(list)) in [309, 310]
+      assert hd(Enum.reverse(list)) == 620
     end
   end
 end

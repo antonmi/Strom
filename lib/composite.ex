@@ -145,13 +145,11 @@ defmodule Strom.Composite do
         %__MODULE__{components: components} = composite
       ) do
     component = Enum.at(components, index)
-    {_composite_name, ref} = component.composite
-    gm = Strom.GenMix.state(component.pid)
+    input_streams = Strom.GenMix.state(component.pid).input_streams
+    :ok = component.__struct__.stop(component)
 
     next_component = Enum.at(components, index + 1)
-    GenServer.call(next_component.pid, {:reregister, ref, gm.input_streams})
-
-    :ok = component.__struct__.stop(component)
+    GenServer.call(next_component.pid, {:reregister, component.composite, input_streams})
 
     {:reply, composite, %{composite | components: List.delete_at(components, index)}}
   end
@@ -162,20 +160,18 @@ defmodule Strom.Composite do
         %__MODULE__{components: components, name: name} = composite
       )
       when is_list(new_components) do
-    component_before = Enum.at(components, index - 1)
     component_after = Enum.at(components, index)
-
-    gm_before = Strom.GenMix.state(component_before.pid)
+    gm_after = Strom.GenMix.state(component_after.pid)
 
     new_components = start_components(new_components, name)
-    _flow = reduce_flow(new_components, gm_before.input_streams)
+    flow = reduce_flow(new_components, gm_after.input_streams)
 
-    last_new_component = Enum.at(new_components, -1)
-    last_new_gm = Strom.GenMix.state(last_new_component.pid)
-    {_composite_name, ref} = last_new_component.composite
-    GenServer.call(component_after.pid, {:reregister, ref, last_new_gm.input_streams})
+    GenServer.call(component_after.pid, {:reregister, gm_after.composite, flow})
 
-    components = List.insert_at(components, index, new_components) |> List.flatten()
+    components =
+      components
+      |> List.insert_at(index, new_components)
+      |> List.flatten()
 
     {:reply, composite, %{composite | components: components}}
   end

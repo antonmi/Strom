@@ -126,7 +126,7 @@ defmodule Strom.CrashTest do
       %{stream: build_stream(Enum.to_list(1..10), 1)}
     end
 
-    test "task is killed also", %{stream: stream} do
+    test "task is alive", %{stream: stream} do
       transformer =
         :stream
         |> Transformer.new(& &1, nil, chunk: 1)
@@ -149,7 +149,7 @@ defmodule Strom.CrashTest do
           assert task_pid == list_task.pid
       end
 
-      refute Process.alive?(task_pid)
+      assert Process.alive?(task_pid)
     end
   end
 

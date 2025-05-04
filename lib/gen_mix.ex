@@ -124,11 +124,12 @@ defmodule Strom.GenMix do
       {^output_name, events} ->
         {events, gm_identifier}
 
-      :continue_ask ->
+      {:continue_ask, gm_identifier} ->
         ask_and_wait(gm_identifier, output_name)
     end
   end
 
+  @spec stop(any()) :: any()
   def stop(gm) do
     GenServer.call(gm.pid, :stop)
   end
@@ -141,8 +142,8 @@ defmodule Strom.GenMix do
     end)
   end
 
-  defp run_stream_in_task({name, stream}, {gm_pid, outputs, chunk}, process_chunk) do
-    Task.Supervisor.async(
+  defp run_stream_in_task({name, stream}, {gm_identifier, outputs, chunk}, process_chunk) do
+    Task.Supervisor.async_nolink(
       {:via, PartitionSupervisor, {Strom.TaskSupervisor, self()}},
       fn ->
         acc =
@@ -158,14 +159,15 @@ defmodule Strom.GenMix do
           fn chunk, acc ->
             case process_chunk.(name, chunk, outputs, acc) do
               {new_data, true, new_acc} ->
-                GenServer.cast(gm_pid, {:new_data, name, {new_data, new_acc}})
+                GenServer.cast(gm_identifier, {:new_data, name, {new_data, new_acc}})
 
                 receive do
                   :continue_task ->
-                    :ok
-                end
+                    {[], new_acc}
 
-                {[], new_acc}
+                  :halt_task ->
+                    {:halt, new_acc}
+                end
 
               {_new_data, false, new_acc} ->
                 {[], new_acc}
@@ -174,6 +176,8 @@ defmodule Strom.GenMix do
           fn acc -> acc end
         )
         |> Stream.run()
+
+        self()
       end
     )
   end
@@ -214,8 +218,8 @@ defmodule Strom.GenMix do
     {:reply, gm.pid, gm}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{} = gm) do
-    terminate_tasks(gm.tasks)
+  def handle_call(:stop, _from, %__MODULE__{tasks: tasks} = gm) do
+    Enum.each(tasks, fn {_name, task_pid} -> send(task_pid, :halt_task) end)
 
     {:stop, :normal, :ok, gm}
   end
@@ -225,28 +229,51 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:reregister, new_ref, new_input_streams},
+        {:reregister, {name, new_ref}, new_input_streams},
         _from,
-        %__MODULE__{composite: {name, _ref}} = gm
+        %__MODULE__{composite: {name, ref}} = gm
       ) do
     registry_name = String.to_existing_atom("Registry_#{name}")
-    Registry.register(registry_name, new_ref, nil)
 
-    terminate_tasks(gm.tasks)
-    tasks = do_start_tasks(new_input_streams, gm)
+    Enum.each(gm.tasks, fn {_name, task_pid} -> send(task_pid, :continue_task) end)
 
-    do_run_tasks(tasks, gm.accs)
+    gm =
+      if new_ref != ref do
+        {:ok, _pid} = Registry.register(registry_name, new_ref, nil)
+        %{gm | composite: {name, new_ref}}
+      else
+        gm
+      end
+
+    Enum.each(gm.tasks, fn {_name, task_pid} -> send(task_pid, :halt_task) end)
+
+    Enum.each(gm.asks, fn {_name, client_pid} ->
+      send(client_pid, {:continue_ask, name_or_pid(gm)})
+    end)
+
+    tasks =
+      new_input_streams
+      |> do_start_tasks(gm)
+      |> do_run_tasks(gm.accs)
 
     {:reply, gm,
-     %{gm | composite: {name, new_ref}, input_streams: new_input_streams, tasks: tasks}}
+     %{
+       gm
+       | composite: {name, new_ref},
+         input_streams: new_input_streams,
+         tasks: tasks
+     }}
   end
 
   defp do_start_tasks(input_streams, gm) do
     Enum.reduce(input_streams, %{}, fn {name, stream}, acc ->
       task =
-        run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
+        run_stream_in_task(
+          {name, stream},
+          {name_or_pid(gm), gm.outputs, gm.chunk},
+          gm.process_chunk
+        )
 
-      Process.flag(:trap_exit, true)
       Map.put(acc, name, task.pid)
     end)
   end
@@ -255,6 +282,8 @@ defmodule Strom.GenMix do
     Enum.each(tasks, fn {name, task_pid} ->
       send(task_pid, {:run_task, accs[name]})
     end)
+
+    tasks
   end
 
   defp terminate_tasks(tasks) do
@@ -358,54 +387,54 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_info({:EXIT, pid, :normal}, gm) do
-    {input_name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
+  def handle_info({ref, pid}, gm) do
+    # Task is done
+    Process.demonitor(ref, [:flush])
 
-    {tasks, waiting_tasks} =
-      if gm.no_wait do
-        terminate_tasks(gm.tasks)
-        {%{}, %{}}
-      else
-        {Map.delete(gm.tasks, input_name), Map.delete(gm.waiting_tasks, input_name)}
-      end
+    case Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end) do
+      nil ->
+        # from another component
+        {:noreply, gm}
 
-    asks =
-      case map_size(tasks) do
-        0 ->
-          Enum.each(gm.asks, fn {output_name, client_pid} ->
-            send(client_pid, {output_name, :done})
-          end)
+      {input_name, _} ->
+        {tasks, waiting_tasks} =
+          if gm.no_wait do
+            terminate_tasks(gm.tasks)
+            {%{}, %{}}
+          else
+            {Map.delete(gm.tasks, input_name), Map.delete(gm.waiting_tasks, input_name)}
+          end
 
-          %{}
+        asks =
+          case map_size(tasks) do
+            0 ->
+              Enum.each(gm.asks, fn {output_name, client_pid} ->
+                send(client_pid, {output_name, :done})
+              end)
 
-        _more ->
-          gm.asks
-      end
+              %{}
 
-    {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+            _more ->
+              gm.asks
+          end
+
+        {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+    end
   end
 
-  def handle_info({:EXIT, pid, _not_normal}, gm) do
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, gm) do
+    # The task failed
     {name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
     stream = Map.get(gm.input_streams, name)
 
-    task = run_stream_in_task({name, stream}, {gm.pid, gm.outputs, gm.chunk}, gm.process_chunk)
-    Process.flag(:trap_exit, true)
+    task =
+      run_stream_in_task(
+        {name, stream},
+        {name_or_pid(gm), gm.outputs, gm.chunk},
+        gm.process_chunk
+      )
+
     send(task.pid, {:run_task, gm.accs[name]})
-
     {:noreply, %{gm | tasks: Map.put(gm.tasks, name, task.pid)}}
-  end
-
-  def handle_info({ref, _}, gm) do
-    # Task is done
-    # handled by handle_info({:EXIT, pid, :normal}
-    Process.demonitor(ref, [:flush])
-    {:noreply, gm}
-  end
-
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, gm) do
-    # The task failed
-    # handled by handle_info({:EXIT, pid, _not_normal}
-    {:noreply, gm}
   end
 end
