@@ -117,7 +117,11 @@ defmodule Strom.Composite do
   end
 
   def delete(composite, index) do
-    GenServer.call(composite.name, {:delete, index})
+    delete(composite, index, index)
+  end
+
+  def delete(composite, index_from, index_to) do
+    GenServer.call(composite.name, {:delete, index_from, index_to})
   end
 
   def insert(composite, index, new_components) do
@@ -140,18 +144,27 @@ defmodule Strom.Composite do
   end
 
   def handle_call(
-        {:delete, index},
+        {:delete, index_from, index_to},
         _from,
         %__MODULE__{components: components} = composite
       ) do
-    component = Enum.at(components, index)
+    component = Enum.at(components, index_from)
     input_streams = Strom.GenMix.state(component.pid).input_streams
-    :ok = component.__struct__.stop(component)
 
-    next_component = Enum.at(components, index + 1)
-    GenServer.call(next_component.pid, {:reregister, component.composite, input_streams})
+    {new_components, _} =
+      Enum.reduce(components, {[], 0}, fn component, {acc, index} ->
+        if index >= index_from and index <= index_to do
+          :ok = component.__struct__.stop(component)
+          {acc, index + 1}
+        else
+          {[component | acc], index + 1}
+        end
+      end)
 
-    {:reply, composite, %{composite | components: List.delete_at(components, index)}}
+    next_component = Enum.at(components, index_to + 1)
+    GenServer.call(next_component.pid, {:restart, component.composite, input_streams})
+
+    {:reply, composite, %{composite | components: Enum.reverse(new_components)}}
   end
 
   def handle_call(
@@ -166,7 +179,7 @@ defmodule Strom.Composite do
     new_components = start_components(new_components, name)
     flow = reduce_flow(new_components, gm_after.input_streams)
 
-    GenServer.call(component_after.pid, {:reregister, gm_after.composite, flow})
+    GenServer.call(component_after.pid, {:restart, gm_after.composite, flow})
 
     components =
       components
@@ -187,6 +200,7 @@ defmodule Strom.Composite do
         %__MODULE__{components: components} = composite
       ) do
     component = Enum.find(components, fn %{pid: ^pid} -> true end)
+    Enum.each(components, & &1.__struct__.stop(&1))
     {:stop, {:component_crashed, component}, composite}
   end
 

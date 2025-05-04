@@ -1,5 +1,5 @@
 defmodule Strom.CrashTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Strom.{Source, Source.ReadLines, Sink}
   alias Strom.{Transformer, Splitter}
@@ -178,7 +178,7 @@ defmodule Strom.CrashTest do
       capture_log(fn ->
         Process.exit(transformer.pid, :kill)
 
-        Process.sleep(50)
+        Process.sleep(100)
         refute Process.alive?(composite.pid)
       end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
     end

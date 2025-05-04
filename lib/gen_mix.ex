@@ -219,7 +219,7 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(:stop, _from, %__MODULE__{tasks: tasks} = gm) do
-    Enum.each(tasks, fn {_name, task_pid} -> send(task_pid, :halt_task) end)
+    send_to_tasks(tasks, :halt_task)
 
     {:stop, :normal, :ok, gm}
   end
@@ -229,32 +229,27 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:reregister, {name, new_ref}, new_input_streams},
+        {:restart, {name, new_ref}, new_input_streams},
         _from,
         %__MODULE__{composite: {name, ref}} = gm
       ) do
-    registry_name = String.to_existing_atom("Registry_#{name}")
-
-    Enum.each(gm.tasks, fn {_name, task_pid} -> send(task_pid, :continue_task) end)
-
     gm =
       if new_ref != ref do
+        registry_name = String.to_existing_atom("Registry_#{name}")
         {:ok, _pid} = Registry.register(registry_name, new_ref, nil)
         %{gm | composite: {name, new_ref}}
       else
         gm
       end
 
-    Enum.each(gm.tasks, fn {_name, task_pid} -> send(task_pid, :halt_task) end)
-
-    Enum.each(gm.asks, fn {_name, client_pid} ->
-      send(client_pid, {:continue_ask, name_or_pid(gm)})
-    end)
+    send_to_tasks(gm.tasks, :halt_task)
 
     tasks =
       new_input_streams
       |> do_start_tasks(gm)
       |> do_run_tasks(gm.accs)
+
+    send_to_clients(gm.asks, {:continue_ask, name_or_pid(gm)})
 
     {:reply, gm,
      %{
@@ -263,6 +258,14 @@ defmodule Strom.GenMix do
          input_streams: new_input_streams,
          tasks: tasks
      }}
+  end
+
+  defp send_to_tasks(tasks, message) do
+    Enum.each(tasks, &send(elem(&1, 1), message))
+  end
+
+  defp send_to_clients(asks, message) do
+    Enum.each(asks, &send(elem(&1, 1), message))
   end
 
   defp do_start_tasks(input_streams, gm) do
@@ -370,7 +373,7 @@ defmodule Strom.GenMix do
 
     waiting_tasks =
       if new_data_size < gm.buffer do
-        Enum.each(gm.waiting_tasks, &send(elem(&1, 1), :continue_task))
+        send_to_tasks(gm.waiting_tasks, :continue_task)
         %{}
       else
         gm.waiting_tasks
