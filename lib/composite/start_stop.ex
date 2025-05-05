@@ -1,5 +1,5 @@
 defmodule Strom.Composite.StartStop do
-  @moduledoc "Utility functions for starting and stopping composites"
+  @moduledoc "Utility module. There are functions for starting and stopping composites"
 
   alias Strom.Composite
   alias Strom.Renamer

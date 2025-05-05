@@ -1,5 +1,5 @@
 defmodule Strom.Composite.Manipulations do
-  @moduledoc "Functions for manipulating components in a composite"
+  @moduledoc "Utility Module. There are functions for manipulating components in a composite"
 
   alias Strom.Composite
   alias Strom.Composite.StartStop
