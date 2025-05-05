@@ -51,11 +51,44 @@ defmodule Strom.Composite do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{} = composite) do
+    supervisor_name = :"Supervisor_#{composite.name}"
+    component_supervisor_name = :"ComponentSupervisor_#{composite.name}"
+    task_supervisor_name = :"TaskSupervisor_#{composite.name}"
     registry_name = :"Registry_#{composite.name}"
+
+    {:ok, _supervisor_pid} =
+      DynamicSupervisor.start_child(
+        Strom.DynamicSupervisor,
+        %{
+          id: supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: supervisor_name]]},
+          restart: :temporary
+        }
+      )
+
+    {:ok, _supervisor_pid} =
+      DynamicSupervisor.start_child(
+        supervisor_name,
+        %{
+          id: component_supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: component_supervisor_name]]},
+          restart: :temporary
+        }
+      )
+
+    {:ok, _task_supervisor_pid} =
+      DynamicSupervisor.start_child(
+        supervisor_name,
+        %{
+          id: task_supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: task_supervisor_name]]},
+          restart: :temporary
+        }
+      )
 
     {:ok, _registry_pid} =
       DynamicSupervisor.start_child(
-        Strom.DynamicSupervisor,
+        supervisor_name,
         %{
           id: registry_name,
           start: {Registry, :start_link, [[keys: :unique, name: registry_name]]},
@@ -73,13 +106,33 @@ defmodule Strom.Composite do
     %{composite | pid: pid}
   end
 
+  def component_supervisor_name(name) do
+    String.to_existing_atom("ComponentSupervisor_#{name}")
+  end
+
+  def task_supervisor_name(name) do
+    String.to_existing_atom("TaskSupervisor_#{name}")
+  end
+
+  def registry_name(name) do
+    String.to_existing_atom("Registry_#{name}")
+  end
+
   def start_link(%__MODULE__{name: name} = composite) do
     GenServer.start_link(__MODULE__, composite, name: name)
   end
 
   @impl true
-  def init(%__MODULE__{name: name} = composite) do
-    {:ok, %{composite | pid: self(), components: start_components(composite.components, name)}}
+  def init(%__MODULE__{} = composite) do
+    {:ok, %{composite | pid: self()}, {:continue, :start_components}}
+  end
+
+  @impl true
+  def handle_continue(
+        :start_components,
+        %__MODULE__{name: name, components: components} = composite
+      ) do
+    {:noreply, %{composite | components: start_components(components, name)}}
   end
 
   def components(%__MODULE__{name: name}) do
@@ -98,7 +151,7 @@ defmodule Strom.Composite do
     pid = Process.whereis(name)
     Process.unlink(pid)
     GenServer.call(name, :stop_components)
-    DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
+    GenServer.call(name, :stop)
   end
 
   def start_components(components, name) do
@@ -141,6 +194,10 @@ defmodule Strom.Composite do
   def handle_call(:stop_components, _from, %__MODULE__{components: components} = composite) do
     stop_components(components)
     {:reply, :ok, composite}
+  end
+
+  def handle_call(:stop, _from, %__MODULE__{} = composite) do
+    {:stop, :normal, :ok, composite}
   end
 
   def handle_call(
