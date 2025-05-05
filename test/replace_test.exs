@@ -1,5 +1,5 @@
 defmodule Strom.ReplaceTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Strom.Transformer
   alias Strom.Composite
@@ -23,7 +23,7 @@ defmodule Strom.ReplaceTest do
 
   describe "delete components" do
     test "delete one transformer" do
-      stream = build_stream(Enum.to_list(1..10), 2)
+      stream = build_stream(Enum.to_list(1..10), 1)
       transformer1 = Transformer.new(:stream, &(&1 + 10), nil, chunk: 1)
       transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
 
@@ -36,7 +36,7 @@ defmodule Strom.ReplaceTest do
 
       task = Task.async(fn -> Enum.to_list(stream) end)
 
-      Process.sleep(10)
+      Process.sleep(7)
       composite = Composite.delete(composite, 0)
       components = Composite.components(composite)
       assert length(components) == 1
@@ -51,7 +51,7 @@ defmodule Strom.ReplaceTest do
     end
 
     test "delete two transformers" do
-      stream = build_stream(Enum.to_list(1..10), 2)
+      stream = build_stream(Enum.to_list(1..10), 1)
       transformer1 = Transformer.new(:stream, &(&1 + 10), nil, chunk: 1)
       transformer2 = Transformer.new(:stream, &(&1 + 20), nil, chunk: 1)
       transformer3 = Transformer.new(:stream, &(&1 + 1000), nil, chunk: 1)
@@ -65,7 +65,7 @@ defmodule Strom.ReplaceTest do
 
       task = Task.async(fn -> Enum.to_list(stream) end)
 
-      Process.sleep(10)
+      Process.sleep(7)
       composite = Composite.delete(composite, 0, 1)
       components = Composite.components(composite)
       assert length(components) == 1
@@ -86,7 +86,7 @@ defmodule Strom.ReplaceTest do
     end
 
     test "insert three components between with two others" do
-      stream = build_stream(Enum.to_list(1..10), 2)
+      stream = build_stream(Enum.to_list(1..10), 1)
       transformer1 = Transformer.new(:stream, &(&1 + 10), nil, chunk: 1)
       transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
 
@@ -103,7 +103,7 @@ defmodule Strom.ReplaceTest do
       new_transformer2 = Transformer.new(:stream, &(&1 + 200), nil, chunk: 1)
       new_transformer3 = Transformer.new(:stream, &(&1 + 300), nil, chunk: 1)
 
-      Process.sleep(10)
+      Process.sleep(7)
 
       composite =
         Composite.insert(composite, 1, [new_transformer1, new_transformer2, new_transformer3])

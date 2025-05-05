@@ -1,5 +1,5 @@
 defmodule Strom.CrashTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Strom.{Source, Source.ReadLines, Sink}
   alias Strom.{Transformer, Splitter}
