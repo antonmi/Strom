@@ -1,20 +1,11 @@
 defmodule Strom.CrashTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Strom.{Source, Source.ReadLines, Sink}
   alias Strom.{Transformer, Splitter}
   alias Strom.Composite
 
   import ExUnit.CaptureLog
-
-  setup do
-    source =
-      :stream
-      |> Source.new(ReadLines.new("test/data/numbers1.txt"), chunk: 1, buffer: 1)
-      |> Source.start()
-
-    %{source: source}
-  end
 
   def crash_fun(el) do
     if Enum.member?([3], el) do
@@ -135,7 +126,7 @@ defmodule Strom.CrashTest do
       %{stream: build_stream(Enum.to_list(1..10), 1)}
     end
 
-    test "task is killed also", %{stream: stream} do
+    test "task is alive", %{stream: stream} do
       transformer =
         :stream
         |> Transformer.new(& &1, nil, chunk: 1)
@@ -158,7 +149,7 @@ defmodule Strom.CrashTest do
           assert task_pid == list_task.pid
       end
 
-      refute Process.alive?(task_pid)
+      assert Process.alive?(task_pid)
     end
   end
 
@@ -187,7 +178,7 @@ defmodule Strom.CrashTest do
       capture_log(fn ->
         Process.exit(transformer.pid, :kill)
 
-        Process.sleep(20)
+        Process.sleep(100)
         refute Process.alive?(composite.pid)
       end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
     end
@@ -348,7 +339,12 @@ defmodule Strom.CrashTest do
         |> Sink.new(CustomWriteLines.new("test/data/output.csv"))
         |> Sink.start()
 
-      %{sink: sink}
+      source =
+        :stream
+        |> Source.new(ReadLines.new("test/data/numbers1.txt"), chunk: 1, buffer: 1)
+        |> Source.start()
+
+      %{sink: sink, source: source}
     end
 
     test "crash in sink", %{source: source, sink: sink} do

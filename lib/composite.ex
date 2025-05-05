@@ -51,11 +51,44 @@ defmodule Strom.Composite do
 
   @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{} = composite) do
+    supervisor_name = :"Supervisor_#{composite.name}"
+    component_supervisor_name = :"ComponentSupervisor_#{composite.name}"
+    task_supervisor_name = :"TaskSupervisor_#{composite.name}"
     registry_name = :"Registry_#{composite.name}"
+
+    {:ok, _supervisor_pid} =
+      DynamicSupervisor.start_child(
+        Strom.DynamicSupervisor,
+        %{
+          id: supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: supervisor_name]]},
+          restart: :temporary
+        }
+      )
+
+    {:ok, _supervisor_pid} =
+      DynamicSupervisor.start_child(
+        supervisor_name,
+        %{
+          id: component_supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: component_supervisor_name]]},
+          restart: :temporary
+        }
+      )
+
+    {:ok, _task_supervisor_pid} =
+      DynamicSupervisor.start_child(
+        supervisor_name,
+        %{
+          id: task_supervisor_name,
+          start: {DynamicSupervisor, :start_link, [[name: task_supervisor_name]]},
+          restart: :temporary
+        }
+      )
 
     {:ok, _registry_pid} =
       DynamicSupervisor.start_child(
-        Strom.DynamicSupervisor,
+        supervisor_name,
         %{
           id: registry_name,
           start: {Registry, :start_link, [[keys: :unique, name: registry_name]]},
@@ -73,13 +106,33 @@ defmodule Strom.Composite do
     %{composite | pid: pid}
   end
 
+  def component_supervisor_name(name) do
+    String.to_existing_atom("ComponentSupervisor_#{name}")
+  end
+
+  def task_supervisor_name(name) do
+    String.to_existing_atom("TaskSupervisor_#{name}")
+  end
+
+  def registry_name(name) do
+    String.to_existing_atom("Registry_#{name}")
+  end
+
   def start_link(%__MODULE__{name: name} = composite) do
     GenServer.start_link(__MODULE__, composite, name: name)
   end
 
   @impl true
-  def init(%__MODULE__{name: name} = composite) do
-    {:ok, %{composite | pid: self(), components: start_components(composite.components, name)}}
+  def init(%__MODULE__{} = composite) do
+    {:ok, %{composite | pid: self()}, {:continue, :start_components}}
+  end
+
+  @impl true
+  def handle_continue(
+        :start_components,
+        %__MODULE__{name: name, components: components} = composite
+      ) do
+    {:noreply, %{composite | components: start_components(components, name)}}
   end
 
   def components(%__MODULE__{name: name}) do
@@ -98,7 +151,7 @@ defmodule Strom.Composite do
     pid = Process.whereis(name)
     Process.unlink(pid)
     GenServer.call(name, :stop_components)
-    DynamicSupervisor.terminate_child(Strom.DynamicSupervisor, pid)
+    GenServer.call(name, :stop)
   end
 
   def start_components(components, name) do
@@ -116,6 +169,18 @@ defmodule Strom.Composite do
     |> Enum.reverse()
   end
 
+  def delete(composite, index) do
+    delete(composite, index, index)
+  end
+
+  def delete(composite, index_from, index_to) do
+    GenServer.call(composite.name, {:delete, index_from, index_to})
+  end
+
+  def insert(composite, index, new_components) do
+    GenServer.call(composite.name, {:insert, index, new_components})
+  end
+
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
     flow = reduce_flow(composite.components, init_flow)
@@ -131,12 +196,68 @@ defmodule Strom.Composite do
     {:reply, :ok, composite}
   end
 
+  def handle_call(:stop, _from, %__MODULE__{} = composite) do
+    {:stop, :normal, :ok, composite}
+  end
+
+  def handle_call(
+        {:delete, index_from, index_to},
+        _from,
+        %__MODULE__{components: components} = composite
+      ) do
+    component = Enum.at(components, index_from)
+    input_streams = Strom.GenMix.state(component.pid).input_streams
+
+    {new_components, _} =
+      Enum.reduce(components, {[], 0}, fn component, {acc, index} ->
+        if index >= index_from and index <= index_to do
+          :ok = component.__struct__.stop(component)
+          {acc, index + 1}
+        else
+          {[component | acc], index + 1}
+        end
+      end)
+
+    next_component = Enum.at(components, index_to + 1)
+    GenServer.call(next_component.pid, {:restart, component.composite, input_streams})
+
+    {:reply, composite, %{composite | components: Enum.reverse(new_components)}}
+  end
+
+  def handle_call(
+        {:insert, index, new_components},
+        _from,
+        %__MODULE__{components: components, name: name} = composite
+      )
+      when is_list(new_components) do
+    component_after = Enum.at(components, index)
+    gm_after = Strom.GenMix.state(component_after.pid)
+
+    new_components = start_components(new_components, name)
+    flow = reduce_flow(new_components, gm_after.input_streams)
+
+    GenServer.call(component_after.pid, {:restart, gm_after.composite, flow})
+
+    components =
+      components
+      |> List.insert_at(index, new_components)
+      |> List.flatten()
+
+    {:reply, composite, %{composite | components: components}}
+  end
+
   @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, composite) do
+    # component stopped normally
+    {:noreply, composite}
+  end
+
   def handle_info(
-        {:DOWN, _ref, :process, pid, _reason},
+        {:DOWN, _ref, :process, pid, _not_normal},
         %__MODULE__{components: components} = composite
       ) do
     component = Enum.find(components, fn %{pid: ^pid} -> true end)
+    Enum.each(components, & &1.__struct__.stop(&1))
     {:stop, {:component_crashed, component}, composite}
   end
 
