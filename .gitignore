@@ -30,3 +30,4 @@ strom-*.tar
 /test_data
 
 .DS_Store
+.vscode
