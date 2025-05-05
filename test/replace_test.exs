@@ -36,7 +36,7 @@ defmodule Strom.ReplaceTest do
 
       task = Task.async(fn -> Enum.to_list(stream) end)
 
-      Process.sleep(13)
+      Process.sleep(10)
       composite = Composite.delete(composite, 0)
       components = Composite.components(composite)
       assert length(components) == 1
@@ -65,7 +65,7 @@ defmodule Strom.ReplaceTest do
 
       task = Task.async(fn -> Enum.to_list(stream) end)
 
-      Process.sleep(13)
+      Process.sleep(10)
       composite = Composite.delete(composite, 0, 1)
       components = Composite.components(composite)
       assert length(components) == 1
@@ -103,7 +103,7 @@ defmodule Strom.ReplaceTest do
       new_transformer2 = Transformer.new(:stream, &(&1 + 200), nil, chunk: 1)
       new_transformer3 = Transformer.new(:stream, &(&1 + 300), nil, chunk: 1)
 
-      Process.sleep(15)
+      Process.sleep(10)
 
       composite =
         Composite.insert(composite, 1, [new_transformer1, new_transformer2, new_transformer3])
