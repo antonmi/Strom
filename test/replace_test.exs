@@ -103,7 +103,7 @@ defmodule Strom.ReplaceTest do
       new_transformer2 = Transformer.new(:stream, &(&1 + 200), nil, chunk: 1)
       new_transformer3 = Transformer.new(:stream, &(&1 + 300), nil, chunk: 1)
 
-      Process.sleep(13)
+      Process.sleep(15)
 
       composite =
         Composite.insert(composite, 1, [new_transformer1, new_transformer2, new_transformer3])

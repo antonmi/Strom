@@ -101,7 +101,7 @@ defmodule Strom.GenMix do
       stream =
         Stream.resource(
           fn ->
-            GenServer.call(gm_identifier, :run_tasks)
+            GenServer.cast(gm_identifier, :run_tasks)
             gm_identifier
           end,
           fn gm_identifier ->
@@ -204,22 +204,14 @@ defmodule Strom.GenMix do
     {:reply, {:error, :already_called}, gm}
   end
 
-  def handle_call(
-        :run_tasks,
-        {_client_pid, _ref},
-        %__MODULE__{tasks_started: true, tasks_run: false} = gm
-      ) do
-    do_run_tasks(gm.tasks, gm.accs)
-
-    {:reply, gm.pid, %{gm | tasks_run: true}}
-  end
-
-  def handle_call(:run_tasks, {_client_pid, _ref}, %__MODULE__{tasks_run: true} = gm) do
-    {:reply, gm.pid, gm}
-  end
-
-  def handle_call(:stop, _from, %__MODULE__{tasks: tasks} = gm) do
+  def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: nil} = gm) do
     send_to_tasks(tasks, :halt_task)
+    {:stop, :normal, :ok, gm}
+  end
+
+  def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: {name, ref}} = gm) do
+    send_to_tasks(tasks, :halt_task)
+    Registry.unregister(String.to_existing_atom("Registry_#{name}"), ref)
 
     {:stop, :normal, :ok, gm}
   end
@@ -260,7 +252,7 @@ defmodule Strom.GenMix do
      }}
   end
 
-  defp send_to_tasks(tasks, message) do
+  def send_to_tasks(tasks, message) do
     Enum.each(tasks, &send(elem(&1, 1), message))
   end
 
@@ -332,6 +324,16 @@ defmodule Strom.GenMix do
   end
 
   @impl true
+  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
+    do_run_tasks(gm.tasks, gm.accs)
+
+    {:noreply, %{gm | tasks_run: true}}
+  end
+
+  def handle_cast(:run_tasks, %__MODULE__{tasks_run: true} = gm) do
+    {:noreply, gm}
+  end
+
   def handle_cast(
         {:new_data, input_name, {new_data, new_acc}},
         %__MODULE__{} = gm
