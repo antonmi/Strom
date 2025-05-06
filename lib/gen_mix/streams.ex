@@ -120,7 +120,7 @@ defmodule Strom.GenMix.Streams do
       {^output_name, events} ->
         {events, gm_identifier}
 
-      {:continue_ask, gm_identifier} ->
+      :continue_ask ->
         ask_and_wait(gm_identifier, output_name)
     end
   end

@@ -49,7 +49,7 @@ defmodule Strom.GenMix do
         nil ->
           {:via, PartitionSupervisor, {Strom.ComponentSupervisor, partition_key}}
 
-        {name, _} ->
+        name ->
           Composite.component_supervisor_name(name)
       end
 
@@ -63,21 +63,7 @@ defmodule Strom.GenMix do
   end
 
   def start_link(%__MODULE__{} = gm) do
-    case name_or_pid(gm) do
-      nil ->
-        GenServer.start_link(__MODULE__, gm)
-
-      registry_name ->
-        GenServer.start_link(__MODULE__, gm, name: registry_name)
-    end
-  end
-
-  def name_or_pid(%{pid: pid, composite: nil}), do: pid
-
-  def name_or_pid(%{composite: composite}) do
-    {composite_name, ref} = composite
-    registry_name = Composite.registry_name(composite_name)
-    {:via, Registry, {registry_name, ref}}
+    GenServer.start_link(__MODULE__, gm)
   end
 
   @impl true
@@ -109,19 +95,12 @@ defmodule Strom.GenMix do
     new_tasks = Tasks.start_tasks(input_streams, gm)
     tasks = Map.merge(gm.tasks, new_tasks)
 
-    {:reply, {:ok, name_or_pid(gm)},
+    {:reply, {:ok, gm.pid},
      %{gm | tasks_started: true, tasks: tasks, input_streams: input_streams}}
   end
 
-  def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: nil} = gm) do
+  def handle_call(:stop, _from, %__MODULE__{tasks: tasks} = gm) do
     Tasks.send_to_tasks(tasks, :halt_task)
-    {:stop, :normal, :ok, gm}
-  end
-
-  def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: {name, ref}} = gm) do
-    Tasks.send_to_tasks(tasks, :halt_task)
-    Registry.unregister(Composite.registry_name(name), ref)
-
     {:stop, :normal, :ok, gm}
   end
 
@@ -130,34 +109,38 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:restart, {name, new_ref}, new_input_streams},
+        {:reassign_tasks, new_gm_pid},
         _from,
-        %__MODULE__{composite: {name, ref}} = gm
+        %__MODULE__{tasks: tasks} = gm
       ) do
-    gm =
-      if new_ref != ref do
-        registry_name = Composite.registry_name(name)
-        {:ok, _pid} = Registry.register(registry_name, new_ref, nil)
-        %{gm | composite: {name, new_ref}}
-      else
-        gm
-      end
+    Tasks.send_to_tasks(tasks, {:new_gm_pid, new_gm_pid})
+    {:reply, tasks, gm}
+  end
 
+  def handle_call(
+        {:restart, new_input_streams, tasks_from_another_gm},
+        _from,
+        %__MODULE__{} = gm
+      ) do
     Tasks.send_to_tasks(gm.tasks, :halt_task)
 
-    tasks =
+    Enum.each(Map.keys(tasks_from_another_gm), &Process.monitor/1)
+    Tasks.send_to_tasks(tasks_from_another_gm, :halt_task)
+
+    new_tasks =
       new_input_streams
       |> Tasks.start_tasks(gm)
       |> Tasks.run_tasks(gm.accs)
 
-    Streams.send_to_clients(gm.asks, {:continue_ask, name_or_pid(gm)})
+    Streams.send_to_clients(gm.asks, :continue_ask)
+
+    all_tasks = gm.tasks |> Map.merge(new_tasks) |> Map.merge(tasks_from_another_gm)
 
     {:reply, gm,
      %{
        gm
-       | composite: {name, new_ref},
-         input_streams: new_input_streams,
-         tasks: tasks
+       | input_streams: new_input_streams,
+         tasks: all_tasks
      }}
   end
 

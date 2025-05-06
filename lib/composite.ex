@@ -62,8 +62,6 @@ defmodule Strom.Composite do
 
   def task_supervisor_name(name), do: :"TaskSupervisor_#{name}"
 
-  def registry_name(name), do: :"Registry_#{name}"
-
   def start_link(%__MODULE__{name: name} = composite) do
     GenServer.start_link(__MODULE__, composite, name: name)
   end

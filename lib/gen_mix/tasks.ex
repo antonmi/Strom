@@ -9,7 +9,7 @@ defmodule Strom.GenMix.Tasks do
       task_pid =
         run_stream_in_task(
           {name, stream},
-          {GenMix.name_or_pid(gm), gm.outputs, gm.chunk},
+          {gm.pid, gm.outputs, gm.chunk},
           gm.process_chunk,
           gm.composite
         )
@@ -68,7 +68,7 @@ defmodule Strom.GenMix.Tasks do
     task_pid =
       run_stream_in_task(
         {name, stream},
-        {GenMix.name_or_pid(gm), gm.outputs, gm.chunk},
+        {gm.pid, gm.outputs, gm.chunk},
         gm.process_chunk,
         gm.composite
       )
@@ -98,7 +98,7 @@ defmodule Strom.GenMix.Tasks do
          {name, stream},
          {gm_identifier, outputs, chunk},
          process_chunk,
-         {composite_name, _gm_ref}
+         composite_name
        ) do
     supervisor_name = Composite.task_supervisor_name(composite_name)
 
@@ -120,7 +120,7 @@ defmodule Strom.GenMix.Tasks do
     task_pid
   end
 
-  defp task_function({name, stream}, {gm_identifier, outputs, chunk}, process_chunk) do
+  defp task_function({name, stream}, {gm_pid, outputs, chunk}, process_chunk) do
     fn ->
       acc =
         receive do
@@ -131,25 +131,29 @@ defmodule Strom.GenMix.Tasks do
       stream
       |> Stream.chunk_every(chunk)
       |> Stream.transform(
-        fn -> acc end,
-        fn chunk, acc ->
+        fn -> {gm_pid, acc} end,
+        fn chunk, {gm_pid, acc} ->
           case process_chunk.(name, chunk, outputs, acc) do
             {new_data, true, new_acc} ->
-              GenServer.cast(gm_identifier, {:new_data, {self(), name}, {new_data, new_acc}})
+              GenServer.cast(gm_pid, {:new_data, {self(), name}, {new_data, new_acc}})
+              Process.info(self(), :messages)
 
               receive do
                 :continue_task ->
-                  {[], new_acc}
+                  {[], {gm_pid, new_acc}}
 
                 :halt_task ->
-                  {:halt, new_acc}
+                  {:halt, {gm_pid, new_acc}}
+
+                {:new_gm_pid, new_gm_pid} ->
+                  {[], {new_gm_pid, new_acc}}
               end
 
             {_new_data, false, new_acc} ->
-              {[], new_acc}
+              {[], {gm_pid, new_acc}}
           end
         end,
-        fn acc -> acc end
+        fn {gm_pid, acc} -> {gm_pid, acc} end
       )
       |> Stream.run()
 

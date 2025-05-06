@@ -9,7 +9,6 @@ defmodule Strom.Composite.StartStop do
     supervisor_name = Composite.supervisor_name(composite.name)
     component_supervisor_name = Composite.component_supervisor_name(composite.name)
     task_supervisor_name = Composite.task_supervisor_name(composite.name)
-    registry_name = Composite.registry_name(composite.name)
 
     {:ok, _supervisor_pid} =
       DynamicSupervisor.start_child(
@@ -41,16 +40,6 @@ defmodule Strom.Composite.StartStop do
         }
       )
 
-    {:ok, _registry_pid} =
-      DynamicSupervisor.start_child(
-        supervisor_name,
-        %{
-          id: registry_name,
-          start: {Registry, :start_link, [[keys: :unique, name: registry_name]]},
-          restart: :temporary
-        }
-      )
-
     {:ok, pid} =
       DynamicSupervisor.start_child(
         Strom.DynamicSupervisor,
@@ -75,7 +64,7 @@ defmodule Strom.Composite.StartStop do
         [Renamer.start(component) | acc]
 
       %{__struct__: module} = component, acc ->
-        component = %{component | composite: {name, make_ref()}}
+        component = %{component | composite: name}
         component = module.start(component)
         Process.monitor(component.pid)
         [component | acc]

@@ -43,7 +43,7 @@ defmodule Strom.ReplaceTest do
 
       list = Task.await(task)
       # one event can be lost, I'll address this later
-      assert length(list) >= 9
+      assert length(list) == 10
       assert [11 | _] = list
       assert [10 | _] = Enum.reverse(list)
 
@@ -72,7 +72,7 @@ defmodule Strom.ReplaceTest do
 
       list = Task.await(task)
       # one event can be lost, I'll address this later
-      assert length(list) >= 9
+      assert length(list) == 10
       assert [1031 | _] = list
       assert [1010 | _] = Enum.reverse(list)
     end
