@@ -10,14 +10,7 @@ defmodule Strom.GenMix.Streams do
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    gm_identifier =
-      case GenServer.call(gm.pid, {:start_tasks, input_streams}) do
-        {:ok, gm_pid} ->
-          gm_pid
-
-        {:error, :already_called} ->
-          raise "Compoment has been already called"
-      end
+    {:ok, gm_identifier} = GenServer.call(gm.pid, {:start_tasks, input_streams})
 
     sub_flow = build_sub_flow(gm.outputs, gm_identifier)
 
@@ -47,17 +40,12 @@ defmodule Strom.GenMix.Streams do
     end)
   end
 
-  def continue_or_wait(name, {tasks, waiting_tasks}, {total_count, buffer}) do
-    case {tasks[name], total_count < buffer} do
-      {nil, _} ->
-        waiting_tasks
-
-      {task_pid, true} ->
-        send(task_pid, :continue_task)
-        waiting_tasks
-
-      {task_pid, false} ->
-        Map.put(waiting_tasks, name, task_pid)
+  def continue_or_wait({task_pid, name}, {_tasks, waiting_tasks}, {total_count, buffer}) do
+    if total_count < buffer do
+      send(task_pid, :continue_task)
+      waiting_tasks
+    else
+      Map.put(waiting_tasks, task_pid, name)
     end
   end
 

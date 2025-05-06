@@ -139,7 +139,8 @@ defmodule Strom.CrashTest do
         end)
 
       Process.sleep(5)
-      %{tasks: %{stream: task_pid}} = :sys.get_state(transformer.pid)
+      %{tasks: tasks} = :sys.get_state(transformer.pid)
+      task_pid = hd(Map.keys(tasks))
       Process.exit(transformer.pid, :kill)
 
       try do

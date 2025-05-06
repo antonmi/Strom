@@ -34,6 +34,9 @@ defmodule Strom.Composite.Manipulations do
 
     GenServer.call(component_after.pid, {:restart, gm_after.composite, flow})
 
+    # take only streams that are in inputs for the component_after
+    # return the flow
+
     components
     |> List.insert_at(index, new_components)
     |> List.flatten()

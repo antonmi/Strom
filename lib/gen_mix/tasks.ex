@@ -14,12 +14,12 @@ defmodule Strom.GenMix.Tasks do
           gm.composite
         )
 
-      Map.put(acc, name, task_pid)
+      Map.put(acc, task_pid, name)
     end)
   end
 
   def run_tasks(tasks, accs) do
-    Enum.each(tasks, fn {name, task_pid} ->
+    Enum.each(tasks, fn {task_pid, name} ->
       send(task_pid, {:run_task, accs[name]})
     end)
 
@@ -27,45 +27,42 @@ defmodule Strom.GenMix.Tasks do
   end
 
   def send_to_tasks(tasks, message) do
-    Enum.each(tasks, &send(elem(&1, 1), message))
+    Enum.each(tasks, &send(elem(&1, 0), message))
   end
 
-  def handle_normal_task_stop(ref, pid, gm) do
+  def handle_normal_task_stop(ref, task_pid, gm) do
     Process.demonitor(ref, [:flush])
 
-    case Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end) do
-      nil ->
-        # from another component
-        {:noreply, gm}
+    if gm.tasks[task_pid] do
+      {tasks, waiting_tasks} =
+        if gm.no_wait do
+          terminate_tasks(gm.tasks)
+          {%{}, %{}}
+        else
+          {Map.delete(gm.tasks, task_pid), Map.delete(gm.waiting_tasks, task_pid)}
+        end
 
-      {input_name, _} ->
-        {tasks, waiting_tasks} =
-          if gm.no_wait do
-            terminate_tasks(gm.tasks)
-            {%{}, %{}}
-          else
-            {Map.delete(gm.tasks, input_name), Map.delete(gm.waiting_tasks, input_name)}
-          end
+      asks =
+        case map_size(tasks) do
+          0 ->
+            Enum.each(gm.asks, fn {output_name, client_pid} ->
+              send(client_pid, {output_name, :done})
+            end)
 
-        asks =
-          case map_size(tasks) do
-            0 ->
-              Enum.each(gm.asks, fn {output_name, client_pid} ->
-                send(client_pid, {output_name, :done})
-              end)
+            %{}
 
-              %{}
+          _more ->
+            gm.asks
+        end
 
-            _more ->
-              gm.asks
-          end
-
-        {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+      {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+    else
+      {:noreply, gm}
     end
   end
 
   def handle_task_error(%GenMix{} = gm, pid) do
-    {name, _} = Enum.find(gm.tasks, fn {_name, task_pid} -> task_pid == pid end)
+    {_, name} = Enum.find(gm.tasks, fn {task_pid, _name} -> task_pid == pid end)
     stream = Map.get(gm.input_streams, name)
 
     task_pid =
@@ -77,12 +74,12 @@ defmodule Strom.GenMix.Tasks do
       )
 
     send(task_pid, {:run_task, gm.accs[name]})
-    {name, task_pid}
+    {task_pid, name}
   end
 
   def terminate_tasks(tasks) do
     Enum.each(
-      Map.values(tasks),
+      Map.keys(tasks),
       &DynamicSupervisor.terminate_child(Strom.TaskSupervisor, &1)
     )
   end
@@ -138,7 +135,7 @@ defmodule Strom.GenMix.Tasks do
         fn chunk, acc ->
           case process_chunk.(name, chunk, outputs, acc) do
             {new_data, true, new_acc} ->
-              GenServer.cast(gm_identifier, {:new_data, name, {new_data, new_acc}})
+              GenServer.cast(gm_identifier, {:new_data, {self(), name}, {new_data, new_acc}})
 
               receive do
                 :continue_task ->

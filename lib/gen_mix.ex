@@ -122,7 +122,7 @@ defmodule Strom.GenMix do
         %__MODULE__{tasks_started: true} = gm
       )
       when is_map(input_streams) do
-    {:reply, {:error, :already_called}, gm}
+    {:reply, {:ok, name_or_pid(gm)}, gm}
   end
 
   def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: nil} = gm) do
@@ -185,13 +185,17 @@ defmodule Strom.GenMix do
   end
 
   def handle_cast(
-        {:new_data, input_name, {new_data, new_acc}},
+        {:new_data, {task_pid, input_name}, {new_data, new_acc}},
         %__MODULE__{} = gm
       ) do
     {all_data, remaining_asks, total_count} = Streams.process_new_data(new_data, gm.data, gm.asks)
 
     waiting_tasks =
-      Streams.continue_or_wait(input_name, {gm.tasks, gm.waiting_tasks}, {total_count, gm.buffer})
+      Streams.continue_or_wait(
+        {task_pid, input_name},
+        {gm.tasks, gm.waiting_tasks},
+        {total_count, gm.buffer}
+      )
 
     {:noreply,
      %{
@@ -221,7 +225,13 @@ defmodule Strom.GenMix do
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, gm) do
     # The task failed
-    {name, task_pid} = Tasks.handle_task_error(gm, pid)
-    {:noreply, %{gm | tasks: Map.put(gm.tasks, name, task_pid)}}
+    {task_pid, name} = Tasks.handle_task_error(gm, pid)
+
+    tasks =
+      gm.tasks
+      |> Map.delete(pid)
+      |> Map.put(task_pid, name)
+
+    {:noreply, %{gm | tasks: tasks}}
   end
 end
