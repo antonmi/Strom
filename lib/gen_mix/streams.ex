@@ -122,6 +122,14 @@ defmodule Strom.GenMix.Streams do
 
       :continue_ask ->
         ask_and_wait(gm_identifier, output_name)
+
+      :halt_task ->
+        # message for the task
+        IO.inspect("message for task :halt_task in #{inspect(self())}")
+        {:halt, gm_identifier}
+
+      message ->
+        raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
     end
   end
 end

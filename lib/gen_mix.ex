@@ -22,6 +22,7 @@ defmodule Strom.GenMix do
             tasks: %{},
             tasks_started: false,
             tasks_run: false,
+            stopping: false,
             asks: %{},
             data: %{},
             data_size: 0,
@@ -100,8 +101,12 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(:stop, _from, %__MODULE__{tasks: tasks} = gm) do
-    Tasks.send_to_tasks(tasks, :halt_task)
-    {:stop, :normal, :ok, gm}
+    if map_size(tasks) == 0 do
+      {:stop, :normal, :ok, gm}
+    else
+      Tasks.send_to_tasks(tasks, :halt_task)
+      {:reply, :ok, %{gm | stopping: true}}
+    end
   end
 
   def handle_call(:state, _from, %__MODULE__{} = gm) do
@@ -109,32 +114,19 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:reassign_tasks, new_gm_pid},
-        _from,
-        %__MODULE__{tasks: tasks} = gm
-      ) do
-    Tasks.send_to_tasks(tasks, {:new_gm_pid, new_gm_pid})
-    {:reply, tasks, gm}
-  end
-
-  def handle_call(
-        {:restart, new_input_streams, tasks_from_another_gm},
+        {:restart, new_input_streams},
         _from,
         %__MODULE__{} = gm
       ) do
-    Tasks.send_to_tasks(gm.tasks, :halt_task)
-
-    Enum.each(Map.keys(tasks_from_another_gm), &Process.monitor/1)
-    Tasks.send_to_tasks(tasks_from_another_gm, :halt_task)
-
     new_tasks =
       new_input_streams
       |> Tasks.start_tasks(gm)
       |> Tasks.run_tasks(gm.accs)
 
     Streams.send_to_clients(gm.asks, :continue_ask)
+    Tasks.send_to_tasks(gm.tasks, :halt_task)
 
-    all_tasks = gm.tasks |> Map.merge(new_tasks) |> Map.merge(tasks_from_another_gm)
+    all_tasks = gm.tasks |> Map.merge(new_tasks)
 
     {:reply, gm,
      %{
@@ -145,10 +137,14 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true} = gm) do
+  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
     Tasks.run_tasks(gm.tasks, gm.accs)
 
     {:noreply, %{gm | tasks_run: true}}
+  end
+
+  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: true} = gm) do
+    {:noreply, gm}
   end
 
   def handle_cast(

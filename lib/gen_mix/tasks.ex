@@ -33,31 +33,41 @@ defmodule Strom.GenMix.Tasks do
   def handle_normal_task_stop(ref, task_pid, gm) do
     Process.demonitor(ref, [:flush])
 
-    if gm.tasks[task_pid] do
-      {tasks, waiting_tasks} =
-        if gm.no_wait do
-          terminate_tasks(gm.tasks)
-          {%{}, %{}}
-        else
-          {Map.delete(gm.tasks, task_pid), Map.delete(gm.waiting_tasks, task_pid)}
-        end
+    {tasks, waiting_tasks} =
+      if gm.no_wait do
+        terminate_tasks(gm.tasks)
+        {%{}, %{}}
+      else
+        {Map.delete(gm.tasks, task_pid), Map.delete(gm.waiting_tasks, task_pid)}
+      end
 
-      asks =
-        case map_size(tasks) do
-          0 ->
-            Enum.each(gm.asks, fn {client_pid, output_name} ->
-              send(client_pid, {output_name, :done})
-            end)
+    asks =
+      case map_size(tasks) do
+        0 ->
+          Enum.each(gm.asks, fn {client_pid, output_name} ->
+            send(client_pid, {output_name, :done})
+          end)
 
-            %{}
+          %{}
 
-          _more ->
-            gm.asks
-        end
+        _more ->
+          gm.asks
+      end
 
-      {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
+    if gm.stopping and map_size(tasks) == 0 do
+      {:messages, messages} = Process.info(self(), :messages)
+
+      Enum.each(messages, fn
+        {:"$gen_cast", {:ask, output_name, client_pid}} ->
+          send(client_pid, {output_name, :done})
+
+        _message ->
+          :do_nothing
+      end)
+
+      {:stop, :normal, %{gm | tasks: %{}}}
     else
-      {:noreply, gm}
+      {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
     end
   end
 
@@ -136,7 +146,6 @@ defmodule Strom.GenMix.Tasks do
           case process_chunk.(name, chunk, outputs, acc) do
             {new_data, true, new_acc} ->
               GenServer.cast(gm_pid, {:new_data, {self(), name}, {new_data, new_acc}})
-              Process.info(self(), :messages)
 
               receive do
                 :continue_task ->
@@ -145,8 +154,9 @@ defmodule Strom.GenMix.Tasks do
                 :halt_task ->
                   {:halt, {gm_pid, new_acc}}
 
-                {:new_gm_pid, new_gm_pid} ->
-                  {[], {new_gm_pid, new_acc}}
+                message ->
+                  raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
+                  {[], {gm_pid, new_acc}}
               end
 
             {_new_data, false, new_acc} ->

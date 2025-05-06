@@ -3,12 +3,40 @@ defmodule Strom.GenMixTest do
 
   alias Strom.GenMix
 
+  def build_stream(list, sleep \\ 0) do
+    Stream.resource(
+      fn -> list end,
+      fn
+        [] ->
+          {:halt, []}
+
+        [hd | tl] ->
+          Process.sleep(sleep)
+          {[hd], tl}
+      end,
+      fn list -> list end
+    )
+  end
+
   test "start and stop" do
     gen_mix = GenMix.start(%GenMix{})
     assert Process.alive?(gen_mix.pid)
     :ok = GenMix.stop(gen_mix)
     refute Process.alive?(gen_mix.pid)
   end
+
+  # test "stop will wait for tasks to finish" do
+  #   stream = build_stream(Enum.to_list(1..10), 1)
+  #   gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}, opts: [chunk: 1]})
+  #   %{stream: stream} = GenMix.call(%{stream: stream}, gen_mix)
+  #   task = Task.async(fn -> Enum.to_list(stream) end)
+  #   Process.sleep(5)
+  #   Task.async(fn -> :ok = GenMix.stop(gen_mix) end)
+  #   list = Task.await(task)
+  #   assert hd(list) == 1
+  #   Process.sleep(10)
+  #   refute Process.alive?(gen_mix.pid)
+  # end
 
   test "call one by one" do
     flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10], numbers3: [0, 0, 0, 0, 0]}
@@ -142,21 +170,6 @@ defmodule Strom.GenMixTest do
 
   def factorial(n) do
     Enum.reduce(1..n, 1, &(&1 * &2))
-  end
-
-  def build_stream(list, sleep \\ 0) do
-    Stream.resource(
-      fn -> list end,
-      fn
-        [] ->
-          {:halt, []}
-
-        [hd | tl] ->
-          Process.sleep(sleep)
-          {[hd], tl}
-      end,
-      fn [] -> [] end
-    )
   end
 
   test "two streams with different rates, be sure that quick stream doesn't block the slow one" do

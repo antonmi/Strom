@@ -8,22 +8,20 @@ defmodule Strom.Composite.Manipulations do
   def delete(components, index_from, index_to) do
     {new_components, _} =
       Enum.reduce(components, {[], 0}, fn component, {acc, index} ->
-        if index >= index_from and index <= index_to do
-          if index == index_from do
+        cond do
+          index == index_from ->
             next_component = Enum.at(components, index_to + 1)
             input_streams = Strom.GenMix.state(component.pid).input_streams
-
-            tasks = GenServer.call(component.pid, {:reassign_tasks, next_component.pid})
-
-            GenServer.call(next_component.pid, {:restart, input_streams, tasks})
             :ok = component.__struct__.stop(component)
-          else
-            :ok = component.__struct__.stop(component)
-          end
+            GenServer.call(next_component.pid, {:restart, input_streams})
+            {acc, index + 1}
 
-          {acc, index + 1}
-        else
-          {[component | acc], index + 1}
+          index > index_from and index <= index_to ->
+            :ok = component.__struct__.stop(component)
+            {acc, index + 1}
+
+          true ->
+            {[component | acc], index + 1}
         end
       end)
 
@@ -37,7 +35,7 @@ defmodule Strom.Composite.Manipulations do
     new_components = StartStop.start_components(new_components, name)
     flow = Composite.reduce_flow(new_components, gm_after.input_streams)
 
-    GenServer.call(component_after.pid, {:restart, flow, %{}})
+    GenServer.call(component_after.pid, {:restart, flow})
 
     # TODO
     # take only streams that are in inputs for the component_after

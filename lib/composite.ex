@@ -150,8 +150,9 @@ defmodule Strom.Composite do
   end
 
   @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, :normal}, composite) do
+  def handle_info({:DOWN, ref, :process, _pid, :normal}, composite) do
     # component stopped normally
+    Process.demonitor(ref, [:flush])
     {:noreply, composite}
   end
 
