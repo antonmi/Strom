@@ -45,7 +45,7 @@ defmodule Strom.GenMix.Tasks do
       asks =
         case map_size(tasks) do
           0 ->
-            Enum.each(gm.asks, fn {output_name, client_pid} ->
+            Enum.each(gm.asks, fn {client_pid, output_name} ->
               send(client_pid, {output_name, :done})
             end)
 

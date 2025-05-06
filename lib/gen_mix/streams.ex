@@ -23,17 +23,20 @@ defmodule Strom.GenMix.Streams do
     Enum.reduce(new_data, {gm_data, asks, 0}, fn {output_name, data}, {all_data, asks, count} ->
       data_for_output = Map.get(all_data, output_name, []) ++ data
 
+      asks_for_output = Enum.filter(asks, fn {_, output} -> output == output_name end)
+
       {data_for_output, asks} =
-        case {data_for_output, asks[output_name]} do
+        case {data_for_output, asks_for_output} do
           {[], _} ->
             {data_for_output, asks}
 
-          {data_for_output, nil} ->
+          {data_for_output, []} ->
             {data_for_output, asks}
 
-          {data_for_output, client_pid} ->
+          {data_for_output, asks_for_output} ->
+            {client_pid, output_name} = Enum.random(asks_for_output)
             send(client_pid, {output_name, data_for_output})
-            {[], Map.delete(asks, output_name)}
+            {[], Map.delete(asks, client_pid)}
         end
 
       {Map.put(all_data, output_name, data_for_output), asks, count + length(data_for_output)}
@@ -55,15 +58,15 @@ defmodule Strom.GenMix.Streams do
         [] ->
           if map_size(gm.tasks) == 0 do
             send(client_pid, {output_name, :done})
-            {Map.delete(gm.asks, output_name), gm.data, 0}
+            {Map.delete(gm.asks, client_pid), gm.data, 0}
           else
-            {Map.put(gm.asks, output_name, client_pid), gm.data, 0}
+            {Map.put(gm.asks, client_pid, output_name), gm.data, 0}
           end
 
         events ->
           send(client_pid, {output_name, events})
 
-          {Map.delete(gm.asks, output_name), Map.put(gm.data, output_name, []), length(events)}
+          {Map.delete(gm.asks, client_pid), Map.put(gm.data, output_name, []), length(events)}
       end
 
     new_data_size = gm.data_size - data_size_for_output
@@ -86,7 +89,7 @@ defmodule Strom.GenMix.Streams do
   end
 
   def send_to_clients(asks, message) do
-    Enum.each(asks, &send(elem(&1, 1), message))
+    Enum.each(asks, &send(elem(&1, 0), message))
   end
 
   defp build_sub_flow(outputs, gm_identifier) do

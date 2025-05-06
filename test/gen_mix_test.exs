@@ -188,12 +188,22 @@ defmodule Strom.GenMixTest do
     assert length(slow_list) == 10
   end
 
-  test "call to the gen_mix that was already called" do
-    gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}})
-    GenMix.call(%{stream: [1, 2, 3]}, gen_mix)
+  describe "call gen_mix several times" do
+    test "call to the gen_mix that was already called" do
+      stream1 = build_stream(Enum.to_list(1..10), 1)
+      gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}})
+      %{stream: stream} = GenMix.call(%{stream: stream1}, gen_mix)
 
-    assert_raise RuntimeError, "Compoment has been already called", fn ->
-      GenMix.call(%{stream: [4, 5, 6]}, gen_mix)
+      task1 = Task.async(fn -> Enum.to_list(stream) end)
+
+      stream2 = build_stream(Enum.to_list(1..10), 1)
+      %{stream: stream} = GenMix.call(%{stream: stream2}, gen_mix)
+      task2 = Task.async(fn -> Enum.to_list(stream) end)
+
+      all_events = Task.await_many([task1, task2]) |> List.flatten() |> Enum.sort()
+
+      assert all_events ==
+               [Enum.to_list(1..10), Enum.to_list(1..10)] |> List.flatten() |> Enum.sort()
     end
   end
 end

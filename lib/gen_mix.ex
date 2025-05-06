@@ -107,23 +107,24 @@ defmodule Strom.GenMix do
   def handle_call(
         {:start_tasks, input_streams},
         _from,
-        %__MODULE__{tasks_started: false} = gm
+        %__MODULE__{tasks_started: _} = gm
       )
       when is_map(input_streams) do
-    tasks = Tasks.start_tasks(input_streams, gm)
+    new_tasks = Tasks.start_tasks(input_streams, gm)
+    tasks = Map.merge(gm.tasks, new_tasks)
 
     {:reply, {:ok, name_or_pid(gm)},
      %{gm | tasks_started: true, tasks: tasks, input_streams: input_streams}}
   end
 
-  def handle_call(
-        {:start_tasks, input_streams},
-        _from,
-        %__MODULE__{tasks_started: true} = gm
-      )
-      when is_map(input_streams) do
-    {:reply, {:ok, name_or_pid(gm)}, gm}
-  end
+  # def handle_call(
+  #       {:start_tasks, input_streams},
+  #       _from,
+  #       %__MODULE__{tasks_started: true} = gm
+  #     )
+  #     when is_map(input_streams) do
+  #   {:reply, {:ok, name_or_pid(gm)}, gm}
+  # end
 
   def handle_call(:stop, _from, %__MODULE__{tasks: tasks, composite: nil} = gm) do
     Tasks.send_to_tasks(tasks, :halt_task)
@@ -174,15 +175,15 @@ defmodule Strom.GenMix do
   end
 
   @impl true
-  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
+  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: _} = gm) do
     Tasks.run_tasks(gm.tasks, gm.accs)
 
     {:noreply, %{gm | tasks_run: true}}
   end
 
-  def handle_cast(:run_tasks, %__MODULE__{tasks_run: true} = gm) do
-    {:noreply, gm}
-  end
+  # def handle_cast(:run_tasks, %__MODULE__{tasks_run: true} = gm) do
+  # {:noreply, gm}
+  # end
 
   def handle_cast(
         {:new_data, {task_pid, input_name}, {new_data, new_acc}},
