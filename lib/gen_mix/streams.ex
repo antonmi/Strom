@@ -19,9 +19,51 @@ defmodule Strom.GenMix.Streams do
     |> Map.merge(sub_flow)
   end
 
-  def process_new_data(new_data, gm_data, asks) do
-    Enum.reduce(new_data, {gm_data, asks, 0}, fn {output_name, data}, {all_data, asks, count} ->
-      data_for_output = Map.get(all_data, output_name, []) ++ data
+  defp build_sub_flow(outputs, gm_identifier) do
+    Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
+      stream =
+        Stream.resource(
+          fn ->
+            GenServer.cast(gm_identifier, {:run_tasks, self()})
+            gm_identifier
+          end,
+          fn gm_identifier ->
+            ask_and_wait(gm_identifier, output_name)
+          end,
+          fn gm_identifier -> gm_identifier end
+        )
+
+      Map.put(flow, output_name, stream)
+    end)
+  end
+
+  defp ask_and_wait(gm_identifier, output_name) do
+    GenServer.cast(gm_identifier, {:ask, output_name, self()})
+
+    receive do
+      {^output_name, :done} ->
+        {:halt, gm_identifier}
+
+      {^output_name, events} ->
+        {events, gm_identifier}
+
+      :halt_client ->
+        {:halt, gm_identifier}
+
+      :halt_task ->
+        # it's a message to the task,
+        # for now, ignoring, but might be the case when "send(self(), :halt_task)" is needed
+        # send(self(), :halt_task)
+        {[], gm_identifier}
+
+      message ->
+        raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
+    end
+  end
+
+  def process_new_data(new_data, outputs, gm_data, asks) do
+    Enum.reduce(outputs, {gm_data, asks, 0}, fn {output_name, _fun}, {all_data, asks, count} ->
+      data_for_output = Map.get(all_data, output_name, []) ++ Map.get(new_data, output_name, [])
 
       asks_for_output = Enum.filter(asks, fn {_, output} -> output == output_name end)
 
@@ -34,6 +76,7 @@ defmodule Strom.GenMix.Streams do
             {data_for_output, asks}
 
           {data_for_output, asks_for_output} ->
+            # if there are multiple clients for the same output, we send the data to a random client
             {client_pid, output_name} = Enum.random(asks_for_output)
             send(client_pid, {output_name, data_for_output})
             {[], Map.delete(asks, client_pid)}
@@ -90,46 +133,5 @@ defmodule Strom.GenMix.Streams do
 
   def send_to_clients(asks, message) do
     Enum.each(asks, &send(elem(&1, 0), message))
-  end
-
-  defp build_sub_flow(outputs, gm_identifier) do
-    Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
-      stream =
-        Stream.resource(
-          fn ->
-            GenServer.cast(gm_identifier, :run_tasks)
-            gm_identifier
-          end,
-          fn gm_identifier ->
-            ask_and_wait(gm_identifier, output_name)
-          end,
-          fn gm_identifier -> gm_identifier end
-        )
-
-      Map.put(flow, output_name, stream)
-    end)
-  end
-
-  defp ask_and_wait(gm_identifier, output_name) do
-    GenServer.cast(gm_identifier, {:ask, output_name, self()})
-
-    receive do
-      {^output_name, :done} ->
-        {:halt, gm_identifier}
-
-      {^output_name, events} ->
-        {events, gm_identifier}
-
-      :continue_ask ->
-        ask_and_wait(gm_identifier, output_name)
-
-      :halt_task ->
-        # message for the task
-        IO.inspect("message for task :halt_task in #{inspect(self())}")
-        {:halt, gm_identifier}
-
-      message ->
-        raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
-    end
   end
 end

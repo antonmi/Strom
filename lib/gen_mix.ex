@@ -20,6 +20,7 @@ defmodule Strom.GenMix do
             no_wait: false,
             input_streams: %{},
             tasks: %{},
+            clients: MapSet.new(),
             tasks_started: false,
             tasks_run: false,
             stopping: false,
@@ -114,7 +115,7 @@ defmodule Strom.GenMix do
   end
 
   def handle_call(
-        {:restart, new_input_streams},
+        {:run_new_tasks, new_input_streams},
         _from,
         %__MODULE__{} = gm
       ) do
@@ -123,35 +124,37 @@ defmodule Strom.GenMix do
       |> Tasks.start_tasks(gm)
       |> Tasks.run_tasks(gm.accs)
 
-    Streams.send_to_clients(gm.asks, :continue_ask)
-    Tasks.send_to_tasks(gm.tasks, :halt_task)
-
-    all_tasks = gm.tasks |> Map.merge(new_tasks)
-
     {:reply, gm,
      %{
        gm
        | input_streams: new_input_streams,
-         tasks: all_tasks
+         tasks: Map.merge(gm.tasks, new_tasks)
      }}
   end
 
   @impl true
-  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: false} = gm) do
+  def handle_cast(
+        {:run_tasks, client_pid},
+        %__MODULE__{tasks_started: true, tasks_run: false} = gm
+      ) do
     Tasks.run_tasks(gm.tasks, gm.accs)
 
-    {:noreply, %{gm | tasks_run: true}}
+    {:noreply, %{gm | tasks_run: true, clients: MapSet.put(gm.clients, client_pid)}}
   end
 
-  def handle_cast(:run_tasks, %__MODULE__{tasks_started: true, tasks_run: true} = gm) do
-    {:noreply, gm}
+  def handle_cast(
+        {:run_tasks, client_pid},
+        %__MODULE__{tasks_started: true, tasks_run: true} = gm
+      ) do
+    {:noreply, %{gm | clients: MapSet.put(gm.clients, client_pid)}}
   end
 
   def handle_cast(
         {:new_data, {task_pid, input_name}, {new_data, new_acc}},
         %__MODULE__{} = gm
       ) do
-    {all_data, remaining_asks, total_count} = Streams.process_new_data(new_data, gm.data, gm.asks)
+    {all_data, remaining_asks, total_count} =
+      Streams.process_new_data(new_data, gm.outputs, gm.data, gm.asks)
 
     waiting_tasks =
       Streams.continue_or_wait(

@@ -44,6 +44,7 @@ defmodule Strom.GenMix.Tasks do
     asks =
       case map_size(tasks) do
         0 ->
+          # no tasks, sending the :done message to all asks
           Enum.each(gm.asks, fn {client_pid, output_name} ->
             send(client_pid, {output_name, :done})
           end)
@@ -54,16 +55,11 @@ defmodule Strom.GenMix.Tasks do
           gm.asks
       end
 
-    if gm.stopping and map_size(tasks) == 0 do
-      {:messages, messages} = Process.info(self(), :messages)
-
-      Enum.each(messages, fn
-        {:"$gen_cast", {:ask, output_name, client_pid}} ->
-          send(client_pid, {output_name, :done})
-
-        _message ->
-          :do_nothing
-      end)
+    # handling the "stopping" case
+    if gm.stopping and map_size(tasks) == 0 and gm.data_size == 0 do
+      # sending the halt_client message to all the seen clients
+      # tasks are already stopped a this moment
+      Enum.each(gm.clients, &send(&1, :halt_client))
 
       {:stop, :normal, %{gm | tasks: %{}}}
     else
@@ -154,9 +150,19 @@ defmodule Strom.GenMix.Tasks do
                 :halt_task ->
                   {:halt, {gm_pid, new_acc}}
 
+                {_stream_name, :done} ->
+                  # addressed to client, halt task
+                  # it happens when component are deleted
+                  {:halt, {gm_pid, new_acc}}
+
+                :halt_client ->
+                  # addressed to client, halt task
+                  # it happens when component are deleted
+                  {:halt, {gm_pid, new_acc}}
+
                 message ->
+                  # raising for now, there are probably some corner cases
                   raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
-                  {[], {gm_pid, new_acc}}
               end
 
             {_new_data, false, new_acc} ->
