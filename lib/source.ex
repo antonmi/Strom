@@ -89,7 +89,8 @@ defmodule Strom.Source do
         outputs: outputs,
         opts: opts,
         process_chunk: &process_chunk/4,
-        composite: composite
+        composite: composite,
+        before_stop: fn -> before_stop(origin) end
       })
 
     %{source | pid: gen_mix.pid, origin: origin}
@@ -129,4 +130,10 @@ defmodule Strom.Source do
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{} = source), do: GenMix.stop(source)
+
+  def before_stop(origin) when is_struct(origin) do
+    apply(origin.__struct__, :stop, [origin])
+  end
+
+  def before_stop(_origin), do: :nothing
 end

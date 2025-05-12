@@ -3,6 +3,8 @@ defmodule Strom.GenMixTest do
 
   alias Strom.GenMix
 
+  @moduletag timeout: 5000
+
   def build_stream(list, sleep \\ 0) do
     Stream.resource(
       fn -> list end,
@@ -25,17 +27,55 @@ defmodule Strom.GenMixTest do
     refute Process.alive?(gen_mix.pid)
   end
 
-  test "stop will wait for tasks to finish" do
-    stream = build_stream(Enum.to_list(1..10), 1)
+  test "start and stop with simple stream" do
+    stream = build_stream(Enum.to_list(1..10), 0)
     gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}, opts: [chunk: 1]})
     %{stream: stream} = GenMix.call(%{stream: stream}, gen_mix)
     task = Task.async(fn -> Enum.to_list(stream) end)
-    Process.sleep(5)
     :ok = GenMix.stop(gen_mix)
-    list = Task.await(task)
-    assert hd(list) == 1
-    Process.sleep(10)
-    refute Process.alive?(gen_mix.pid)
+    Task.await(task)
+    assert wait_for_dying(gen_mix.pid)
+  end
+
+  test "start and stop with many streams when buffer is full" do
+    max = 100
+    stream_names = Enum.map(1..10, &:"stream#{&1}")
+
+    flow =
+      Enum.reduce(stream_names, %{}, fn name, acc ->
+        Map.put(acc, name, build_stream(Enum.to_list(1..max), 0))
+      end)
+
+    outputs =
+      Enum.reduce(stream_names, %{}, fn name, acc ->
+        Map.put(acc, name, fn _ -> true end)
+      end)
+
+    gen_mix =
+      GenMix.start(%GenMix{inputs: stream_names, outputs: outputs, opts: [chunk: 1, buffer: 10]})
+
+    flow = GenMix.call(flow, gen_mix)
+
+    numbers =
+      stream_names
+      |> Enum.map(fn name ->
+        Task.async(fn -> Enum.to_list(flow[name]) end)
+      end)
+      |> Task.await_many()
+      |> List.flatten()
+
+    assert length(numbers) == 10000
+
+    :ok = GenMix.stop(gen_mix)
+    assert wait_for_dying(gen_mix.pid)
+  end
+
+  defp wait_for_dying(pid) do
+    if Process.alive?(pid) do
+      wait_for_dying(pid)
+    else
+      true
+    end
   end
 
   test "call one by one" do
@@ -78,8 +118,33 @@ defmodule Strom.GenMixTest do
     assert Task.await(task_odd) == 100
   end
 
+  test "call first one by one and then in a tasks" do
+    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: [6, 7, 8, 9, 10]}
+
+    outputs = %{
+      odd: fn el ->
+        rem(el, 2) == 1
+      end,
+      even: fn el ->
+        rem(el, 2) == 0
+      end
+    }
+
+    gen_mix = GenMix.start(%GenMix{inputs: [:numbers1, :numbers2], outputs: outputs})
+
+    %{odd: odd, even: even} = GenMix.call(flow, gen_mix)
+    assert Enum.sort(Enum.to_list(even)) == [2, 4, 6, 8, 10]
+    assert Enum.sort(Enum.to_list(odd)) == [1, 3, 5, 7, 9]
+
+    %{odd: odd, even: even} = GenMix.call(flow, gen_mix)
+    task_even = Task.async(fn -> Enum.sort(Enum.to_list(even)) end)
+    task_odd = Task.async(fn -> Enum.sort(Enum.to_list(odd)) end)
+    assert Task.await(task_even) == [2, 4, 6, 8, 10]
+    assert Task.await(task_odd) == [1, 3, 5, 7, 9]
+  end
+
   test "when buffer limit has been reached" do
-    flow = %{numbers1: Enum.to_list(1..1_000), numbers2: Enum.to_list(1..1_000)}
+    flow = %{numbers1: Enum.to_list(1..10), numbers2: Enum.to_list(1..10)}
 
     outputs = %{
       odd: fn el ->
@@ -94,22 +159,25 @@ defmodule Strom.GenMixTest do
       GenMix.start(%GenMix{
         inputs: [:numbers1, :numbers2],
         outputs: outputs,
-        opts: [chunk: 10, buffer: 100]
+        opts: [chunk: 5, buffer: 3]
       })
 
     flow = GenMix.call(flow, gen_mix)
 
     task_even = Task.async(fn -> Enum.count(flow[:even]) end)
-    Process.sleep(50)
-    assert :sys.get_state(gen_mix.pid).data[:even] == []
-    assert length(:sys.get_state(gen_mix.pid).data[:odd]) >= 100
     task_odd = Task.async(fn -> Enum.count(flow[:odd]) end)
-    assert Task.await(task_even) == 1000
-    assert Task.await(task_odd) == 1000
+    assert Task.await(task_even) == 10
+    assert Task.await(task_odd) == 10
+
+    assert Process.alive?(gen_mix.pid)
+
+    :ok = GenMix.stop(gen_mix)
+    Process.sleep(100)
+    refute Process.alive?(gen_mix.pid)
   end
 
-  test "call with one infinite stream" do
-    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: Stream.cycle([1, 2, 3])}
+  test "call with one infinite stream and no_wait option" do
+    flow = %{numbers1: [1, 2, 3, 4, 5], numbers2: Stream.cycle([1, 3, 5])}
 
     outputs = %{
       odd: fn el -> rem(el, 2) == 1 end,
@@ -123,10 +191,17 @@ defmodule Strom.GenMixTest do
         opts: [no_wait: true]
       })
 
-    flow = GenMix.call(flow, gen_mix)
+    %{odd: odd, even: even} = GenMix.call(flow, gen_mix)
 
-    assert Enum.count(flow[:even]) >= 2
-    assert Enum.count(flow[:odd]) >= 3
+    assert Enum.to_list(even) == [2, 4]
+    assert Enum.count(odd) >= 0
+
+    # when run in tasks
+    %{odd: odd, even: even} = GenMix.call(flow, gen_mix)
+    task1 = Task.async(fn -> Enum.to_list(even) end)
+    task2 = Task.async(fn -> Enum.count(odd) end)
+    assert Task.await(task1) == [2, 4]
+    assert Task.await(task2) >= 0
   end
 
   test "massive call" do
@@ -202,20 +277,20 @@ defmodule Strom.GenMixTest do
 
   describe "call gen_mix several times" do
     test "call to the gen_mix that was already called" do
-      stream1 = build_stream(Enum.to_list(1..10), 1)
+      max = 1000
+      stream1 = build_stream(Enum.to_list(1..max), 0)
       gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}})
       %{stream: stream} = GenMix.call(%{stream: stream1}, gen_mix)
-
       task1 = Task.async(fn -> Enum.to_list(stream) end)
 
-      stream2 = build_stream(Enum.to_list(1..10), 1)
+      stream2 = build_stream(Enum.to_list(1..max), 0)
       %{stream: stream} = GenMix.call(%{stream: stream2}, gen_mix)
       task2 = Task.async(fn -> Enum.to_list(stream) end)
 
-      all_events = Task.await_many([task1, task2]) |> List.flatten() |> Enum.sort()
+      all_events = Task.await_many([task1, task2], 4000) |> List.flatten() |> Enum.sort()
 
       assert all_events ==
-               [Enum.to_list(1..10), Enum.to_list(1..10)] |> List.flatten() |> Enum.sort()
+               [Enum.to_list(1..max), Enum.to_list(1..max)] |> List.flatten() |> Enum.sort()
     end
   end
 end

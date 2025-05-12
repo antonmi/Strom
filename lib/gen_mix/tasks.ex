@@ -1,6 +1,5 @@
 defmodule Strom.GenMix.Tasks do
   @moduledoc "Utility module. There are fucntions for manipulating tasks in gen_mix"
-
   alias Strom.GenMix
   alias Strom.Composite
 
@@ -20,51 +19,10 @@ defmodule Strom.GenMix.Tasks do
 
   def run_tasks(tasks, accs) do
     Enum.each(tasks, fn {task_pid, name} ->
-      send(task_pid, {:run_task, accs[name]})
+      send(task_pid, {:task, :run, accs[name]})
     end)
 
     tasks
-  end
-
-  def send_to_tasks(tasks, message) do
-    Enum.each(tasks, &send(elem(&1, 0), message))
-  end
-
-  def handle_normal_task_stop(ref, task_pid, gm) do
-    Process.demonitor(ref, [:flush])
-
-    {tasks, waiting_tasks} =
-      if gm.no_wait do
-        terminate_tasks(gm.tasks)
-        {%{}, %{}}
-      else
-        {Map.delete(gm.tasks, task_pid), Map.delete(gm.waiting_tasks, task_pid)}
-      end
-
-    asks =
-      case map_size(tasks) do
-        0 ->
-          # no tasks, sending the :done message to all asks
-          Enum.each(gm.asks, fn {client_pid, output_name} ->
-            send(client_pid, {output_name, :done})
-          end)
-
-          %{}
-
-        _more ->
-          gm.asks
-      end
-
-    # handling the "stopping" case
-    if gm.stopping and map_size(tasks) == 0 and gm.data_size == 0 do
-      # sending the halt_client message to all the seen clients
-      # tasks are already stopped a this moment
-      Enum.each(gm.clients, &send(&1, :halt_client))
-
-      {:stop, :normal, %{gm | tasks: %{}}}
-    else
-      {:noreply, %{gm | tasks: tasks, waiting_tasks: waiting_tasks, asks: asks}}
-    end
   end
 
   def handle_task_error(%GenMix{} = gm, pid) do
@@ -79,7 +37,7 @@ defmodule Strom.GenMix.Tasks do
         gm.composite
       )
 
-    send(task_pid, {:run_task, gm.accs[name]})
+    send(task_pid, {:task, :run, gm.accs[name]})
     {task_pid, name}
   end
 
@@ -130,7 +88,7 @@ defmodule Strom.GenMix.Tasks do
     fn ->
       acc =
         receive do
-          {:run_task, acc} ->
+          {:task, :run, acc} ->
             acc
         end
 
@@ -141,28 +99,23 @@ defmodule Strom.GenMix.Tasks do
         fn chunk, {gm_pid, acc} ->
           case process_chunk.(name, chunk, outputs, acc) do
             {new_data, true, new_acc} ->
-              GenServer.cast(gm_pid, {:new_data, {self(), name}, {new_data, new_acc}})
+              GenServer.cast(gm_pid, {:put_data, {name, self()}, {new_data, new_acc}})
 
               receive do
-                :continue_task ->
+                {:task, ^name, :continue} ->
                   {[], {gm_pid, new_acc}}
 
-                :halt_task ->
+                {:task, :halt} ->
                   {:halt, {gm_pid, new_acc}}
 
-                {_stream_name, :done} ->
-                  # addressed to client, halt task
-                  # it happens when component are deleted
-                  {:halt, {gm_pid, new_acc}}
+                {:task, :run, _acc} = message ->
+                  # each client tries to run tasks, so we need to flush the message
+                  flush(message)
+                  {[], {gm_pid, new_acc}}
 
-                :halt_client ->
-                  # addressed to client, halt task
-                  # it happens when component are deleted
+                {:task, :run_new_tasks_and_halt, {task_pid, acc}} ->
+                  send(task_pid, {:task, :run, acc})
                   {:halt, {gm_pid, new_acc}}
-
-                message ->
-                  # raising for now, there are probably some corner cases
-                  raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
               end
 
             {_new_data, false, new_acc} ->
@@ -174,6 +127,16 @@ defmodule Strom.GenMix.Tasks do
       |> Stream.run()
 
       self()
+    end
+  end
+
+  defp flush(message) do
+    receive do
+      ^message ->
+        flush(message)
+    after
+      0 ->
+        :ok
     end
   end
 end

@@ -32,6 +32,19 @@ defmodule Strom.Examples.SimpleNumbersTest do
 
     assert Enum.sort(Enum.to_list(odd)) == [3, 5, 7, 9, 11]
     assert Enum.sort(Enum.to_list(even)) == [2, 4, 6, 8, 10]
+
+    # in tasks
+    %{odd: odd, even: even} =
+      flow
+      |> Mixer.call(mixer)
+      |> Transformer.call(transformer)
+      |> Splitter.call(splitter)
+
+    task_odd = Task.async(fn -> Enum.to_list(odd) end)
+    task_even = Task.async(fn -> Enum.to_list(even) end)
+
+    assert Enum.sort(Task.await(task_odd)) == [3, 5, 7, 9, 11]
+    assert Enum.sort(Task.await(task_even)) == [2, 4, 6, 8, 10]
   end
 
   describe "round robin mixer" do

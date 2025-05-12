@@ -59,7 +59,8 @@ defmodule Strom.Sink do
         outputs: outputs,
         opts: opts,
         process_chunk: &process_chunk/4,
-        composite: composite
+        composite: composite,
+        before_stop: fn -> before_stop(origin) end
       })
 
     %{sink | pid: gen_mix.pid, origin: origin}
@@ -95,4 +96,8 @@ defmodule Strom.Sink do
 
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{} = sink), do: GenMix.stop(sink)
+
+  def before_stop(origin) do
+    apply(origin.__struct__, :stop, [origin])
+  end
 end

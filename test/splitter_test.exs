@@ -89,10 +89,10 @@ defmodule Strom.SplitterTest do
       %{flow: flow}
     end
 
-    test "splitter with list of streams", %{flow: flow} do
+    test "splitter with streams", %{flow: flow} do
       splitter =
         :orders
-        |> Splitter.new(["111", "222", "333"])
+        |> Splitter.new(["111", "222", "333"], buffer: 1000)
         |> Splitter.start()
 
       assert %{
@@ -100,9 +100,7 @@ defmodule Strom.SplitterTest do
                "111" => stream1,
                "222" => stream2,
                "333" => stream3
-             } =
-               flow
-               |> Splitter.call(splitter)
+             } = Splitter.call(flow, splitter)
 
       task111 = Task.async(fn -> Enum.to_list(stream1) end)
       task222 = Task.async(fn -> Enum.to_list(stream2) end)

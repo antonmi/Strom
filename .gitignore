@@ -31,3 +31,4 @@ strom-*.tar
 
 .DS_Store
 .vscode
+.elixir_ls

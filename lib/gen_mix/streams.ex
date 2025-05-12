@@ -1,137 +1,75 @@
 defmodule Strom.GenMix.Streams do
   @moduledoc "Utility module. There are functions for manipulating data in gen_mix"
 
-  alias Strom.GenMix
-  alias Strom.GenMix.Tasks
-
   def call(flow, gm) do
     input_streams =
       Enum.reduce(gm.inputs, %{}, fn name, acc ->
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    {:ok, gm_identifier} = GenServer.call(gm.pid, {:start_tasks, input_streams})
+    {:ok, gm_pid, _new_tasks} = GenServer.call(gm.pid, {:start_tasks, input_streams})
 
-    sub_flow = build_sub_flow(gm.outputs, gm_identifier)
+    sub_flow = build_sub_flow(gm.outputs, gm_pid)
 
     flow
     |> Map.drop(gm.inputs)
     |> Map.merge(sub_flow)
   end
 
-  defp build_sub_flow(outputs, gm_identifier) do
+  defp build_sub_flow(outputs, gm_pid) do
     Enum.reduce(outputs, %{}, fn {output_name, _fun}, flow ->
       stream =
         Stream.resource(
           fn ->
-            GenServer.cast(gm_identifier, {:run_tasks, self()})
-            gm_identifier
+            :ok = GenServer.call(gm_pid, {:run_tasks, output_name})
+            gm_pid
           end,
-          fn gm_identifier ->
-            ask_and_wait(gm_identifier, output_name)
+          fn gm_pid ->
+            ask_and_wait(gm_pid, output_name)
           end,
-          fn gm_identifier -> gm_identifier end
+          fn gm_pid ->
+            gm_pid
+          end
         )
 
       Map.put(flow, output_name, stream)
     end)
   end
 
-  defp ask_and_wait(gm_identifier, output_name) do
-    GenServer.cast(gm_identifier, {:ask, output_name, self()})
+  defp ask_and_wait(gm_pid, output_name) do
+    GenServer.cast(gm_pid, {:get_data, {output_name, self()}})
 
     receive do
-      {^output_name, :done} ->
-        {:halt, gm_identifier}
+      {:client, ^output_name, {:data, output_data}} ->
+        {output_data, gm_pid}
 
-      {^output_name, events} ->
-        {events, gm_identifier}
-
-      :halt_client ->
-        {:halt, gm_identifier}
-
-      :halt_task ->
-        # it's a message to the task,
-        # for now, ignoring, but might be the case when "send(self(), :halt_task)" is needed
-        # send(self(), :halt_task)
-        {[], gm_identifier}
-
-      message ->
-        raise "Unexpected message #{inspect(message)} in #{inspect(self())}"
+      {:client, ^output_name, :done} ->
+        {:halt, gm_pid}
     end
   end
 
-  def process_new_data(new_data, outputs, gm_data, asks) do
-    Enum.reduce(outputs, {gm_data, asks, 0}, fn {output_name, _fun}, {all_data, asks, count} ->
-      data_for_output = Map.get(all_data, output_name, []) ++ Map.get(new_data, output_name, [])
+  def new_data(new_data, outputs, gm_data, waiting_clients) do
+    Enum.reduce(
+      outputs,
+      {gm_data, waiting_clients, 0},
+      fn {output_name, _fun}, {all_data, waiting, count} ->
+        data_for_output = Map.get(all_data, output_name, []) ++ Map.get(new_data, output_name, [])
 
-      asks_for_output = Enum.filter(asks, fn {_, output} -> output == output_name end)
+        if length(data_for_output) > 0 do
+          case Enum.filter(waiting, fn {_, name} -> name == output_name end) do
+            [] ->
+              {Map.put(all_data, output_name, data_for_output), waiting,
+               count + length(data_for_output)}
 
-      {data_for_output, asks} =
-        case {data_for_output, asks_for_output} do
-          {[], _} ->
-            {data_for_output, asks}
-
-          {data_for_output, []} ->
-            {data_for_output, asks}
-
-          {data_for_output, asks_for_output} ->
-            # if there are multiple clients for the same output, we send the data to a random client
-            {client_pid, output_name} = Enum.random(asks_for_output)
-            send(client_pid, {output_name, data_for_output})
-            {[], Map.delete(asks, client_pid)}
-        end
-
-      {Map.put(all_data, output_name, data_for_output), asks, count + length(data_for_output)}
-    end)
-  end
-
-  def continue_or_wait({task_pid, name}, {_tasks, waiting_tasks}, {total_count, buffer}) do
-    if total_count < buffer do
-      send(task_pid, :continue_task)
-      waiting_tasks
-    else
-      Map.put(waiting_tasks, task_pid, name)
-    end
-  end
-
-  def handle_ask(output_name, client_pid, %GenMix{} = gm) do
-    {asks, new_data, data_size_for_output} =
-      case Map.get(gm.data, output_name, []) do
-        [] ->
-          if map_size(gm.tasks) == 0 do
-            send(client_pid, {output_name, :done})
-            {Map.delete(gm.asks, client_pid), gm.data, 0}
-          else
-            {Map.put(gm.asks, client_pid, output_name), gm.data, 0}
+            clients ->
+              {client_pid, _} = Enum.random(clients)
+              send(client_pid, {:client, output_name, {:data, data_for_output}})
+              {Map.put(all_data, output_name, []), Map.delete(waiting, client_pid), count}
           end
-
-        events ->
-          send(client_pid, {output_name, events})
-
-          {Map.delete(gm.asks, client_pid), Map.put(gm.data, output_name, []), length(events)}
+        else
+          {all_data, waiting, count}
+        end
       end
-
-    new_data_size = gm.data_size - data_size_for_output
-
-    waiting_tasks =
-      if new_data_size < gm.buffer do
-        Tasks.send_to_tasks(gm.waiting_tasks, :continue_task)
-        %{}
-      else
-        gm.waiting_tasks
-      end
-
-    %{
-      gm
-      | asks: asks,
-        data: new_data,
-        data_size: new_data_size,
-        waiting_tasks: waiting_tasks
-    }
-  end
-
-  def send_to_clients(asks, message) do
-    Enum.each(asks, &send(elem(&1, 0), message))
+    )
   end
 end

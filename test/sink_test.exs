@@ -43,4 +43,49 @@ defmodule Strom.SinkTest do
     Sink.stop(sink)
     assert File.read!("test/data/orders.csv") <> "\n" == File.read!("test/data/output.csv")
   end
+
+  describe "stop" do
+    defmodule CustomSink do
+      @behaviour Strom.Sink
+
+      defstruct agent: nil
+
+      def new(), do: %__MODULE__{}
+
+      @impl true
+      def start(%__MODULE__{} = source) do
+        {:ok, agent} = Agent.start_link(fn -> [] end)
+        %{source | agent: agent}
+      end
+
+      @impl true
+      def call(%__MODULE__{} = sink, _el), do: sink
+
+      @impl true
+      def stop(%__MODULE__{agent: agent} = sink) do
+        Agent.stop(agent)
+        sink
+      end
+    end
+
+    test "it calls stop on the source before exit" do
+      %Sink{origin: %{agent: agent}} =
+        sink =
+        :my_stream
+        |> Sink.new(CustomSink.new())
+        |> Sink.start()
+
+      %{} = Sink.call(%{my_stream: [1, 2, 3]}, sink)
+      Sink.stop(sink)
+      assert wait_for_dying(agent)
+    end
+  end
+
+  defp wait_for_dying(pid) do
+    if Process.alive?(pid) do
+      wait_for_dying(pid)
+    else
+      true
+    end
+  end
 end

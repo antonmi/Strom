@@ -7,6 +7,8 @@ defmodule Strom.CrashTest do
 
   import ExUnit.CaptureLog
 
+  @moduletag timeout: 5_000
+
   def crash_fun(el) do
     if Enum.member?([3], el) do
       raise "error"
@@ -101,6 +103,20 @@ defmodule Strom.CrashTest do
         assert Enum.to_list(stream) == [2, 4, 8, 10]
         assert Enum.to_list(stream2) == [20, 40, 60, 80, 100]
       end)
+
+      # when runnning in tasks
+      stream = build_stream([1, 2, 3, 4, 5])
+      stream2 = build_stream([10, 20, 30, 40, 50])
+
+      capture_log(fn ->
+        %{stream: stream, stream2: stream2} =
+          Transformer.call(%{stream: stream, stream2: stream2}, transformer)
+
+        task1 = Task.async(fn -> Enum.to_list(stream) end)
+        task2 = Task.async(fn -> Enum.to_list(stream2) end)
+        assert Task.await(task1) == [2, 4, 8, 10]
+        assert Task.await(task2) == [20, 40, 60, 80, 100]
+      end)
     end
 
     test "crush when transformer process 2 steams with accumulators", %{stream: stream} do
@@ -117,6 +133,20 @@ defmodule Strom.CrashTest do
 
         assert Enum.to_list(stream) == [1, 3, 7, 12]
         assert Enum.to_list(stream2) == [10, 30, 60, 100, 150]
+      end)
+
+      # when runnning in tasks, accs are preserved
+      stream = build_stream([1, 2, 3, 4, 5])
+      stream2 = build_stream([10, 20, 30, 40, 50])
+
+      capture_log(fn ->
+        %{stream: stream, stream2: stream2} =
+          Transformer.call(%{stream: stream, stream2: stream2}, transformer)
+
+        task1 = Task.async(fn -> Enum.to_list(stream) end)
+        task2 = Task.async(fn -> Enum.to_list(stream2) end)
+        assert Task.await(task1) == [13, 15, 19, 24]
+        assert Task.await(task2) == [160, 180, 210, 250, 300]
       end)
     end
   end
@@ -179,9 +209,16 @@ defmodule Strom.CrashTest do
       capture_log(fn ->
         Process.exit(transformer.pid, :kill)
 
-        Process.sleep(100)
-        refute Process.alive?(composite.pid)
+        assert wait_for_dying(composite.pid)
       end) =~ "(stop) {:component_crashed, %Strom.Transformer{pid:"
+    end
+  end
+
+  defp wait_for_dying(pid) do
+    if Process.alive?(pid) do
+      wait_for_dying(pid)
+    else
+      true
     end
   end
 
@@ -337,7 +374,7 @@ defmodule Strom.CrashTest do
     setup do
       sink =
         :stream
-        |> Sink.new(CustomWriteLines.new("test/data/output.csv"))
+        |> Sink.new(CustomWriteLines.new("test/data/output.csv"), sync: true)
         |> Sink.start()
 
       source =
@@ -354,7 +391,6 @@ defmodule Strom.CrashTest do
         |> Source.call(source)
         |> Sink.call(sink)
 
-        Process.sleep(50)
         Sink.stop(sink)
 
         assert File.read!("test/data/output.csv") == "1\n3\n4\n5\n"

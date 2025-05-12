@@ -81,4 +81,59 @@ defmodule Strom.SourceTest do
 
     assert Enum.to_list(my_stream) == [:tick, :tick, :tick, :tick, :tick]
   end
+
+  describe "stop" do
+    defmodule CustomSource do
+      @behaviour Strom.Source
+
+      defstruct agent: nil
+
+      def new(), do: %__MODULE__{}
+
+      @impl true
+      def start(%__MODULE__{} = source) do
+        {:ok, agent} = Agent.start_link(fn -> Enum.to_list(1..10) end)
+        %{source | agent: agent}
+      end
+
+      @impl true
+      def call(%__MODULE__{agent: agent} = source) do
+        Agent.get_and_update(agent, fn
+          [] -> {nil, []}
+          [datum | data] -> {datum, data}
+        end)
+        |> case do
+          nil -> {:halt, source}
+          number -> {[number], source}
+        end
+      end
+
+      @impl true
+      def stop(%__MODULE__{agent: agent} = source) do
+        Agent.stop(agent)
+        source
+      end
+    end
+
+    test "it calls stop on the source before exit" do
+      %Source{origin: %{agent: agent}} =
+        source =
+        :my_stream
+        |> Source.new(CustomSource.new())
+        |> Source.start()
+
+      %{my_stream: my_stream} = Source.call(%{}, source)
+      assert Enum.to_list(my_stream) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      Source.stop(source)
+      assert wait_for_dying(agent)
+    end
+  end
+
+  defp wait_for_dying(pid) do
+    if Process.alive?(pid) do
+      wait_for_dying(pid)
+    else
+      true
+    end
+  end
 end

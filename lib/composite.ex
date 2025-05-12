@@ -135,7 +135,7 @@ defmodule Strom.Composite do
         _from,
         %__MODULE__{components: components} = composite
       ) do
-    components = Manipulations.delete(components, index_from, index_to)
+    {components, _deleted_components} = Manipulations.delete(components, index_from, index_to)
     {:reply, composite, %{composite | components: components}}
   end
 

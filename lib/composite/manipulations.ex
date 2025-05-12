@@ -6,27 +6,30 @@ defmodule Strom.Composite.Manipulations do
   alias Strom.GenMix
 
   def delete(components, index_from, index_to) do
-    {new_components, _} =
-      Enum.reduce(components, {[], 0}, fn component, {acc, index} ->
+    {{new_components, deleted_components}, _} =
+      Enum.reduce(components, {{[], []}, 0}, fn component, {{acc, deleted_acc}, index} ->
         cond do
           index == index_from ->
             next_component = Enum.at(components, index_to + 1)
             input_streams = Strom.GenMix.state(component.pid).input_streams
-            GenServer.call(next_component.pid, {:run_new_tasks, input_streams})
 
-            :ok = component.__struct__.stop(component)
-            {acc, index + 1}
+            {:ok, _pid, new_tasks} =
+              GenServer.call(next_component.pid, {:start_tasks, input_streams})
+
+            GenServer.call(component.pid, {:transfer_tasks, new_tasks})
+            GenServer.cast(component.pid, {:gen_mix, :stopping})
+            {{acc, [component | deleted_acc]}, index + 1}
 
           index > index_from and index <= index_to ->
-            :ok = component.__struct__.stop(component)
-            {acc, index + 1}
+            GenServer.cast(component.pid, {:gen_mix, :stopping})
+            {{acc, [component | deleted_acc]}, index + 1}
 
           true ->
-            {[component | acc], index + 1}
+            {{[component | acc], deleted_acc}, index + 1}
         end
       end)
 
-    Enum.reverse(new_components)
+    {Enum.reverse(new_components), deleted_components}
   end
 
   def insert(components, index, new_components, name) when is_list(new_components) do
@@ -36,7 +39,7 @@ defmodule Strom.Composite.Manipulations do
     new_components = StartStop.start_components(new_components, name)
     flow = Composite.reduce_flow(new_components, gm_after.input_streams)
 
-    GenServer.call(component_after.pid, {:run_new_tasks, flow})
+    GenServer.call(component_after.pid, {:start_tasks, flow})
 
     # TODO
     # take only streams that are in inputs for the component_after
