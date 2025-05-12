@@ -1,25 +1,9 @@
 defmodule Strom.TransformerTest do
   use ExUnit.Case, async: true
+  import Strom.TestHelper
   doctest Strom.Transformer
 
   alias Strom.Transformer
-
-  def build_stream(list, sleep \\ 0) do
-    {:ok, agent} = Agent.start_link(fn -> list end)
-
-    Stream.resource(
-      fn -> agent end,
-      fn agent ->
-        Process.sleep(sleep)
-
-        Agent.get_and_update(agent, fn
-          [] -> {{:halt, agent}, []}
-          [datum | data] -> {{[datum], agent}, data}
-        end)
-      end,
-      fn agent -> agent end
-    )
-  end
 
   test "start and stop" do
     transformer =

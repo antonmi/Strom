@@ -1,27 +1,10 @@
 defmodule Strom.ReplaceTest do
   use ExUnit.Case, async: false
-
+  import Strom.TestHelper
   alias Strom.Transformer
   alias Strom.Composite
 
   @moduletag timeout: 10_000
-
-  def build_stream(list, sleep \\ 0) do
-    {:ok, agent} = Agent.start_link(fn -> list end)
-
-    Stream.resource(
-      fn -> agent end,
-      fn agent ->
-        Process.sleep(sleep)
-
-        Agent.get_and_update(agent, fn
-          [] -> {{:halt, agent}, []}
-          [datum | data] -> {{[datum], agent}, data}
-        end)
-      end,
-      fn agent -> agent end
-    )
-  end
 
   describe "delete components" do
     test "delete one transformer" do
@@ -108,16 +91,15 @@ defmodule Strom.ReplaceTest do
       list3 = Task.await(task3)
 
       Composite.stop(composite)
-      # one event can be lost, I'll address this later
       assert length(list1) == 10_000
-      # assert [10_011 | _] = list1
-      # assert [20_000 | _] = Enum.reverse(list1)
+      assert [10_011 | _] = list1
+      assert [20_000 | _] = Enum.reverse(list1)
       assert length(list2) == 10_000
-      # assert [20_011 | _] = list2
-      # assert [30_000 | _] = Enum.reverse(list2)
+      assert [20_011 | _] = list2
+      assert [30_000 | _] = Enum.reverse(list2)
       assert length(list3) == 10_000
-      # assert [30_011 | _] = list3
-      # assert [40_000 | _] = Enum.reverse(list3)
+      assert [30_011 | _] = list3
+      assert [40_000 | _] = Enum.reverse(list3)
     end
 
     test "delete two transformers" do
@@ -198,14 +180,6 @@ defmodule Strom.ReplaceTest do
       end)
 
       Composite.stop(composite)
-    end
-
-    defp wait_for_dying(pid) do
-      if Process.alive?(pid) do
-        wait_for_dying(pid)
-      else
-        true
-      end
     end
 
     # test "when there are two streams" do

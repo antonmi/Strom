@@ -1,11 +1,11 @@
 defmodule Strom.GenMixTest do
   use ExUnit.Case, async: true
-
+  import Strom.TestHelper
   alias Strom.GenMix
 
   @moduletag timeout: 5000
 
-  def build_stream(list, sleep \\ 0) do
+  def build_list_stream(list, sleep \\ 0) do
     Stream.resource(
       fn -> list end,
       fn
@@ -28,7 +28,7 @@ defmodule Strom.GenMixTest do
   end
 
   test "start and stop with simple stream" do
-    stream = build_stream(Enum.to_list(1..10), 0)
+    stream = build_list_stream(Enum.to_list(1..10), 0)
     gen_mix = GenMix.start(%GenMix{inputs: [:stream], outputs: %{stream: & &1}, opts: [chunk: 1]})
     %{stream: stream} = GenMix.call(%{stream: stream}, gen_mix)
     task = Task.async(fn -> Enum.to_list(stream) end)
@@ -43,7 +43,7 @@ defmodule Strom.GenMixTest do
 
     flow =
       Enum.reduce(stream_names, %{}, fn name, acc ->
-        Map.put(acc, name, build_stream(Enum.to_list(1..max), 0))
+        Map.put(acc, name, build_list_stream(Enum.to_list(1..max), 0))
       end)
 
     outputs =
@@ -64,18 +64,10 @@ defmodule Strom.GenMixTest do
       |> Task.await_many()
       |> List.flatten()
 
-    assert length(numbers) == 10000
+    assert length(numbers) == 10_000
 
     :ok = GenMix.stop(gen_mix)
     assert wait_for_dying(gen_mix.pid)
-  end
-
-  defp wait_for_dying(pid) do
-    if Process.alive?(pid) do
-      wait_for_dying(pid)
-    else
-      true
-    end
   end
 
   test "call one by one" do
@@ -248,8 +240,8 @@ defmodule Strom.GenMixTest do
   end
 
   test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
-    quick = build_stream(List.duplicate([101], 10000), 0)
-    slow = build_stream(Enum.to_list(1..10), 1)
+    quick = build_list_stream(List.duplicate([101], 10_000), 0)
+    slow = build_list_stream(Enum.to_list(1..10), 1)
 
     outputs = %{
       quick: fn n -> n > 10 end,

@@ -1,7 +1,7 @@
 defmodule Strom.SourceTest do
   use ExUnit.Case, async: true
   doctest Strom.Source
-
+  import Strom.TestHelper
   alias Strom.Source
   alias Strom.Source.ReadLines
 
@@ -126,14 +126,6 @@ defmodule Strom.SourceTest do
       assert Enum.to_list(my_stream) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
       Source.stop(source)
       assert wait_for_dying(agent)
-    end
-  end
-
-  defp wait_for_dying(pid) do
-    if Process.alive?(pid) do
-      wait_for_dying(pid)
-    else
-      true
     end
   end
 end

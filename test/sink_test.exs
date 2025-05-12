@@ -1,5 +1,6 @@
 defmodule Strom.SinkTest do
   use ExUnit.Case, async: true
+  import Strom.TestHelper
   doctest Strom.Sink
 
   alias Strom.Source
@@ -78,14 +79,6 @@ defmodule Strom.SinkTest do
       %{} = Sink.call(%{my_stream: [1, 2, 3]}, sink)
       Sink.stop(sink)
       assert wait_for_dying(agent)
-    end
-  end
-
-  defp wait_for_dying(pid) do
-    if Process.alive?(pid) do
-      wait_for_dying(pid)
-    else
-      true
     end
   end
 end
