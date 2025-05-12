@@ -102,19 +102,18 @@ defmodule Strom.GenMix.Tasks do
               GenServer.cast(gm_pid, {:put_data, {name, self()}, {new_data, new_acc}})
 
               receive do
-                {:task, ^name, :continue} ->
+                {:task, :run, _acc} ->
+                  # ignore the message
                   {[], {gm_pid, new_acc}}
 
-                {:task, :halt} ->
-                  {:halt, {gm_pid, new_acc}}
-
-                {:task, :run, _acc} = message ->
-                  # each client tries to run tasks, so we need to flush the message
-                  flush(message)
+                {:task, ^name, :continue} ->
                   {[], {gm_pid, new_acc}}
 
                 {:task, :run_new_tasks_and_halt, {task_pid, acc}} ->
                   send(task_pid, {:task, :run, acc})
+                  {:halt, {gm_pid, new_acc}}
+
+                {:task, :halt} ->
                   {:halt, {gm_pid, new_acc}}
               end
 
@@ -127,16 +126,6 @@ defmodule Strom.GenMix.Tasks do
       |> Stream.run()
 
       self()
-    end
-  end
-
-  defp flush(message) do
-    receive do
-      ^message ->
-        flush(message)
-    after
-      0 ->
-        :ok
     end
   end
 end

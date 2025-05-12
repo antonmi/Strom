@@ -4,6 +4,8 @@ defmodule Strom.ReplaceTest do
   alias Strom.Transformer
   alias Strom.Composite
 
+  @moduletag timeout: 10_000
+
   def build_stream(list, sleep \\ 0) do
     {:ok, agent} = Agent.start_link(fn -> list end)
 
@@ -147,8 +149,8 @@ defmodule Strom.ReplaceTest do
 
     test "delete 10 transformer with 10 streams" do
       max = 100
-      streams_count = 10
-      transformer_count = 10
+      streams_count = Enum.random(1..10)
+      transformer_count = Enum.random(1..10)
       stream_names = Enum.map(1..streams_count, &:"stream#{&1}")
 
       flow =
@@ -156,11 +158,11 @@ defmodule Strom.ReplaceTest do
           Map.put(ac, name, build_stream(Enum.to_list(1..max), 0))
         end)
 
-      transformer = Transformer.new(stream_names, &(&1 + 1_000), nil, chunk: 1, buffer: 100)
+      transformer = Transformer.new(stream_names, &(&1 + 1_000), nil, chunk: 1, buffer: 1)
 
       transformers =
         Enum.reduce(1..transformer_count, [], fn _n, acc ->
-          [Transformer.new(stream_names, & &1, nil, chunk: 1, buffer: 100) | acc]
+          [Transformer.new(stream_names, & &1, nil, chunk: 1, buffer: 10) | acc]
         end)
 
       composite =
@@ -178,6 +180,7 @@ defmodule Strom.ReplaceTest do
         end)
 
       Process.sleep(10)
+
       composite = Composite.delete(composite, 0, transformer_count - 1)
       components_after = Composite.components(composite)
       assert length(components_after) == 1
@@ -193,6 +196,8 @@ defmodule Strom.ReplaceTest do
       Enum.each(stopped_components, fn component ->
         assert wait_for_dying(component.pid)
       end)
+
+      Composite.stop(composite)
     end
 
     defp wait_for_dying(pid) do

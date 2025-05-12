@@ -4,6 +4,23 @@ defmodule Strom.TransformerTest do
 
   alias Strom.Transformer
 
+  def build_stream(list, sleep \\ 0) do
+    {:ok, agent} = Agent.start_link(fn -> list end)
+
+    Stream.resource(
+      fn -> agent end,
+      fn agent ->
+        Process.sleep(sleep)
+
+        Agent.get_and_update(agent, fn
+          [] -> {{:halt, agent}, []}
+          [datum | data] -> {{[datum], agent}, data}
+        end)
+      end,
+      fn agent -> agent end
+    )
+  end
+
   test "start and stop" do
     transformer =
       :stream
@@ -99,5 +116,59 @@ defmodule Strom.TransformerTest do
     assert Enum.sort(Enum.to_list(flow[:numbers3])) == [0, 0, 0, 0, 0]
 
     Transformer.stop(transformer)
+  end
+
+  test "two transforemers with different buffer size" do
+    max = 1000
+    stream1 = build_stream(Enum.to_list(1..max), 0)
+    stream2 = build_stream(Enum.to_list(1..max), 0)
+
+    transformer1 =
+      [:stream1, :stream2]
+      |> Transformer.new(& &1, nil, chunk: 1, buffer: 100)
+      |> Transformer.start()
+
+    transformer2 =
+      [:stream1, :stream2]
+      |> Transformer.new(& &1, nil, chunk: 1, buffer: 1)
+      |> Transformer.start()
+
+    flow =
+      %{stream1: stream1, stream2: stream2}
+      |> Transformer.call(transformer1)
+      |> Transformer.call(transformer2)
+
+    task1 = Task.async(fn -> Enum.to_list(flow[:stream1]) end)
+    task2 = Task.async(fn -> Enum.to_list(flow[:stream2]) end)
+
+    assert length(Task.await(task1)) == max
+    assert length(Task.await(task2)) == max
+  end
+
+  test "two transforemers when data fits to buffer" do
+    max = 10
+    stream1 = build_stream(Enum.to_list(1..max), 0)
+    stream2 = build_stream(Enum.to_list(1..max), 0)
+
+    transformer1 =
+      [:stream1, :stream2]
+      |> Transformer.new(& &1, nil, chunk: 1)
+      |> Transformer.start()
+
+    transformer2 =
+      [:stream1, :stream2]
+      |> Transformer.new(& &1, nil, chunk: 1)
+      |> Transformer.start()
+
+    flow =
+      %{stream1: stream1, stream2: stream2}
+      |> Transformer.call(transformer1)
+      |> Transformer.call(transformer2)
+
+    task1 = Task.async(fn -> Enum.to_list(flow[:stream1]) end)
+    task2 = Task.async(fn -> Enum.to_list(flow[:stream2]) end)
+
+    assert length(Task.await(task1)) == max
+    assert length(Task.await(task2)) == max
   end
 end

@@ -142,18 +142,36 @@ defmodule Strom.GenMix do
         _from,
         %__MODULE__{} = gm
       ) do
-    Enum.each(gm.tasks, fn {task_pid, stream_name} ->
-      {pid_for_stream, _} = Enum.find(new_tasks, fn {_, name} -> name == stream_name end)
-      send(task_pid, {:task, :run_new_tasks_and_halt, {pid_for_stream, gm.accs[stream_name]}})
+    Enum.each(new_tasks, fn {new_task_pid, stream_name} ->
+      case Enum.find(gm.tasks, fn {_, name} -> name == stream_name end) do
+        {task_pid, ^stream_name} ->
+          send(task_pid, {:task, :run_new_tasks_and_halt, {new_task_pid, gm.accs[stream_name]}})
+
+        nil ->
+          send(new_task_pid, {:task, :run, gm.accs[stream_name]})
+      end
     end)
 
     {:reply, gm, gm}
   end
 
   @impl true
-
   def handle_cast({:gen_mix, :stopping}, gm) do
-    {:noreply, %{gm | stopping: true}}
+    after_action(%{gm | stopping: true})
+  end
+
+  def handle_cast({:transfer_tasks, new_tasks}, gm) do
+    Enum.each(new_tasks, fn {new_task_pid, stream_name} ->
+      case Enum.find(gm.tasks, fn {_, name} -> name == stream_name end) do
+        {task_pid, ^stream_name} ->
+          send(task_pid, {:task, :run_new_tasks_and_halt, {new_task_pid, gm.accs[stream_name]}})
+
+        nil ->
+          send(new_task_pid, {:task, :run, gm.accs[stream_name]})
+      end
+    end)
+
+    after_action(%{gm | stopping: true})
   end
 
   def handle_cast(
@@ -251,8 +269,17 @@ defmodule Strom.GenMix do
 
         send_done_to_clients(gm.waiting_clients)
 
+        # {data, data_size} = send_data_to_clients(gm.data, gm.data_size, gm.clients)
+        # send_done_to_clients(gm.clients)
+
         {:noreply,
-         %{gm | data: data, data_size: data_size, tasks_run: false, waiting_clients: %{}}}
+         %{
+           gm
+           | data: data,
+             data_size: data_size,
+             tasks_run: false,
+             waiting_clients: %{}
+         }}
 
       true ->
         {:noreply, gm}

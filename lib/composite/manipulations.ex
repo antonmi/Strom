@@ -13,11 +13,10 @@ defmodule Strom.Composite.Manipulations do
             next_component = Enum.at(components, index_to + 1)
             input_streams = Strom.GenMix.state(component.pid).input_streams
 
-            {:ok, _pid, new_tasks} =
+            {:ok, _, new_tasks} =
               GenServer.call(next_component.pid, {:start_tasks, input_streams})
 
-            GenServer.call(component.pid, {:transfer_tasks, new_tasks})
-            GenServer.cast(component.pid, {:gen_mix, :stopping})
+            GenServer.cast(component.pid, {:transfer_tasks, new_tasks})
             {{acc, [component | deleted_acc]}, index + 1}
 
           index > index_from and index <= index_to ->
