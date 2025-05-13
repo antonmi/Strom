@@ -145,8 +145,8 @@ defmodule Strom.Composite do
         %__MODULE__{components: components, name: name} = composite
       )
       when is_list(new_components) do
-    components = Manipulations.insert(components, index, new_components, name)
-    {:reply, composite, %{composite | components: components}}
+    {components, subflow} = Manipulations.insert(components, index, new_components, name)
+    {:reply, {composite, subflow}, %{composite | components: components}}
   end
 
   @impl true

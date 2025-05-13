@@ -106,12 +106,12 @@ defmodule Strom.GenMix.Tasks do
                   # ignore the message
                   {[], {gm_pid, new_acc}}
 
-                {:task, ^name, :continue} ->
-                  {[], {gm_pid, new_acc}}
-
                 {:task, :run_new_tasks_and_halt, {task_pid, acc}} ->
                   send(task_pid, {:task, :run, acc})
                   {:halt, {gm_pid, new_acc}}
+
+                {:task, ^name, :continue} ->
+                  {[], {gm_pid, new_acc}}
 
                 {:task, :halt} ->
                   {:halt, {gm_pid, new_acc}}

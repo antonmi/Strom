@@ -102,7 +102,7 @@
 #     Process.sleep(5000)
 
 #     IO.inspect("calling")
-#     numbers = Enum.to_list(1..100)
+#     numbers = Enum.to_list(1..10000)
 #     starting = :erlang.system_time(:second)
 #     flow = Composite.call(%{stream: numbers}, composite)
 #     IO.inspect("called #{:erlang.system_time(:second) - starting}")

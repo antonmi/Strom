@@ -46,7 +46,6 @@ defmodule Strom.Composite.StartStop do
         %{id: Composite, start: {Composite, :start_link, [composite]}, restart: :temporary}
       )
 
-    Process.link(pid)
     pid
   end
 

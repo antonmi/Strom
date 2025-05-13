@@ -120,6 +120,16 @@ defmodule Strom.GenMix do
     {:reply, :ok, %{gm | clients: clients}}
   end
 
+  def handle_call(
+        {:replace_tasks, new_tasks},
+        _from,
+        %__MODULE__{tasks_started: true} = gm
+      ) do
+    old_tasks = Map.drop(gm.tasks, Map.keys(new_tasks))
+    run_new_tasks_and_halt_the_old_ones(new_tasks, old_tasks, gm.accs)
+    {:reply, :ok, %{gm | tasks_run: true, tasks: new_tasks}}
+  end
+
   def handle_call(:stop, _from, %__MODULE__{} = gm) do
     gm = %{gm | stopping: true}
 
@@ -137,39 +147,13 @@ defmodule Strom.GenMix do
     {:reply, gm, gm}
   end
 
-  def handle_call(
-        {:transfer_tasks, new_tasks},
-        _from,
-        %__MODULE__{} = gm
-      ) do
-    Enum.each(new_tasks, fn {new_task_pid, stream_name} ->
-      case Enum.find(gm.tasks, fn {_, name} -> name == stream_name end) do
-        {task_pid, ^stream_name} ->
-          send(task_pid, {:task, :run_new_tasks_and_halt, {new_task_pid, gm.accs[stream_name]}})
-
-        nil ->
-          send(new_task_pid, {:task, :run, gm.accs[stream_name]})
-      end
-    end)
-
-    {:reply, gm, gm}
-  end
-
   @impl true
   def handle_cast({:gen_mix, :stopping}, gm) do
     after_action(%{gm | stopping: true})
   end
 
   def handle_cast({:transfer_tasks, new_tasks}, gm) do
-    Enum.each(new_tasks, fn {new_task_pid, stream_name} ->
-      case Enum.find(gm.tasks, fn {_, name} -> name == stream_name end) do
-        {task_pid, ^stream_name} ->
-          send(task_pid, {:task, :run_new_tasks_and_halt, {new_task_pid, gm.accs[stream_name]}})
-
-        nil ->
-          send(new_task_pid, {:task, :run, gm.accs[stream_name]})
-      end
-    end)
+    run_new_tasks_and_halt_the_old_ones(new_tasks, gm.tasks, gm.accs)
 
     after_action(%{gm | stopping: true})
   end
@@ -286,17 +270,23 @@ defmodule Strom.GenMix do
     end
   end
 
+  defp run_new_tasks_and_halt_the_old_ones(new_tasks, old_tasks, accs) do
+    Enum.each(new_tasks, fn {new_task_pid, stream_name} ->
+      case Enum.find(old_tasks, fn {_, name} -> name == stream_name end) do
+        {task_pid, ^stream_name} ->
+          send(task_pid, {:task, :run_new_tasks_and_halt, {new_task_pid, accs[stream_name]}})
+
+        nil ->
+          send(new_task_pid, {:task, :run, accs[stream_name]})
+      end
+    end)
+  end
+
   defp send_continue_to_tasks(tasks) do
     Enum.each(tasks, fn {task_pid, input_name} ->
       send(task_pid, {:task, input_name, :continue})
     end)
   end
-
-  # defp send_halt_to_tasks(tasks) do
-  # Enum.each(tasks, fn {task_pid, _} ->
-  # send(task_pid, {:task, :halt})
-  # end)
-  # end
 
   defp send_done_to_clients(clients) do
     Enum.each(clients, fn {client_pid, output_name} ->

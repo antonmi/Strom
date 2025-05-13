@@ -13,7 +13,7 @@ defmodule Strom.Composite.Manipulations do
             next_component = Enum.at(components, index_to + 1)
             input_streams = Strom.GenMix.state(component.pid).input_streams
 
-            {:ok, _, new_tasks} =
+            {:ok, _gm_pid, new_tasks} =
               GenServer.call(next_component.pid, {:start_tasks, input_streams})
 
             GenServer.cast(component.pid, {:transfer_tasks, new_tasks})
@@ -38,13 +38,16 @@ defmodule Strom.Composite.Manipulations do
     new_components = StartStop.start_components(new_components, name)
     flow = Composite.reduce_flow(new_components, gm_after.input_streams)
 
-    GenServer.call(component_after.pid, {:start_tasks, flow})
+    {:ok, _gm_pid, new_tasks} =
+      GenServer.call(component_after.pid, {:start_tasks, Map.take(flow, component_after.inputs)})
 
-    # TODO
-    # take only streams that are in inputs for the component_after
-    # return the flow
-    components
-    |> List.insert_at(index, new_components)
-    |> List.flatten()
+    GenServer.call(component_after.pid, {:replace_tasks, new_tasks})
+
+    components =
+      components
+      |> List.insert_at(index, new_components)
+      |> List.flatten()
+
+    {components, Map.drop(flow, component_after.inputs)}
   end
 end

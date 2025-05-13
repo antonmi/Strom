@@ -3,9 +3,12 @@ ExUnit.start()
 defmodule Strom.TestHelper do
   def build_stream(list, sleep \\ 0) do
     {:ok, agent} = Agent.start_link(fn -> list end)
+    Process.unlink(agent)
 
     Stream.resource(
-      fn -> agent end,
+      fn ->
+        agent
+      end,
       fn agent ->
         Process.sleep(sleep)
 
