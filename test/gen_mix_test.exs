@@ -240,7 +240,7 @@ defmodule Strom.GenMixTest do
   end
 
   test "two streams with different rates, be sure that quick stream doesn't block the slow one" do
-    quick = build_list_stream(List.duplicate([101], 10_000), 0)
+    quick = build_list_stream(List.duplicate([101], 100_000), 0)
     slow = build_list_stream(Enum.to_list(1..10), 1)
 
     outputs = %{
