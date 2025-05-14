@@ -1,5 +1,5 @@
 defmodule Strom do
-  @moduledoc false
+  @moduledoc "Strom is a framework for building stream processing applications."
 
   @type event() :: any()
   @type stream_name() :: any()
