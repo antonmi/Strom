@@ -90,7 +90,7 @@ defmodule Strom.Composite do
   def call(flow, name) when is_atom(name),
     do: GenServer.call(name, {:call, flow}, :infinity)
 
-  def reduce_flow(components, init_flow) do
+  def call_flow(components, init_flow) do
     Enum.reduce(components, init_flow, fn %{__struct__: module} = component, flow ->
       module.call(flow, component)
     end)
@@ -99,21 +99,43 @@ defmodule Strom.Composite do
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{} = composite), do: StartStop.stop(composite)
 
-  def delete(composite, index) do
-    delete(composite, index, index)
-  end
-
-  def delete(composite, index_from, index_to) do
+  def delete(composite, {index_from, index_to}) do
     GenServer.call(composite.name, {:delete, index_from, index_to})
   end
 
-  def insert(composite, index, new_components) do
+  def delete(composite, index) do
+    delete(composite, {index, index})
+  end
+
+  def insert(composite, index, new_component) when is_struct(new_component) do
+    insert(composite, index, [new_component])
+  end
+
+  def insert(composite, index, new_components) when is_list(new_components) do
     GenServer.call(composite.name, {:insert, index, new_components})
+  end
+
+  def replace(composite, index, new_component)
+      when is_integer(index) and is_struct(new_component) do
+    replace(composite, {index, index}, [new_component])
+  end
+
+  def replace(composite, {index_from, index_to}, new_component) when is_struct(new_component) do
+    replace(composite, {index_from, index_to}, [new_component])
+  end
+
+  def replace(composite, {index_from, index_to}, new_components) when is_list(new_components) do
+    GenServer.call(composite.name, {:replace, {index_from, index_to}, new_components})
+  end
+
+  def replace(composite, index, new_components)
+      when is_integer(index) and is_list(new_components) do
+    replace(composite, {index, index}, new_components)
   end
 
   @impl true
   def handle_call({:call, init_flow}, _from, %__MODULE__{} = composite) do
-    flow = reduce_flow(composite.components, init_flow)
+    flow = call_flow(composite.components, init_flow)
     {:reply, flow, composite}
   end
 
@@ -136,7 +158,8 @@ defmodule Strom.Composite do
         %__MODULE__{components: components} = composite
       ) do
     {components, _deleted_components} = Manipulations.delete(components, index_from, index_to)
-    {:reply, composite, %{composite | components: components}}
+    composite = %{composite | components: components}
+    {:reply, composite, composite}
   end
 
   def handle_call(
@@ -146,7 +169,21 @@ defmodule Strom.Composite do
       )
       when is_list(new_components) do
     {components, subflow} = Manipulations.insert(components, index, new_components, name)
-    {:reply, {composite, subflow}, %{composite | components: components}}
+    composite = %{composite | components: components}
+    {:reply, {composite, subflow}, composite}
+  end
+
+  def handle_call(
+        {:replace, {index_from, index_to}, new_components},
+        _from,
+        %__MODULE__{components: components, name: name} = composite
+      )
+      when is_list(new_components) do
+    {components, _deleted_components, subflow} =
+      Manipulations.replace(components, index_from, index_to, new_components, name)
+
+    composite = %{composite | components: components}
+    {:reply, {composite, subflow}, composite}
   end
 
   @impl true

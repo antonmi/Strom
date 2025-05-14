@@ -138,7 +138,6 @@ defmodule Strom.GenMix do
 
       {:stop, :normal, :ok, gm}
     else
-      # send_halt_to_tasks(gm.tasks)
       {:reply, :ok, gm}
     end
   end

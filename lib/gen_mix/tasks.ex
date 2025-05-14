@@ -102,19 +102,19 @@ defmodule Strom.GenMix.Tasks do
               GenServer.cast(gm_pid, {:put_data, {name, self()}, {new_data, new_acc}})
 
               receive do
-                {:task, :run, _acc} ->
-                  # ignore the message
-                  {[], {gm_pid, new_acc}}
+                {:task, :halt} ->
+                  {:halt, {gm_pid, new_acc}}
 
                 {:task, :run_new_tasks_and_halt, {task_pid, acc}} ->
                   send(task_pid, {:task, :run, acc})
                   {:halt, {gm_pid, new_acc}}
 
-                {:task, ^name, :continue} ->
+                {:task, :run, _acc} ->
+                  # ignore the message
                   {[], {gm_pid, new_acc}}
 
-                {:task, :halt} ->
-                  {:halt, {gm_pid, new_acc}}
+                {:task, ^name, :continue} ->
+                  {[], {gm_pid, new_acc}}
               end
 
             {_new_data, false, new_acc} ->

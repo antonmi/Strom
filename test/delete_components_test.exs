@@ -117,7 +117,7 @@ defmodule Strom.DeleteComponentsTest do
     task = Task.async(fn -> Enum.to_list(stream) end)
 
     Process.sleep(7)
-    composite = Composite.delete(composite, 0, 1)
+    composite = Composite.delete(composite, {0, 1})
     components = Composite.components(composite)
     assert length(components) == 1
 
@@ -162,7 +162,7 @@ defmodule Strom.DeleteComponentsTest do
 
     Process.sleep(10)
 
-    composite = Composite.delete(composite, 0, transformer_count - 1)
+    composite = Composite.delete(composite, {0, transformer_count - 1})
     components_after = Composite.components(composite)
     assert length(components_after) == 1
 
