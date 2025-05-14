@@ -90,6 +90,7 @@ defmodule Strom.Sink do
     end)
   end
 
+  @spec process_chunk(atom(), list(), Strom.flow(), any()) :: {Strom.flow(), false, nil}
   def process_chunk(input_stream_name, _chunk, _outputs, nil) do
     {%{input_stream_name => []}, false, nil}
   end

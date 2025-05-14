@@ -70,6 +70,7 @@ defmodule Strom.Splitter do
     GenMix.call(flow, splitter)
   end
 
+  @spec process_chunk(atom(), list(), Strom.flow(), nil) :: {Strom.flow(), boolean(), nil}
   def process_chunk(_input_stream_name, chunk, outputs, nil) do
     outputs
     |> Enum.reduce({%{}, false, nil}, fn {stream_name, fun}, {acc, any?, nil} ->

@@ -33,6 +33,9 @@ defmodule Strom.GenMix do
   alias Strom.GenMix.Streams
   alias Strom.GenMix.Tasks
 
+  @type t() :: %__MODULE__{}
+
+  @spec start(__MODULE__.t()) :: __MODULE__.t()
   def start(%__MODULE__{process_chunk: process_chunk, opts: opts, composite: composite} = gm)
       when is_list(opts) do
     gm = %{
@@ -69,13 +72,25 @@ defmodule Strom.GenMix do
   end
 
   @impl true
+  @spec init(__MODULE__.t()) :: {:ok, __MODULE__.t()}
   def init(%__MODULE__{} = gm) do
     {:ok, %{gm | pid: self()}}
+  end
+
+  @spec start_tasks(pid(), Strom.flow()) :: {pid(), map()}
+  def start_tasks(gm_pid, input_streams) do
+    GenServer.call(gm_pid, {:start_tasks, input_streams})
+  end
+
+  @spec run_tasks(pid(), atom()) :: :ok
+  def run_tasks(gm_pid, output_name) do
+    GenServer.call(gm_pid, {:run_tasks, output_name})
   end
 
   @spec call(map(), map()) :: map() | no_return()
   def call(flow, gm), do: Streams.call(flow, gm)
 
+  @spec state(pid()) :: __MODULE__.t()
   def state(pid), do: GenServer.call(pid, :state)
 
   @spec stop(any()) :: any()
@@ -83,6 +98,12 @@ defmodule Strom.GenMix do
     GenServer.call(gm.pid, :stop)
   end
 
+  @spec transfer_tasks(pid(), map(), atom()) :: :ok
+  def transfer_tasks(gm_pid, new_tasks, all_or_old) when all_or_old in [:all, :old] do
+    GenServer.cast(gm_pid, {:transfer_tasks, new_tasks, all_or_old})
+  end
+
+  @spec process_chunk(atom(), list(), Strom.flow(), any()) :: {Strom.flow(), boolean(), any()}
   def process_chunk(_input_stream_name, chunk, outputs, nil) do
     outputs
     |> Enum.reduce({%{}, false, nil}, fn {output_name, output_stream_fun}, {acc, any?, nil} ->
@@ -97,7 +118,7 @@ defmodule Strom.GenMix do
     new_tasks = Tasks.start_tasks(input_streams, gm)
     tasks = Map.merge(gm.tasks, new_tasks)
 
-    {:reply, {:ok, gm.pid, new_tasks},
+    {:reply, {gm.pid, new_tasks},
      %{gm | tasks_started: true, tasks_run: false, tasks: tasks, input_streams: input_streams}}
   end
 
@@ -118,16 +139,6 @@ defmodule Strom.GenMix do
       ) do
     clients = Map.put(gm.clients, client_pid, output_name)
     {:reply, :ok, %{gm | clients: clients}}
-  end
-
-  def handle_call(
-        {:replace_tasks, new_tasks},
-        _from,
-        %__MODULE__{tasks_started: true} = gm
-      ) do
-    old_tasks = Map.drop(gm.tasks, Map.keys(new_tasks))
-    run_new_tasks_and_halt_the_old_ones(new_tasks, old_tasks, gm.accs)
-    {:reply, :ok, %{gm | tasks_run: true, tasks: new_tasks}}
   end
 
   def handle_call(:stop, _from, %__MODULE__{} = gm) do
@@ -151,10 +162,17 @@ defmodule Strom.GenMix do
     after_action(%{gm | stopping: true})
   end
 
-  def handle_cast({:transfer_tasks, new_tasks}, gm) do
+  def handle_cast({:transfer_tasks, new_tasks, :all}, gm) do
     run_new_tasks_and_halt_the_old_ones(new_tasks, gm.tasks, gm.accs)
 
     after_action(%{gm | stopping: true})
+  end
+
+  def handle_cast({:transfer_tasks, new_tasks, :old}, gm) do
+    old_tasks = Map.drop(gm.tasks, Map.keys(new_tasks))
+    run_new_tasks_and_halt_the_old_ones(new_tasks, old_tasks, gm.accs)
+
+    after_action(%{gm | tasks_run: true, tasks: new_tasks})
   end
 
   def handle_cast(

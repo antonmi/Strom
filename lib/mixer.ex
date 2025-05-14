@@ -54,6 +54,7 @@ defmodule Strom.Mixer do
     GenMix.call(flow, mixer)
   end
 
+  @spec process_chunk(atom(), list(), Strom.flow(), nil) :: {Strom.flow(), boolean(), nil}
   def process_chunk(_input_stream_name, chunk, outputs, nil) when map_size(outputs) == 1 do
     [stream_name] = Map.keys(outputs)
     {%{stream_name => chunk}, Enum.any?(chunk), nil}

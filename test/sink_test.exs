@@ -1,5 +1,5 @@
 defmodule Strom.SinkTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   import Strom.TestHelper
   doctest Strom.Sink
 

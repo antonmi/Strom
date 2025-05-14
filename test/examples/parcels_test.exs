@@ -143,7 +143,6 @@ defmodule Strom.Examples.ParcelsTest do
 
     def decide(event, agent) do
       order_number = event[:order_number]
-      #            IO.inspect(map_size(memo), label: :decide)
 
       case event[:type] do
         "ORDER_CREATED" ->

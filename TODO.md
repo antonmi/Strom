@@ -14,3 +14,5 @@ Clustering:
 
 Refactoring
 - chunk transformer
+- hanging streams after delete component 
+- empty_gen_mix at the end of composite. delete, insert, and replace the last component

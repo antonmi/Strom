@@ -3,6 +3,7 @@ defmodule Strom do
 
   @type event() :: any()
   @type stream_name() :: any()
+  @type component() :: struct()
   @type stream() :: Enumerable.t(event())
   @type flow() :: %{optional(stream_name()) => stream()}
 end

@@ -88,6 +88,7 @@ defmodule Strom.Transformer do
     GenMix.call(flow, transformer)
   end
 
+  @spec process_chunk(atom(), list(), Strom.flow(), any()) :: {Strom.flow(), boolean(), any()}
   def process_chunk(input_stream_name, chunk, outputs, acc) do
     output_function = Map.get(outputs, input_stream_name)
 

@@ -1,13 +1,15 @@
 defmodule Strom.GenMix.Streams do
   @moduledoc "Utility module. There are functions for manipulating data in gen_mix"
 
+  alias Strom.GenMix
+
   def call(flow, gm) do
     input_streams =
       Enum.reduce(gm.inputs, %{}, fn name, acc ->
         Map.put(acc, name, Map.fetch!(flow, name))
       end)
 
-    {:ok, gm_pid, _new_tasks} = GenServer.call(gm.pid, {:start_tasks, input_streams})
+    {gm_pid, _new_tasks} = GenMix.start_tasks(gm.pid, input_streams)
 
     sub_flow = build_sub_flow(gm.outputs, gm_pid)
 
@@ -21,7 +23,7 @@ defmodule Strom.GenMix.Streams do
       stream =
         Stream.resource(
           fn ->
-            :ok = GenServer.call(gm_pid, {:run_tasks, output_name})
+            :ok = GenMix.run_tasks(gm_pid, output_name)
             gm_pid
           end,
           fn gm_pid ->
