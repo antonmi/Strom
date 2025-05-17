@@ -32,6 +32,30 @@ defmodule Strom.DeleteComponentsTest do
     assert [1020 | _] = Enum.reverse(list)
   end
 
+  test "delete with invalid indicies" do
+    stream = build_stream(Enum.to_list(1001..1020), 1)
+    transformer1 = Transformer.new(:stream, &(&1 + 10), nil, chunk: 1)
+    transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
+
+    composite =
+      [transformer1, transformer2]
+      |> Composite.new()
+      |> Composite.start()
+
+    %{stream: stream} = Composite.call(%{stream: stream}, composite)
+    task = Task.async(fn -> Enum.to_list(stream) end)
+
+    assert {:error, :cannot_replace_last_component} = Composite.delete(composite, 1)
+    assert {:error, :indicies_not_in_range} = Composite.delete(composite, {-5, 10})
+    assert {:error, :indicies_not_in_range} = Composite.delete(composite, {0, 2})
+    assert {:error, :indicies_not_in_range} = Composite.delete(composite, {1, 0})
+    assert {:error, :indicies_not_in_range} = Composite.delete(composite, {-1, -2})
+
+    list = Task.await(task)
+    Composite.stop(composite)
+    assert length(list) == 20
+  end
+
   test "delete one transformer with sleep 0" do
     stream = build_stream(Enum.to_list(10_001..20_000), 0)
     transformer1 = Transformer.new(:stream, &(&1 + 10), nil, chunk: 1)

@@ -165,15 +165,34 @@ defmodule Strom.Composite do
   end
 
   def handle_call(
+        {:replace, {index_from, index_to}, new_components},
+        _from,
+        %__MODULE__{components: components, name: name} = composite
+      )
+      when is_list(new_components) do
+    case Manipulations.replace(components, index_from, index_to, new_components, name) do
+      {components, _deleted_components, subflow} ->
+        composite = %{composite | components: components}
+        {:reply, {composite, subflow}, composite}
+
+      {:error, message} ->
+        {:reply, {:error, message}, composite}
+    end
+  end
+
+  def handle_call(
         {:delete, index_from, index_to},
         _from,
         %__MODULE__{components: components, name: name} = composite
       ) do
-    {components, _deleted_components, %{}} =
-      Manipulations.replace(components, index_from, index_to, [], name)
+    case Manipulations.replace(components, index_from, index_to, [], name) do
+      {components, _deleted_components, %{}} ->
+        composite = %{composite | components: components}
+        {:reply, composite, composite}
 
-    composite = %{composite | components: components}
-    {:reply, composite, composite}
+      {:error, message} ->
+        {:reply, {:error, message}, composite}
+    end
   end
 
   def handle_call(
@@ -182,22 +201,14 @@ defmodule Strom.Composite do
         %__MODULE__{components: components, name: name} = composite
       )
       when is_list(new_components) do
-    {components, [], subflow} = Manipulations.insert(components, index, new_components, name)
-    composite = %{composite | components: components}
-    {:reply, {composite, subflow}, composite}
-  end
+    case Manipulations.insert(components, index, new_components, name) do
+      {components, [], subflow} ->
+        composite = %{composite | components: components}
+        {:reply, {composite, subflow}, composite}
 
-  def handle_call(
-        {:replace, {index_from, index_to}, new_components},
-        _from,
-        %__MODULE__{components: components, name: name} = composite
-      )
-      when is_list(new_components) do
-    {components, _deleted_components, subflow} =
-      Manipulations.replace(components, index_from, index_to, new_components, name)
-
-    composite = %{composite | components: components}
-    {:reply, {composite, subflow}, composite}
+      {:error, message} ->
+        {:reply, {:error, message}, composite}
+    end
   end
 
   @impl true
