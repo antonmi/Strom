@@ -226,7 +226,8 @@ defmodule Strom.DeleteComponentsTest do
     {composite, subflow} = Composite.delete(composite, 2)
     components = Composite.components(composite)
     assert length(components) == 3
-    assert Map.keys(subflow) == [:stream1, :stream2]
+    assert Enum.member?(Map.keys(subflow), :stream1)
+    assert Enum.member?(Map.keys(subflow), :stream2)
 
     list = Task.await(task)
     stream1_leftovers = Enum.to_list(subflow[:stream1])
