@@ -99,47 +99,49 @@ defmodule Strom.Composite do
   @spec stop(__MODULE__.t()) :: :ok
   def stop(%__MODULE__{} = composite), do: StartStop.stop(composite)
 
-  @spec delete(__MODULE__.t(), {integer(), integer()}) :: __MODULE__.t()
+  @spec delete(__MODULE__.t(), {integer(), integer()}) :: __MODULE__.t() | {:error, atom()}
   def delete(composite, {index_from, index_to}) do
     GenServer.call(composite.name, {:delete, index_from, index_to})
   end
 
-  @spec delete(__MODULE__.t(), integer()) :: __MODULE__.t()
+  @spec delete(__MODULE__.t(), integer()) :: __MODULE__.t() | {:error, atom()}
   def delete(composite, index) do
     delete(composite, {index, index})
   end
 
-  @spec insert(__MODULE__.t(), integer(), Strom.component()) :: {__MODULE__.t(), Strom.flow()}
+  @spec insert(__MODULE__.t(), integer(), Strom.component()) ::
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def insert(composite, index, new_component) when is_struct(new_component) do
     insert(composite, index, [new_component])
   end
 
   @spec insert(__MODULE__.t(), integer(), list(Strom.component())) ::
-          {__MODULE__.t(), Strom.flow()}
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def insert(composite, index, new_components) when is_list(new_components) do
     GenServer.call(composite.name, {:insert, index, new_components})
   end
 
-  @spec replace(__MODULE__.t(), integer(), Strom.component()) :: {__MODULE__.t(), Strom.flow()}
+  @spec replace(__MODULE__.t(), integer(), Strom.component()) ::
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def replace(composite, index, new_component)
       when is_integer(index) and is_struct(new_component) do
     replace(composite, {index, index}, [new_component])
   end
 
   @spec replace(__MODULE__.t(), {integer(), integer()}, Strom.component()) ::
-          {__MODULE__.t(), Strom.flow()}
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def replace(composite, {index_from, index_to}, new_component) when is_struct(new_component) do
     replace(composite, {index_from, index_to}, [new_component])
   end
 
   @spec replace(__MODULE__.t(), {integer(), integer()}, list(Strom.component())) ::
-          {__MODULE__.t(), Strom.flow()}
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def replace(composite, {index_from, index_to}, new_components) when is_list(new_components) do
     GenServer.call(composite.name, {:replace, {index_from, index_to}, new_components})
   end
 
   @spec replace(__MODULE__.t(), integer(), list(Strom.component())) ::
-          {__MODULE__.t(), Strom.flow()}
+          {__MODULE__.t(), Strom.flow()} | {:error, atom()}
   def replace(composite, index, new_components)
       when is_integer(index) and is_list(new_components) do
     replace(composite, {index, index}, new_components)
