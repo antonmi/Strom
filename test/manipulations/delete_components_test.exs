@@ -1,8 +1,7 @@
 defmodule Strom.DeleteComponentsTest do
   use ExUnit.Case, async: false
   import Strom.TestHelper
-  alias Strom.Transformer
-  alias Strom.Composite
+  alias Strom.{Composite, Mixer, Transformer}
 
   @moduletag timeout: 10_000
 
@@ -20,7 +19,7 @@ defmodule Strom.DeleteComponentsTest do
     task = Task.async(fn -> Enum.to_list(stream) end)
 
     Process.sleep(10)
-    composite = Composite.delete(composite, 0)
+    {composite, %{}} = Composite.delete(composite, 0)
     components = Composite.components(composite)
     assert length(components) == 1
 
@@ -71,7 +70,7 @@ defmodule Strom.DeleteComponentsTest do
     task = Task.async(fn -> Enum.to_list(stream) end)
 
     Process.sleep(1)
-    composite = Composite.delete(composite, 0)
+    {composite, %{}} = Composite.delete(composite, 0)
     components = Composite.components(composite)
     assert length(components) == 1
 
@@ -104,7 +103,7 @@ defmodule Strom.DeleteComponentsTest do
     task3 = Task.async(fn -> Enum.to_list(stream3) end)
 
     Process.sleep(5)
-    composite = Composite.delete(composite, 0)
+    {composite, %{}} = Composite.delete(composite, 0)
 
     components = Composite.components(composite)
     assert length(components) == 1
@@ -115,14 +114,14 @@ defmodule Strom.DeleteComponentsTest do
 
     Composite.stop(composite)
     assert length(list1) == 10_000
-    # assert [10_011 | _] = list1
-    # assert [20_000 | _] = Enum.reverse(list1)
+    assert [10_011 | _] = list1
+    assert [20_000 | _] = Enum.reverse(list1)
     assert length(list2) == 10_000
-    # assert [20_011 | _] = list2
-    # assert [30_000 | _] = Enum.reverse(list2)
+    assert [20_011 | _] = list2
+    assert [30_000 | _] = Enum.reverse(list2)
     assert length(list3) == 10_000
-    # assert [30_011 | _] = list3
-    # assert [40_000 | _] = Enum.reverse(list3)
+    assert [30_011 | _] = list3
+    assert [40_000 | _] = Enum.reverse(list3)
   end
 
   test "delete two transformers" do
@@ -141,7 +140,7 @@ defmodule Strom.DeleteComponentsTest do
     task = Task.async(fn -> Enum.to_list(stream) end)
 
     Process.sleep(7)
-    composite = Composite.delete(composite, {0, 1})
+    {composite, %{}} = Composite.delete(composite, {0, 1})
     components = Composite.components(composite)
     assert length(components) == 1
 
@@ -190,24 +189,51 @@ defmodule Strom.DeleteComponentsTest do
     components_after = Composite.components(composite)
     assert length(components_after) == 1
 
-    try do
-      numbers =
-        tasks
-        |> Task.await_many(1000)
-        |> List.flatten()
+    numbers =
+      tasks
+      |> Task.await_many(1000)
+      |> List.flatten()
 
-      assert length(numbers) == max * streams_count
-    catch
-      :exit, error ->
-        IO.inspect(error)
-        IO.inspect({streams_count, transformer_count, max})
-    end
+    assert length(numbers) == max * streams_count
 
     stopped_components = Enum.slice(initial_components, 0, transformer_count - 1)
 
     Enum.each(stopped_components, fn component ->
       assert wait_for_dying(component.pid)
     end)
+
+    Composite.stop(composite)
+  end
+
+  test "delete mixer having 2 streams hanging" do
+    stream1 = build_stream(Enum.to_list(1001..1020), 1)
+    stream2 = build_stream(Enum.to_list(1001..1020), 1)
+    transformer1 = Transformer.new(:stream1, &(&1 + 10), nil, chunk: 1)
+    transformer2 = Transformer.new(:stream2, & &1, nil, chunk: 1)
+    mixer = Mixer.new([:stream1, :stream2], :stream, chunk: 1)
+    transformer3 = Transformer.new(:stream, &(&1 + 100), nil, chunk: 1)
+
+    composite =
+      [transformer1, transformer2, mixer, transformer3]
+      |> Composite.new()
+      |> Composite.start()
+
+    %{stream: stream} = Composite.call(%{stream1: stream1, stream2: stream2}, composite)
+
+    task = Task.async(fn -> Enum.to_list(stream) end)
+
+    Process.sleep(10)
+    {composite, subflow} = Composite.delete(composite, 2)
+    components = Composite.components(composite)
+    assert length(components) == 3
+    assert Map.keys(subflow) == [:stream1, :stream2]
+
+    list = Task.await(task)
+    stream1_leftovers = Enum.to_list(subflow[:stream1])
+    stream2_leftovers = Enum.to_list(subflow[:stream2])
+
+    all_numbers = list ++ stream1_leftovers ++ stream2_leftovers
+    assert length(all_numbers) == 40
 
     Composite.stop(composite)
   end

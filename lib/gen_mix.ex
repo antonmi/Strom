@@ -297,6 +297,13 @@ defmodule Strom.GenMix do
           send(new_task_pid, {:task, :run, accs[stream_name]})
       end
     end)
+
+    # halt the old tasks that are not in the new tasks
+    old_tasks
+    |> Map.drop(Map.keys(new_tasks))
+    |> Enum.each(fn {task_pid, _stream_name} ->
+      send(task_pid, {:task, :halt})
+    end)
   end
 
   defp send_continue_to_tasks(tasks) do

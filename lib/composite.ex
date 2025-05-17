@@ -188,9 +188,9 @@ defmodule Strom.Composite do
         %__MODULE__{components: components, name: name} = composite
       ) do
     case Manipulations.replace(components, index_from, index_to, [], name) do
-      {components, _deleted_components, %{}} ->
+      {components, _deleted_components, subflow} ->
         composite = %{composite | components: components}
-        {:reply, composite, composite}
+        {:reply, {composite, subflow}, composite}
 
       {:error, message} ->
         {:reply, {:error, message}, composite}
