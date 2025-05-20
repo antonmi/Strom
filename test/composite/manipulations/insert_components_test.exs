@@ -91,36 +91,36 @@ defmodule Strom.Composite.Manipulations.InsertComponentsTest do
     assert length(list) == 20
   end
 
-  def func(event) do
-    IO.puts("event: #{event}")
-
-    if event < 10 do
+  def func(event, position) do
+    if event < 3 do
       composite = %Composite{name: :composite}
 
-      Composite.insert(composite, event, [
-        # transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1),
-        Transformer.new(:stream, &func/1, nil, chunk: 1)
-      ])
-      |> IO.inspect()
+      {_, _} =
+        Composite.insert(composite, position + 2, [
+          Transformer.new(:stream, &func/2, position + 2, chunk: 1),
+          Transformer.new(:stream, & &1, nil, chunk: 1)
+        ])
 
-      event + 1
+      {[event + 1, event + 1], position}
     else
-      event |> IO.inspect(label: "after")
+      {[event], position}
     end
   end
 
-  # TODO
-  # test "insert on the fly" do
-  #   transformer1 = Transformer.new(:stream, &func/1, nil, chunk: 1)
-  #   transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
+  test "insert on the fly" do
+    transformer1 = Transformer.new(:stream, &func/2, 0, chunk: 1)
+    transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
+    transformer3 = Transformer.new(:stream, & &1, nil, chunk: 1)
 
-  #   composite =
-  #     [transformer1, transformer2]
-  #     |> Composite.new(:composite)
-  #     |> Composite.start()
+    composite =
+      [transformer1, transformer2, transformer3]
+      |> Composite.new(:composite)
+      |> Composite.start()
 
-  #   %{stream: stream} = Composite.call(%{stream: [1, 11, 2, 12, 3, 13]}, composite)
+    stream = build_stream(Enum.to_list(1..1), 1)
+    %{stream: stream} = Composite.call(%{stream: stream}, composite)
 
-  #   Enum.to_list(stream) |> IO.inspect()
-  # end
+    assert Enum.to_list(stream) == [2, 3, 3]
+    assert length(Composite.components(composite)) == 7
+  end
 end

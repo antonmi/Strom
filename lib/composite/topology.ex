@@ -5,7 +5,8 @@ defmodule Strom.Composite.Topology do
   alias Strom.{Composite, Mixer, Splitter, Source, Transformer, Sink}
 
   @info_width 50
-  def draw(%Composite{components: components}) do
+  def draw(%Composite{} = composite) do
+    components = refresh_components(composite)
     Enum.reduce(components, {[], 0}, fn %{inputs: inputs, outputs: outputs} = component,
                                         {streams, index} ->
       streams =
@@ -13,6 +14,14 @@ defmodule Strom.Composite.Topology do
 
       {streams, index + 1}
     end)
+  end
+
+  defp refresh_components(composite) do
+    if is_pid(composite.pid) do
+      Composite.components(composite)
+    else
+      composite.components
+    end
   end
 
   defp draw_line(index, component, streams_after_inputs, inputs, outputs) do
