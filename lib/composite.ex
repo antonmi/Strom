@@ -36,7 +36,7 @@ defmodule Strom.Composite do
 
   @type t :: %__MODULE__{}
 
-  @spec new([struct()]) :: __MODULE__.t()
+  @spec new([struct()], atom()) :: __MODULE__.t()
   def new(components, name \\ nil) when is_list(components) do
     components =
       components

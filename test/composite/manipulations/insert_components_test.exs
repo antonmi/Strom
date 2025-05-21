@@ -1,4 +1,4 @@
-defmodule Strom.InsertComponentsTest do
+defmodule Strom.Composite.Manipulations.InsertComponentsTest do
   use ExUnit.Case, async: false
   import Strom.TestHelper
   alias Strom.{Splitter, Transformer}
@@ -89,5 +89,38 @@ defmodule Strom.InsertComponentsTest do
 
     list = Task.await(task)
     assert length(list) == 20
+  end
+
+  def func(event, position) do
+    if event < 3 do
+      composite = %Composite{name: :composite}
+
+      {_, _} =
+        Composite.insert(composite, position + 2, [
+          Transformer.new(:stream, &func/2, position + 2, chunk: 1),
+          Transformer.new(:stream, & &1, nil, chunk: 1)
+        ])
+
+      {[event + 1, event + 1], position}
+    else
+      {[event], position}
+    end
+  end
+
+  test "insert on the fly" do
+    transformer1 = Transformer.new(:stream, &func/2, 0, chunk: 1)
+    transformer2 = Transformer.new(:stream, & &1, nil, chunk: 1)
+    transformer3 = Transformer.new(:stream, & &1, nil, chunk: 1)
+
+    composite =
+      [transformer1, transformer2, transformer3]
+      |> Composite.new(:composite)
+      |> Composite.start()
+
+    stream = build_stream(Enum.to_list(1..1), 1)
+    %{stream: stream} = Composite.call(%{stream: stream}, composite)
+
+    assert Enum.to_list(stream) == [2, 3, 3]
+    assert length(Composite.components(composite)) == 7
   end
 end

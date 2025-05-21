@@ -30,6 +30,8 @@ defmodule Strom.MixerTree do
         {[mixer | acc], [output | outputs], counter + 1}
       end)
 
+    mixers = Enum.reverse(mixers)
+
     if count > parts do
       mixers ++ build_mixers(outputs, level + 1, parts, final_output, opts)
     else

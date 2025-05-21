@@ -1,4 +1,4 @@
-defmodule Strom.ReplaceComponentsTest do
+defmodule Strom.Composite.Manipulations.ReplaceComponentsTest do
   use ExUnit.Case, async: false
   import Strom.TestHelper
   alias Strom.{Mixer, Splitter, Transformer}

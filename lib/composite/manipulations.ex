@@ -6,7 +6,7 @@ defmodule Strom.Composite.Manipulations do
   alias Strom.GenMix
 
   @spec insert(list(Strom.component()), integer(), list(Strom.component()), atom()) ::
-          {list(Strom.component()), list(Strom.component()), Strom.flow()}
+          {list(Strom.component()), list(Strom.component()), Strom.flow()} | {:error, any()}
   def insert(components, index, new_components, name) when is_list(new_components) do
     case valid_insert_indices?(components, index) do
       true ->

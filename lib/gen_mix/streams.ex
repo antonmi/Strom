@@ -13,9 +13,14 @@ defmodule Strom.GenMix.Streams do
 
     sub_flow = build_sub_flow(gm.outputs, gm_pid)
 
-    flow
-    |> Map.drop(gm.inputs)
-    |> Map.merge(sub_flow)
+    flow = Map.drop(flow, gm.inputs)
+
+    Enum.reduce(sub_flow, flow, fn {name, stream}, flow ->
+      case Map.get(flow, name) do
+        nil -> Map.put(flow, name, stream)
+        existing_stream -> Map.put(flow, name, Stream.concat(existing_stream, stream))
+      end
+    end)
   end
 
   defp build_sub_flow(outputs, gm_pid) do

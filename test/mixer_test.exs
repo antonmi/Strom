@@ -2,7 +2,7 @@ defmodule Strom.MixerTest do
   use ExUnit.Case, async: true
   doctest Strom.Mixer
 
-  alias Strom.{Composite, Mixer, Source}
+  alias Strom.{Composite, Mixer, Source, Transformer}
   alias Strom.Source.ReadLines
 
   setup do
@@ -144,5 +144,20 @@ defmodule Strom.MixerTest do
       Enum.each([1, 2, 3, 4, 5], fn num -> assert Enum.member?(results, num) end)
       Composite.stop(composite)
     end
+  end
+
+  test "two mixers mix into the same stream" do
+    mixer1 = Mixer.new([:s1, :s2], :stream, chunk: 1)
+    mixer2 = Mixer.new([:s3, :s4], :stream, chunk: 1)
+    transformer = Transformer.new(:stream, & &1)
+
+    composite =
+      [mixer1, mixer2, transformer]
+      |> Composite.new()
+      |> Composite.start()
+
+    %{stream: stream} = Composite.call(%{s1: [1], s2: [2], s3: [3], s4: [4]}, composite)
+
+    assert Enum.sort(Enum.to_list(stream)) == [1, 2, 3, 4]
   end
 end
