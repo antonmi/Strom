@@ -4,16 +4,26 @@ defmodule Strom.Composite.Topology do
   """
   alias Strom.{Composite, Mixer, Splitter, Source, Transformer, Sink}
 
-  @info_width 50
+  @info_width 70
+
+  @spec draw(Composite.t()) :: :ok
   def draw(%Composite{} = composite) do
     components = refresh_components(composite)
-    Enum.reduce(components, {[], 0}, fn %{inputs: inputs, outputs: outputs} = component,
+    {streams, _} = Enum.reduce(components, {[], 0}, fn %{inputs: inputs, outputs: outputs} = component,
                                         {streams, index} ->
-      streams =
-        draw_line(index, component, Enum.uniq(streams ++ inputs), inputs, Map.keys(outputs))
+      {inputs, outputs} = case component do
+        %Source{} -> {[],  Map.keys(outputs)}
+        %Sink{} -> {inputs, []}
+        _ -> {inputs, Map.keys(outputs)}
+      end
+      started = inputs -- streams
+      streams =  draw_line(index, component, streams ++ started, inputs, outputs)
 
       {streams, index + 1}
     end)
+    draw_stream_names(streams)
+    draw_streams(streams, [])
+    :ok
   end
 
   defp refresh_components(composite) do
@@ -27,19 +37,26 @@ defmodule Strom.Composite.Topology do
   defp draw_line(index, component, streams_after_inputs, inputs, outputs) do
     draw_stream_names(streams_after_inputs)
     input_positions = draw_streams(streams_after_inputs, inputs)
-
-    {streams_after_outputs, output_positions} =
-      find_place_for_outputs(streams_after_inputs, inputs, outputs)
-
-    average_position = average_position(input_positions, output_positions)
-
+    average_position = average_position(input_positions)
+    streams_after_outputs =
+      find_place_for_outputs(streams_after_inputs, inputs, outputs, average_position)
     draw_component_description(index, component)
     draw_component(component, streams_after_outputs, outputs, average_position)
 
-    streams_after_outputs
+      streams_after_outputs
   end
 
-  defp find_place_for_outputs(streams, inputs, outputs) do
+  defp average_position(input_positions) do
+    case input_positions do
+      [] ->
+        0
+
+      positions when is_list(positions) ->
+        round(Enum.sum(positions) / length(positions))
+    end
+  end
+
+  defp find_place_for_outputs(streams, inputs, outputs, average_position) do
     ended = inputs -- outputs
 
     streams =
@@ -54,10 +71,10 @@ defmodule Strom.Composite.Topology do
       end)
       |> Enum.reverse()
 
-    Enum.reduce(outputs, {streams, []}, fn output, {acc, positions} ->
+    Enum.reduce(outputs, streams, fn output, acc ->
       case Enum.member?(streams, output) do
         true ->
-          {acc, positions}
+          acc
 
         false ->
           nils =
@@ -66,28 +83,16 @@ defmodule Strom.Composite.Topology do
 
           case nils do
             [] ->
-              {[output | acc], [length(acc) | positions]}
+              [output | acc]
 
             nils when is_list(nils) ->
-              index = round(Enum.sum_by(nils, fn {_, index} -> index end) / length(nils))
-              {List.replace_at(acc, index, output), [index | positions]}
+              {nil, closest_to_average} = Enum.min_by(nils, fn {_, index} -> abs(index - average_position) end)
+              List.replace_at(acc, closest_to_average, output)
           end
       end
     end)
   end
 
-  defp average_position(input_positions, output_positions) do
-    case {input_positions, output_positions} do
-      {[], positions} when is_list(positions) ->
-        round(Enum.sum(positions) / length(positions))
-
-      {positions, []} when is_list(positions) ->
-        round(Enum.sum(positions) / length(positions))
-
-      {in_pos, out_pos} when is_list(in_pos) and is_list(out_pos) ->
-        round((Enum.sum(in_pos) + Enum.sum(out_pos)) / (length(in_pos) + length(out_pos)))
-    end
-  end
 
   defp draw_stream_names(streams) do
     string =
@@ -96,7 +101,7 @@ defmodule Strom.Composite.Topology do
       |> Enum.map(&to_string/1)
       |> Enum.join(" ")
 
-    IO.write(format_to_width(string, @info_width))
+    IO.write(format_to_width("\e[3m#{string}\e[0m", @info_width))
   end
 
   defp draw_streams(streams, inputs) do
@@ -124,19 +129,19 @@ defmodule Strom.Composite.Topology do
   defp draw_component_description(index, component) do
     case component do
       %Mixer{} ->
-        IO.write(format_to_width("Mixer (#{index})", @info_width))
+        IO.write(format_to_width("\e[1mMixer (#{index})\e[0m", @info_width))
 
       %Splitter{} ->
-        IO.write(format_to_width("Splitter (#{index})", @info_width))
+        IO.write(format_to_width("\e[1mSplitter (#{index})\e[0m", @info_width))
 
       %Transformer{} ->
-        IO.write(format_to_width("Transformer (#{index})", @info_width))
+        IO.write(format_to_width("\e[1mTransformer (#{index})\e[0m", @info_width))
 
       %Source{} ->
-        IO.write(format_to_width("Source (#{index})", @info_width))
+        IO.write(format_to_width("\e[1mSource (#{index})\e[0m", @info_width))
 
       %Sink{} ->
-        IO.write(format_to_width("Sink (#{index})", @info_width))
+        IO.write(format_to_width("\e[1mSink (#{index})\e[0m", @info_width))
     end
   end
 

@@ -35,7 +35,7 @@ defmodule Strom.Composite.Topology.DrawTest do
   end
 
   test "draw mixer tree" do
-    mixer_tree = MixerTree.new([:s1, :s2, :s3, :s4, :s5, :s6], :stream, parts: 2)
+    mixer_tree = MixerTree.new([:s1, :s2, :s3, :s4, :s5, :s6, :s7], :stream, parts: 2)
     transformer = Transformer.new(:stream, & &1)
 
     composite =
