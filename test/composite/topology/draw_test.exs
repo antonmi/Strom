@@ -4,10 +4,10 @@ defmodule Strom.Composite.Topology.DrawTest do
   alias Strom.Composite.Topology
 
   test "draw example 1" do
-    source = Source.new(:stream1, [])
-    transformer1 = Transformer.new(:stream1, & &1)
-    splitter = Splitter.new(:stream1, [:stream4, :stream5])
-    transformer5 = Transformer.new(:stream5, & &1)
+    source = Source.new(:stream1, [], label: "Source of stream1")
+    transformer1 = Transformer.new(:stream1, & &1, nil, label: "Transformer 1")
+    splitter = Splitter.new(:stream1, [:stream4, :stream5], label: "Splitter")
+    transformer5 = Transformer.new(:stream5, & &1, nil, label: "Transformer 5")
 
     transformer2 = Transformer.new(:stream2, & &1)
     mixer = Mixer.new([:stream1, :stream2, :stream3], :stream)
