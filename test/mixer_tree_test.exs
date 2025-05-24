@@ -1,29 +1,47 @@
 defmodule Strom.MixerTreeTest do
   use ExUnit.Case, async: true
 
-  alias Strom.{Composite, MixerTree, Source}
+  alias Strom.{Composite, MixerTree}
 
-  @tag timeout: :infinity
-  test "messages" do
-    count = :rand.uniform(100)
+  test "mixes 5 streams with 2 parts" do
+    count = 5
+    parts = 2
+    names = Enum.map(1..count, &String.to_atom("s#{&1}"))
 
-    names = Enum.map(1..count, &String.to_atom("tick#{&1}"))
-
-    sources =
-      Enum.map(names, fn name ->
-        Source.new(name, [:tick])
-      end)
-
-    mixer = MixerTree.new(names, :stream, parts: 5 + :rand.uniform(5))
-
-    composite =
-      [sources, mixer]
-      |> Composite.new()
+    mixer_tree =
+      names
+      |> MixerTree.new(:stream, parts: parts)
       |> Composite.start()
 
-    flow = Composite.call(%{}, composite)
+    assert length(Composite.components(mixer_tree)) == 6
 
-    assert length(Enum.to_list(flow[:stream])) == count
-    Composite.stop(composite)
+    flow =
+      names
+      |> Enum.reduce(%{}, fn name, acc -> Map.put(acc, name, Enum.to_list(1..10)) end)
+      |> Composite.call(mixer_tree)
+
+    assert length(Enum.to_list(flow[:stream])) == count * 10
+    Composite.stop(mixer_tree)
+  end
+
+  test "mixes random number of streams" do
+    count = :rand.uniform(100)
+
+    names = Enum.map(1..count, &String.to_atom("s#{&1}"))
+
+    parts = 5 + :rand.uniform(5)
+
+    mixer_tree =
+      names
+      |> MixerTree.new(:stream, parts: parts)
+      |> Composite.start()
+
+    flow =
+      names
+      |> Enum.reduce(%{}, fn name, acc -> Map.put(acc, name, Enum.to_list(1..10)) end)
+      |> Composite.call(mixer_tree)
+
+    assert length(Enum.to_list(flow[:stream])) == count * 10
+    Composite.stop(mixer_tree)
   end
 end
