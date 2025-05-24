@@ -16,7 +16,7 @@ defmodule Strom.Composite.Topology do
                                           {streams, index} ->
         {inputs, outputs} =
           case component do
-            %Source{} -> {[], Map.keys(outputs)}
+            %Source{} -> {Map.keys(outputs), Map.keys(outputs)}
             %Sink{} -> {inputs, []}
             _ -> {inputs, Map.keys(outputs)}
           end
@@ -91,7 +91,7 @@ defmodule Strom.Composite.Topology do
 
           case nils do
             [] ->
-              [output | acc]
+              acc ++ [output]
 
             nils when is_list(nils) ->
               {nil, closest_to_average} =
