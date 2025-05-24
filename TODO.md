@@ -13,6 +13,10 @@ Clustering:
 
 
 Refactoring
-- chunk transformer
-- hanging streams after delete component 
-- empty_gen_mix at the end of composite. delete, insert, and replace the last component
+- memo instead of acc
+- event instead of el or element
+
+Bugs:
+
+New features:
+- Splitter tree (round-robin)
