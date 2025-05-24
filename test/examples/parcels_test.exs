@@ -210,15 +210,23 @@ defmodule Strom.Examples.ParcelsTest do
       {:ok, agent} = Agent.start_link(fn -> %{} end)
 
       [
-        source(:orders, ReadLines.new("test/examples/parcels/orders.csv"), chunk: @chunk),
-        transform([:orders], &__MODULE__.build_order/1, nil, chunk: @chunk),
-        source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv"), chunk: @chunk),
-        transform([:parcels], &__MODULE__.build_parcel/1, nil, chunk: @chunk),
-        mix([:orders, :parcels], :mixed, chunk: @chunk),
-        #        mix([:orders, :parcels], :mixed, chunk: %{orders: 1000, parcels: 3000}),
-        transform([:mixed], &ParcelsFlow.order_seen/2, 0, chunk: @chunk),
-        transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: @chunk),
-        transform([:mixed], &ParcelsFlow.decide/2, agent, chunk: @chunk),
+        source(:orders, ReadLines.new("test/examples/parcels/orders.csv"),
+          chunk: @chunk,
+          label: "read_orders"
+        ),
+        transform([:orders], &__MODULE__.build_order/1, nil, chunk: @chunk, label: "build_order"),
+        source(:parcels, ReadLines.new("test/examples/parcels/parcels.csv"),
+          chunk: @chunk,
+          label: "read_parcels"
+        ),
+        transform([:parcels], &__MODULE__.build_parcel/1, nil,
+          chunk: @chunk,
+          label: "build_parcel"
+        ),
+        mix([:orders, :parcels], :mixed, chunk: @chunk, label: "mix orders and parcels"),
+        transform([:mixed], &ParcelsFlow.order_seen/2, 0, chunk: @chunk, label: "order_seen"),
+        transform([:mixed], &ParcelsFlow.force_order/2, %{}, chunk: @chunk, label: "force_order"),
+        transform([:mixed], &ParcelsFlow.decide/2, agent, chunk: @chunk, label: "decide"),
         split(
           :mixed,
           %{
@@ -228,13 +236,17 @@ defmodule Strom.Examples.ParcelsTest do
           chunk: @chunk
         ),
         transform([:threshold_exceeded, :all_parcels_shipped], &__MODULE__.to_string/1, nil,
-          chunk: @chunk
+          chunk: @chunk,
+          label: "to_string"
         ),
-        sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv")),
+        sink(:threshold_exceeded, WriteLines.new("test/examples/parcels/threshold_exceeded.csv"),
+          label: "write threshold exceeded"
+        ),
         sink(
           :all_parcels_shipped,
           WriteLines.new("test/examples/parcels/all_parcels_shipped.csv"),
-          sync: true
+          sync: true,
+          label: "write all parcels shipped"
         )
       ]
     end
@@ -273,6 +285,7 @@ defmodule Strom.Examples.ParcelsTest do
       |> Composite.new()
       |> Composite.start()
 
+    Composite.Topology.draw(parcels_flow)
     Composite.call(%{}, parcels_flow)
 
     shipped_length =
