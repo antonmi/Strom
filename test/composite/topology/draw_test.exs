@@ -1,6 +1,7 @@
 defmodule Strom.Composite.Topology.DrawTest do
   use ExUnit.Case, async: false
-  alias Strom.{Composite, Mixer, MixerTree, Transformer, Sink, Source, Splitter}
+  alias Strom.{Composite, Mixer, Transformer, Sink, Source, Splitter}
+  alias Strom.{MixerTree, SplitterTree}
   alias Strom.Composite.Topology
 
   test "draw example 1" do
@@ -35,7 +36,7 @@ defmodule Strom.Composite.Topology.DrawTest do
   end
 
   test "draw mixer tree" do
-    mixer_tree = MixerTree.new([:s1, :s2, :s3, :s4, :s5, :s6, :s7], :stream, parts: 2)
+    mixer_tree = MixerTree.new([:s1, :s2, :s3, :s4, :s5, :s6, :s7], :stream, parts: 3)
     transformer = Transformer.new(:stream, & &1)
 
     composite =
@@ -55,5 +56,30 @@ defmodule Strom.Composite.Topology.DrawTest do
       |> Composite.new()
 
     Topology.draw(composite)
+  end
+
+  test "draw several sources and sinks" do
+    source1 = Source.new(:s1, [])
+    source2 = Source.new(:s2, [])
+    source3 = Source.new(:s3, [])
+    sink1 = Sink.new(:s1, %Sink{})
+    sink2 = Sink.new(:s2, %Sink{})
+    sink3 = Sink.new(:s3, %Sink{})
+
+    composite =
+      [source1, source2, source3, sink1, sink2, sink3]
+      |> Composite.new()
+
+    Topology.draw(composite)
+  end
+
+  test "draw mixer_tree (order of streams is important)" do
+    mixer_tree = MixerTree.new([:s1, :s2, :s3, :s4, :s5, :s6, :s7], :stream, parts: 3)
+    Topology.draw(mixer_tree)
+  end
+
+  test "draw splitter_tree" do
+    splitter_tree = SplitterTree.new(:stream, [:s1, :s2, :s3, :s4, :s5, :s6, :s7], parts: 3)
+    Topology.draw(splitter_tree)
   end
 end
