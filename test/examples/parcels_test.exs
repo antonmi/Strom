@@ -285,7 +285,6 @@ defmodule Strom.Examples.ParcelsTest do
       |> Composite.new()
       |> Composite.start()
 
-    Composite.Topology.draw(parcels_flow)
     Composite.call(%{}, parcels_flow)
 
     shipped_length =
