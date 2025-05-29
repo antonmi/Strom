@@ -13,6 +13,7 @@ Clustering:
 
 
 Refactoring
+- annoying tests with files
 - memo instead of acc
 - event instead of el or element
 
