@@ -6,4 +6,5 @@ defmodule Strom do
   @type component() :: struct()
   @type stream() :: Enumerable.t(event())
   @type flow() :: %{optional(stream_name()) => stream()}
+  @type duplex_flow() :: {flow(), flow()}
 end
