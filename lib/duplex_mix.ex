@@ -86,10 +86,7 @@ defmodule Strom.DuplexMix do
 
   @spec run_tasks(pid(), atom(), :left | :right) :: :ok
   def run_tasks(gm_pid, output_name, side) do
-    case side do
-      :left -> GenServer.call(gm_pid, {:run_left_tasks, output_name})
-      :right -> GenServer.call(gm_pid, {:run_right_tasks, output_name})
-    end
+    GenServer.call(gm_pid, {:run_tasks, output_name, side})
   end
 
   @spec call(Strom.duplex_flow(), map()) :: Strom.duplex_flow() | no_return()
@@ -175,46 +172,42 @@ defmodule Strom.DuplexMix do
   end
 
   def handle_call(
-        {:run_left_tasks, output_name},
+        {:run_tasks, output_name, side},
         {client_pid, _ref},
-        %__MODULE__{tasks_started: {true, _}, tasks_run: {false, right_running}} = gm
+        %__MODULE__{tasks_started: {_, true}, tasks_run: {left_run?, right_run?}} = gm
       ) do
-    Tasks.run_tasks(elem(gm.tasks, 0), elem(gm.accs, 0))
-    {left_clients, right_clients} = gm.clients
-    left_clients = Map.put(left_clients, client_pid, output_name)
+    unless left_run? do
+      Tasks.run_tasks(elem(gm.tasks, 0), elem(gm.accs, 0))
+    end
 
-    {:reply, :ok,
-     %{gm | tasks_run: {true, right_running}, clients: {left_clients, right_clients}}}
-  end
+    unless right_run? do
+      Tasks.run_tasks(elem(gm.tasks, 1), elem(gm.accs, 1))
+    end
 
-  def handle_call(
-        {:run_left_tasks, output_name},
-        {client_pid, _ref},
-        %__MODULE__{tasks_started: {true, _}, tasks_run: {true, _}} = gm
-      ) do
     {left_clients, right_clients} = gm.clients
-    left_clients = Map.put(left_clients, client_pid, output_name)
-    {:reply, :ok, %{gm | clients: {left_clients, right_clients}}}
-  end
 
-  def handle_call(
-        {:run_right_tasks, output_name},
-        {client_pid, _ref},
-        %__MODULE__{tasks_started: {_, true}, tasks_run: {_, false}} = gm
-      ) do
-    Tasks.run_tasks(elem(gm.tasks, 1), elem(gm.accs, 1))
-    {left_clients, right_clients} = gm.clients
-    right_clients = Map.put(right_clients, client_pid, output_name)
+    {left_clients, right_clients} =
+      case side do
+        :left -> {Map.put(left_clients, client_pid, output_name), right_clients}
+        :right -> {left_clients, Map.put(right_clients, client_pid, output_name)}
+      end
+
     {:reply, :ok, %{gm | tasks_run: {true, true}, clients: {left_clients, right_clients}}}
   end
 
   def handle_call(
-        {:run_right_tasks, output_name},
+        {:run_tasks, output_name, side},
         {client_pid, _ref},
-        %__MODULE__{tasks_started: {_, true}, tasks_run: {_, true}} = gm
+        %__MODULE__{tasks_started: {_, true}, tasks_run: {true, true}} = gm
       ) do
     {left_clients, right_clients} = gm.clients
-    right_clients = Map.put(right_clients, client_pid, output_name)
+
+    {left_clients, right_clients} =
+      case side do
+        :left -> {Map.put(left_clients, client_pid, output_name), right_clients}
+        :right -> {left_clients, Map.put(right_clients, client_pid, output_name)}
+      end
+
     {:reply, :ok, %{gm | clients: {left_clients, right_clients}}}
   end
 
@@ -246,7 +239,8 @@ defmodule Strom.DuplexMix do
     {all_data, waiting_clients, total_count} =
       Streams.new_data(
         new_data,
-        [input_name | Map.keys(elem(gm.outputs, 0))],
+        # TODO refactor
+        Enum.uniq([input_name | Map.keys(elem(gm.outputs, 0))]),
         elem(gm.data, 0),
         elem(gm.waiting_clients, 0)
       )
@@ -278,7 +272,8 @@ defmodule Strom.DuplexMix do
     {all_data, waiting_clients, total_count} =
       Streams.new_data(
         new_data,
-        [input_name | Map.keys(elem(gm.outputs, 1))],
+        # TODO refactor
+        Enum.uniq([input_name | Map.keys(elem(gm.outputs, 1))]),
         elem(gm.data, 1),
         elem(gm.waiting_clients, 1)
       )
